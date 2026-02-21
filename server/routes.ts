@@ -3,11 +3,21 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { registerAudioRoutes } from "./replit_integrations/audio";
+import { registerImageRoutes } from "./replit_integrations/image";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Setup auth FIRST
+  await setupAuth(app);
+  registerAuthRoutes(app);
+  
+  // Register audio and image routes
+  registerAudioRoutes(app);
+  registerImageRoutes(app);
 
   app.post(api.auth.register.path, async (req, res) => {
     try {
