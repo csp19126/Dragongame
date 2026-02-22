@@ -13,7 +13,7 @@ export default function Home() {
   const { data: gameState, isLoading: isGameLoading } = useGameState();
   const { t } = useLang();
 
-  if (isAuthLoading || (user && isGameLoading)) {
+  if (isAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-12 h-12 animate-spin text-primary" />
@@ -58,7 +58,7 @@ export default function Home() {
               Unlock the secrets of the <span className="text-primary font-bold">Dragon</span> in our premium Vietnamese slot experience.
             </p>
 
-            <Link href="/api/login">
+            <Link href="/auth">
               <Button size="lg" className="text-2xl px-16 py-10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(139,92,246,0.5)] bg-gradient-to-r from-primary via-purple-600 to-accent hover:scale-105 transition-all duration-500 font-display tracking-widest group">
                 <span className="group-hover:tracking-[0.2em] transition-all duration-500">{t.playNow}</span>
               </Button>
@@ -90,7 +90,13 @@ export default function Home() {
             animate={{ opacity: 1 }}
             className="w-full max-w-4xl mx-auto space-y-12 py-8"
           >
-            <SlotMachine balance={gameState?.balance ?? user.balance} />
+            {isGameLoading ? (
+               <div className="flex justify-center p-20">
+                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
+               </div>
+            ) : (
+              <SlotMachine balance={gameState?.balance ?? user.balance} />
+            )}
             
             {/* VIP Status Badge (Static MVP) */}
             <motion.div 

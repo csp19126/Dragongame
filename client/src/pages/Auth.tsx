@@ -68,9 +68,19 @@ export default function Auth() {
         transition={{ duration: 0.3 }}
         className="w-full max-w-md z-10"
       >
-        <div className="text-center mb-8">
-          <h1 className="font-display text-5xl text-primary drop-shadow-sm mb-2">VnSlot</h1>
-          <p className="text-muted-foreground">Gateway to Fortune</p>
+        <div className="text-center mb-12 relative">
+          <motion.div
+            animate={{ 
+              scale: [1, 1.05, 1],
+              rotate: [0, 1, -1, 0]
+            }}
+            transition={{ duration: 5, repeat: Infinity }}
+          >
+            <h1 className="font-display text-7xl gold-gradient-text drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] mb-2">VnSlot</h1>
+          </motion.div>
+          <p className="text-primary/60 font-black uppercase tracking-[0.4em] text-xs">Gateway to Fortune</p>
+          <div className="absolute -top-8 -left-8 text-6xl opacity-10 rotate-12">🧧</div>
+          <div className="absolute -bottom-8 -right-8 text-6xl opacity-10 -rotate-12">✨</div>
         </div>
 
         <Card className="border-0 shadow-2xl backdrop-blur-2xl bg-black/40 rounded-[2rem] overflow-hidden">

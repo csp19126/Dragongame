@@ -91,7 +91,7 @@ export function Header() {
               </DropdownMenu>
             </>
           ) : (
-            <Link href="/api/login">
+            <Link href="/auth">
               <Button className="font-black bg-gradient-to-r from-primary to-purple-600 hover:scale-105 rounded-2xl px-8 h-12 shadow-lg shadow-primary/25 transition-all">
                 {t.login}
               </Button>
@@ -100,7 +100,5 @@ export function Header() {
         </div>
       </div>
     </header>
-  );
-}
   );
 }
