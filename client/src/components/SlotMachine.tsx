@@ -54,23 +54,16 @@ export function SlotMachine({ balance }: { balance: number }) {
         
         if (result.winAmount > 0) {
           setLastWin(result.winAmount);
-          {result.winAmount > 0}
-          {result.winAmount > 0 && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
-            >
-              <div className="bg-yellow-500/20 backdrop-blur-sm p-8 rounded-full border-4 border-yellow-500 win-text-glow">
-                <span className="text-6xl font-black text-yellow-400 drop-shadow-2xl">+{result.winAmount}</span>
-              </div>
-            </motion.div>
-          )}
-        </span>
-      ),
-    });
-  }
-}
+          if (result.isJackpot) {
+            triggerJackpotConfetti();
+          }
+          toast({
+            title: result.isJackpot ? t.jackpot : `${t.win} +${result.winAmount}`,
+            className: result.isJackpot 
+              ? "bg-yellow-500 text-purple-900 border-yellow-600 font-bold text-xl"
+              : "bg-purple-600 text-yellow-100 border-yellow-700",
+          });
+        }
       }, 1500); // 1.5s spin duration
     } catch (error) {
       setIsSpinning(false);
