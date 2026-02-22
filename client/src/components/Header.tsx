@@ -16,7 +16,7 @@ export function Header() {
   const { t, toggleLang, lang } = useLang();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-background/60 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40">
+    <header className="sticky top-0 z-50 w-full border-b border-yellow-500/10 bg-background/60 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40">
       <div className="container mx-auto px-6 h-20 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
@@ -36,7 +36,7 @@ export function Header() {
             variant="ghost" 
             size="icon" 
             onClick={toggleLang} 
-            className="rounded-2xl hover:bg-white/5 border border-transparent hover:border-white/10 h-11 w-11 transition-all"
+            className="rounded-2xl hover:bg-purple-900/20 border border-transparent hover:border-yellow-500/10 h-11 w-11 transition-all"
           >
             <span className="text-xl filter drop-shadow-sm">{lang === 'en' ? '🇺🇸' : '🇻🇳'}</span>
           </Button>
@@ -46,7 +46,7 @@ export function Header() {
               {/* Balance Display */}
               <motion.div 
                 whileHover={{ scale: 1.02 }}
-                className="hidden md:flex items-center gap-3 bg-black/40 px-5 py-2 rounded-2xl border border-yellow-500/20 shadow-inner"
+                className="hidden md:flex items-center gap-3 bg-purple-950/40 px-5 py-2 rounded-2xl border border-yellow-500/20 shadow-inner"
               >
                 <span className="text-[10px] font-black text-yellow-500/60 uppercase tracking-[0.2em]">{t.balance}</span>
                 <span className="font-mono font-black text-yellow-400 text-lg tracking-tight">{user.balance.toLocaleString()}</span>
@@ -58,7 +58,7 @@ export function Header() {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="text-yellow-400 hover:text-yellow-300 hover:bg-white/5 h-11 w-11 rounded-2xl transition-all"
+                  className="text-yellow-400 hover:text-yellow-300 hover:bg-purple-900/20 h-11 w-11 rounded-2xl transition-all"
                 >
                   <Trophy className="w-6 h-6" />
                 </Button>
@@ -75,8 +75,8 @@ export function Header() {
                     <User className="w-6 h-6" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-background/95 backdrop-blur-xl border-white/10 rounded-2xl shadow-2xl p-2">
-                  <div className="p-3 border-b border-white/5 mb-1 md:hidden">
+                <DropdownMenuContent align="end" className="w-56 bg-background/95 backdrop-blur-xl border-yellow-500/10 rounded-2xl shadow-2xl p-2">
+                  <div className="p-3 border-b border-yellow-500/5 mb-1 md:hidden">
                      <p className="text-[10px] font-black text-yellow-500/60 uppercase tracking-[0.2em] mb-1">{t.balance}</p>
                      <p className="font-mono font-black text-yellow-400 text-xl">{user.balance.toLocaleString()} 🪙</p>
                   </div>

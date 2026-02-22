@@ -30,7 +30,7 @@ export default function Auth() {
     e.preventDefault();
     try {
       await login.mutateAsync({ username, password });
-      toast({ title: "Welcome back!", className: "bg-primary text-white border-primary/20 font-bold" });
+      toast({ title: "Welcome back!", className: "bg-primary text-yellow-100 border-yellow-500/20 font-bold" });
     } catch (error) {
       toast({ 
         title: "Login failed", 
@@ -44,7 +44,7 @@ export default function Auth() {
     e.preventDefault();
     try {
       await register.mutateAsync({ username, password });
-      toast({ title: "Account created!", className: "bg-primary text-white border-primary/20 font-bold" });
+      toast({ title: "Account created!", className: "bg-primary text-yellow-100 border-yellow-500/20 font-bold" });
     } catch (error) {
       toast({ 
         title: "Registration failed", 
@@ -83,16 +83,16 @@ export default function Auth() {
           <div className="absolute -bottom-8 -right-8 text-6xl opacity-10 -rotate-12">✨</div>
         </div>
 
-        <Card className="border-0 shadow-2xl backdrop-blur-2xl bg-black/40 rounded-[2rem] overflow-hidden">
+        <Card className="border-0 shadow-2xl backdrop-blur-2xl bg-purple-950/40 rounded-[2rem] overflow-hidden">
           <CardHeader className="pt-10">
             <CardTitle className="text-center text-3xl font-black gold-gradient-text uppercase tracking-tighter">{activeTab === "login" ? t.login : t.register}</CardTitle>
-            <CardDescription className="text-center text-white/50 font-medium">Step into the Realm of Fortune</CardDescription>
+            <CardDescription className="text-center text-yellow-100/50 font-medium">Step into the Realm of Fortune</CardDescription>
           </CardHeader>
           <CardContent className="pb-10 px-8">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-10 bg-white/5 p-1 rounded-2xl h-14">
-                <TabsTrigger value="login" className="rounded-xl font-bold data-[state=active]:bg-primary data-[state=active]:text-white transition-all">{t.login}</TabsTrigger>
-                <TabsTrigger value="register" className="rounded-xl font-bold data-[state=active]:bg-primary data-[state=active]:text-white transition-all">{t.register}</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 mb-10 bg-purple-900/20 p-1 rounded-2xl h-14">
+                <TabsTrigger value="login" className="rounded-xl font-bold data-[state=active]:bg-primary data-[state=active]:text-yellow-100 transition-all">{t.login}</TabsTrigger>
+                <TabsTrigger value="register" className="rounded-xl font-bold data-[state=active]:bg-primary data-[state=active]:text-yellow-100 transition-all">{t.register}</TabsTrigger>
               </TabsList>
               
               <TabsContent value="login">
@@ -103,7 +103,7 @@ export default function Auth() {
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)}
                       required 
-                      className="rounded-2xl h-14 bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
+                      className="rounded-2xl h-14 bg-purple-900/20 border-yellow-500/10 text-yellow-100 placeholder:text-yellow-100/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
                     />
                   </div>
                   <div className="space-y-3">
@@ -113,7 +113,7 @@ export default function Auth() {
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)}
                       required 
-                      className="rounded-2xl h-14 bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
+                      className="rounded-2xl h-14 bg-purple-900/20 border-yellow-500/10 text-yellow-100 placeholder:text-yellow-100/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
                     />
                   </div>
                   <Button type="submit" className="w-full rounded-2xl h-16 font-black text-xl bg-gradient-to-r from-primary to-purple-600 shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all" disabled={isLoading}>
@@ -130,7 +130,7 @@ export default function Auth() {
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)}
                       required 
-                      className="rounded-2xl h-14 bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
+                      className="rounded-2xl h-14 bg-purple-900/20 border-yellow-500/10 text-yellow-100 placeholder:text-yellow-100/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
                     />
                   </div>
                   <div className="space-y-3">
@@ -140,7 +140,7 @@ export default function Auth() {
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)}
                       required 
-                      className="rounded-2xl h-14 bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
+                      className="rounded-2xl h-14 bg-purple-900/20 border-yellow-500/10 text-yellow-100 placeholder:text-yellow-100/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
                     />
                   </div>
                   <Button type="submit" className="w-full rounded-2xl h-16 font-black text-xl bg-gradient-to-r from-primary to-purple-600 shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all" disabled={isLoading}>

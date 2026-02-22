@@ -54,19 +54,23 @@ export function SlotMachine({ balance }: { balance: number }) {
         
         if (result.winAmount > 0) {
           setLastWin(result.winAmount);
-          if (result.isJackpot) {
-            triggerJackpotConfetti();
-            toast({
-              title: t.jackpot,
-              className: "bg-yellow-500 text-black border-yellow-600 font-bold text-xl",
-            });
-          } else {
-            toast({
-              title: `${t.win} +${result.winAmount}`,
-              className: "bg-green-600 text-white border-green-700",
-            });
-          }
-        }
+          {result.winAmount > 0}
+          {result.winAmount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
+            >
+              <div className="bg-yellow-500/20 backdrop-blur-sm p-8 rounded-full border-4 border-yellow-500 win-text-glow">
+                <span className="text-6xl font-black text-yellow-400 drop-shadow-2xl">+{result.winAmount}</span>
+              </div>
+            </motion.div>
+          )}
+        </span>
+      ),
+    });
+  }
+}
       }, 1500); // 1.5s spin duration
     } catch (error) {
       setIsSpinning(false);
@@ -126,7 +130,7 @@ export function SlotMachine({ balance }: { balance: number }) {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", damping: 15 }}
-        className="slot-machine-frame p-8 rounded-[2rem] w-full relative"
+        className="slot-machine-frame p-8 rounded-[2rem] w-full relative border-yellow-500/40 shadow-[0_0_50px_rgba(109,40,217,0.3)]"
       >
         {/* Decorative Top */}
         <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gradient-to-b from-yellow-300 to-yellow-500 text-red-900 px-8 py-2 rounded-full font-bold border-4 border-red-800 shadow-[0_5px_15px_rgba(0,0,0,0.3)] z-10 whitespace-nowrap text-lg uppercase tracking-widest">
@@ -136,8 +140,8 @@ export function SlotMachine({ balance }: { balance: number }) {
         {/* Reels */}
         <div className="bg-gradient-to-b from-gray-900 to-black rounded-2xl border-4 border-yellow-500/50 p-4 flex justify-between items-center h-56 reel-container overflow-hidden shadow-[inset_0_10px_30px_rgba(0,0,0,1)] gap-3">
           {reels.map((symbol, i) => (
-            <div key={i} className="flex-1 h-full bg-gradient-to-b from-white to-gray-200 rounded-xl border-2 border-yellow-600/30 flex items-center justify-center text-7xl shadow-xl relative overflow-hidden">
-               <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none" />
+            <div key={i} className="flex-1 h-full bg-gradient-to-b from-purple-900 to-purple-950 rounded-xl border-2 border-yellow-600/30 flex items-center justify-center text-7xl shadow-xl relative overflow-hidden">
+               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                <AnimatePresence mode="popLayout">
                  <motion.div
                    key={isSpinning ? `spinning-${i}-${Math.random()}` : symbol}
@@ -179,7 +183,7 @@ export function SlotMachine({ balance }: { balance: number }) {
       </motion.div>
 
       {/* Controls */}
-      <div className="w-full bg-white/5 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] space-y-8">
+      <div className="w-full bg-purple-950/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-yellow-500/20 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] space-y-8">
         {/* Bet Selector */}
         <div className="space-y-4">
           <div className="flex justify-between items-center px-2">
@@ -194,7 +198,7 @@ export function SlotMachine({ balance }: { balance: number }) {
                 className={`flex-1 py-3 rounded-2xl font-black transition-all duration-300 border-2 ${
                   bet === amount 
                     ? "bg-yellow-500 text-purple-900 border-yellow-300 shadow-[0_0_20px_rgba(234,179,8,0.4)] scale-105" 
-                    : "bg-white/5 hover:bg-white/10 text-white/70 border-white/10"
+                    : "bg-purple-900/40 hover:bg-purple-800/60 text-yellow-100/70 border-yellow-500/10"
                 }`}
               >
                 {amount}
@@ -216,7 +220,7 @@ export function SlotMachine({ balance }: { balance: number }) {
           <Button
             variant="outline"
             onClick={handleAiAdvice}
-            className="h-20 w-20 rounded-2xl border-2 border-white/10 bg-white/5 hover:bg-white/10 text-yellow-400 group transition-all duration-500"
+            className="h-20 w-20 rounded-2xl border-2 border-yellow-500/20 bg-purple-900/40 hover:bg-purple-800/60 text-yellow-400 group transition-all duration-500"
             title={t.aiPredict}
           >
             <Brain className="w-8 h-8 group-hover:scale-125 transition-transform" />

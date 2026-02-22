@@ -78,7 +78,7 @@ export default function Home() {
                   className="flex flex-col items-center group cursor-default"
                 >
                   <span className="text-5xl mb-4 group-hover:scale-125 transition-transform duration-300">{item.icon}</span>
-                  <span className="font-black text-xs uppercase tracking-[0.3em] text-primary/60">{item.label}</span>
+                  <span className="font-black text-xs uppercase tracking-[0.3em] text-yellow-500/60">{item.label}</span>
                 </motion.div>
               ))}
             </div>
