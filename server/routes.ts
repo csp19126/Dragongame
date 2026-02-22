@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth/index";
 import { registerAudioRoutes } from "./replit_integrations/audio";
 import { registerImageRoutes } from "./replit_integrations/image";
 
@@ -53,11 +53,12 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.game.state.path, isAuthenticated, async (req: any, res) => {
+  app.get(api.game.state.path, async (req: any, res) => {
     try {
+      if (!req.user || !req.user.claims) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const userId = req.user.claims.sub;
-      const dbUser = await storage.getUserByUsername(userId); // Replit Auth ID is used as username in this simple mapping or we should use a proper mapping
-      // Actually Replit Auth sub is a unique string. Let's use it to find/create user.
       let user = await storage.getUserByUsername(userId);
       if (!user) {
         user = await storage.createUser({ username: userId, password: "oidc-user" });

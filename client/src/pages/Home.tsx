@@ -13,6 +13,7 @@ export default function Home() {
   const { data: gameState, isLoading: isGameLoading } = useGameState();
   const { t } = useLang();
 
+  // If auth is loading, show spinner
   if (isAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -21,13 +22,12 @@ export default function Home() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background flex flex-col selection:bg-primary selection:text-white">
-      <Header />
-
-      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
-        {!user ? (
-          // Landing Hero for non-logged in users
+  // If not logged in, show landing page
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col selection:bg-primary selection:text-white">
+        <Header />
+        <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -83,36 +83,60 @@ export default function Home() {
               ))}
             </div>
           </motion.div>
-        ) : (
-          // Game UI for logged in users
+        </main>
+        {/* Decorative background elements */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20 z-0">
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="w-full max-w-4xl mx-auto space-y-12 py-8"
+            animate={{ y: [0, -20, 0] }} 
+            transition={{ duration: 6, repeat: Infinity }}
+            className="absolute top-1/4 -left-12 text-9xl blur-sm"
           >
-            {isGameLoading ? (
-               <div className="flex justify-center p-20">
-                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
-               </div>
-            ) : (
-              <SlotMachine balance={gameState?.balance ?? user.balance} />
-            )}
-            
-            {/* VIP Status Badge (Static MVP) */}
-            <motion.div 
-              whileHover={{ scale: 1.05 }}
-              className="flex justify-center"
-            >
-              <div className="bg-gradient-to-r from-gray-950 to-gray-900 text-yellow-500 px-10 py-4 rounded-3xl border-2 border-yellow-500/40 flex items-center gap-4 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-                <span className="text-3xl animate-pulse">👑</span>
-                <div className="flex flex-col">
-                  <span className="font-display tracking-[0.3em] text-sm text-yellow-400">ROYAL VIP</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest opacity-50">Level 1 Privelege</span>
-                </div>
-              </div>
-            </motion.div>
+            🐉
           </motion.div>
-        )}
+          <motion.div 
+            animate={{ y: [0, 20, 0] }} 
+            transition={{ duration: 8, repeat: Infinity }}
+            className="absolute bottom-1/4 -right-12 text-9xl blur-sm"
+          >
+            🐢
+          </motion.div>
+        </div>
+        <div className="fixed bottom-0 left-0 w-full h-64 bg-gradient-to-t from-primary/10 to-transparent pointer-events-none z-0" />
+      </div>
+    );
+  }
+
+  // If logged in, show game UI
+  return (
+    <div className="min-h-screen bg-background flex flex-col selection:bg-primary selection:text-white">
+      <Header />
+      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="w-full max-w-4xl mx-auto space-y-12 py-8"
+        >
+          {isGameLoading ? (
+            <div className="flex justify-center p-20">
+              <Loader2 className="w-12 h-12 animate-spin text-primary" />
+            </div>
+          ) : (
+            <SlotMachine balance={gameState?.balance ?? user.balance} />
+          )}
+          
+          <motion.div 
+            whileHover={{ scale: 1.05 }}
+            className="flex justify-center"
+          >
+            <div className="bg-gradient-to-r from-gray-950 to-gray-900 text-yellow-500 px-10 py-4 rounded-3xl border-2 border-yellow-500/40 flex items-center gap-4 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+              <span className="text-3xl animate-pulse">👑</span>
+              <div className="flex flex-col">
+                <span className="font-display tracking-[0.3em] text-sm text-yellow-400">ROYAL VIP</span>
+                <span className="text-[10px] font-black uppercase tracking-widest opacity-50">Level 1 Privelege</span>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
       </main>
 
       {/* Decorative background elements */}
