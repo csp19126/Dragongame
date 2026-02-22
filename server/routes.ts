@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { registerAudioRoutes } from "./replit_integrations/audio";
 import { registerImageRoutes } from "./replit_integrations/image";
 
@@ -53,27 +53,35 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.game.state.path, async (req, res) => {
-    let user = await storage.getUserByUsername("player1");
-    if (!user) {
-      user = await storage.createUser({ username: "player1", password: "pwd" });
+  app.get(api.game.state.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const dbUser = await storage.getUserByUsername(userId); // Replit Auth ID is used as username in this simple mapping or we should use a proper mapping
+      // Actually Replit Auth sub is a unique string. Let's use it to find/create user.
+      let user = await storage.getUserByUsername(userId);
+      if (!user) {
+        user = await storage.createUser({ username: userId, password: "oidc-user" });
+      }
+      res.json({ balance: user.balance, gameStates: [] });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch state" });
     }
-    res.json({ balance: user.balance, gameStates: [] });
   });
 
-  app.post(api.game.spin.path, async (req, res) => {
+  app.post(api.game.spin.path, isAuthenticated, async (req: any, res) => {
     try {
       const input = api.game.spin.input.parse(req.body);
-      let user = await storage.getUserByUsername("player1");
+      const userId = req.user.claims.sub;
+      let user = await storage.getUserByUsername(userId);
       if (!user) {
-        user = await storage.createUser({ username: "player1", password: "pwd" });
+        user = await storage.createUser({ username: userId, password: "oidc-user" });
       }
       
       if (user.balance < input.betAmount) {
         return res.status(400).json({ message: "Insufficient balance" });
       }
 
-      const symbols = ["🐉", "🐯", "🐢", "🌺", "🪙"];
+      const symbols = ["🐉", "🐯", "🐢", "🌺", "🪙", "🏮"];
       const result = [
         symbols[Math.floor(Math.random() * symbols.length)],
         symbols[Math.floor(Math.random() * symbols.length)],
@@ -83,11 +91,12 @@ export async function registerRoutes(
       let winAmount = 0;
       let isJackpot = false;
 
+      // Simple winning logic
       if (result[0] === result[1] && result[1] === result[2]) {
-        winAmount = input.betAmount * 10;
+        winAmount = input.betAmount * 50; // Increased jackpot for "shiny" feel
         isJackpot = true;
       } else if (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]) {
-        winAmount = input.betAmount * 2;
+        winAmount = input.betAmount * 3;
       }
 
       const newBalance = user.balance - input.betAmount + winAmount;
@@ -102,7 +111,11 @@ export async function registerRoutes(
         isJackpot
       });
     } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid spin request" });
+      } else {
+        res.status(500).json({ message: "Spin failed" });
+      }
     }
   });
 

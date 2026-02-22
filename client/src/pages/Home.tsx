@@ -22,75 +22,112 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col selection:bg-primary selection:text-white">
       <Header />
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8">
+      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
         {!user ? (
           // Landing Hero for non-logged in users
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-8 max-w-2xl"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="text-center space-y-12 max-w-3xl"
           >
-            <div className="relative inline-block">
-              <h1 className="text-6xl md:text-8xl font-display gold-gradient-text drop-shadow-xl p-4">
-                VnSlot
-              </h1>
+            <div className="relative inline-block group">
+              <motion.div
+                animate={{ 
+                  filter: ["drop-shadow(0 0 20px rgba(139, 92, 246, 0.3))", "drop-shadow(0 0 40px rgba(139, 92, 246, 0.6))", "drop-shadow(0 0 20px rgba(139, 92, 246, 0.3))"]
+                }}
+                transition={{ duration: 4, repeat: Infinity }}
+              >
+                <h1 className="text-7xl md:text-9xl font-display gold-gradient-text drop-shadow-2xl py-8 px-4 leading-tight">
+                  VnSlot
+                </h1>
+              </motion.div>
               <motion.div 
-                animate={{ rotate: 360 }}
-                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                className="absolute -top-12 -right-12 text-6xl opacity-20 pointer-events-none"
+                animate={{ rotate: 360, scale: [1, 1.2, 1] }}
+                transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                className="absolute -top-16 -right-16 text-8xl opacity-30 pointer-events-none filter blur-[1px]"
               >
                 🏮
               </motion.div>
             </div>
             
-            <p className="text-xl md:text-2xl text-muted-foreground">
-              Experience the luck of the Dragon in the most exciting Vietnamese-style slot game.
+            <p className="text-2xl md:text-3xl font-light text-muted-foreground/80 tracking-wide max-w-xl mx-auto leading-relaxed">
+              Unlock the secrets of the <span className="text-primary font-bold">Dragon</span> in our premium Vietnamese slot experience.
             </p>
 
-            <Link href="/auth">
-              <Button size="lg" className="text-xl px-12 py-8 rounded-full shadow-2xl shadow-primary/30 animate-pulse bg-gradient-to-r from-primary to-orange-600 hover:scale-105 transition-transform">
-                {t.playNow}
+            <Link href="/api/login">
+              <Button size="lg" className="text-2xl px-16 py-10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(139,92,246,0.5)] bg-gradient-to-r from-primary via-purple-600 to-accent hover:scale-105 transition-all duration-500 font-display tracking-widest group">
+                <span className="group-hover:tracking-[0.2em] transition-all duration-500">{t.playNow}</span>
               </Button>
             </Link>
 
-            <div className="grid grid-cols-3 gap-4 mt-12 opacity-80">
-              <div className="flex flex-col items-center">
-                <span className="text-4xl mb-2">💰</span>
-                <span className="font-bold text-sm">Big Wins</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-4xl mb-2">🧧</span>
-                <span className="font-bold text-sm">Lucky Money</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-4xl mb-2">⚡</span>
-                <span className="font-bold text-sm">Fast Payouts</span>
-              </div>
+            <div className="grid grid-cols-3 gap-8 mt-20">
+              {[
+                { icon: "💰", label: "Massive Wins" },
+                { icon: "🧧", label: "Lucky Daily" },
+                { icon: "✨", label: "Royal Perks" }
+              ].map((item, i) => (
+                <motion.div 
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 0.8, y: 0 }}
+                  transition={{ delay: 0.5 + (i * 0.2) }}
+                  className="flex flex-col items-center group cursor-default"
+                >
+                  <span className="text-5xl mb-4 group-hover:scale-125 transition-transform duration-300">{item.icon}</span>
+                  <span className="font-black text-xs uppercase tracking-[0.3em] text-primary/60">{item.label}</span>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
         ) : (
           // Game UI for logged in users
-          <div className="w-full max-w-4xl mx-auto space-y-8">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="w-full max-w-4xl mx-auto space-y-12 py-8"
+          >
             <SlotMachine balance={gameState?.balance ?? user.balance} />
             
             {/* VIP Status Badge (Static MVP) */}
-            <div className="flex justify-center">
-              <div className="bg-gradient-to-r from-gray-900 to-gray-800 text-yellow-500 px-6 py-2 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
-                <span className="text-xl">👑</span>
-                <span className="font-display tracking-widest text-sm">VIP LEVEL 1</span>
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              className="flex justify-center"
+            >
+              <div className="bg-gradient-to-r from-gray-950 to-gray-900 text-yellow-500 px-10 py-4 rounded-3xl border-2 border-yellow-500/40 flex items-center gap-4 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+                <span className="text-3xl animate-pulse">👑</span>
+                <div className="flex flex-col">
+                  <span className="font-display tracking-[0.3em] text-sm text-yellow-400">ROYAL VIP</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-50">Level 1 Privelege</span>
+                </div>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
       </main>
 
-      {/* Decorative footer elements */}
-      <div className="fixed bottom-0 left-0 w-full h-32 bg-gradient-to-t from-background to-transparent pointer-events-none z-0" />
-      <div className="fixed bottom-4 left-4 text-4xl opacity-10 pointer-events-none">🎍</div>
-      <div className="fixed bottom-4 right-4 text-4xl opacity-10 pointer-events-none">🌸</div>
+      {/* Decorative background elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20 z-0">
+        <motion.div 
+          animate={{ y: [0, -20, 0] }} 
+          transition={{ duration: 6, repeat: Infinity }}
+          className="absolute top-1/4 -left-12 text-9xl blur-sm"
+        >
+          🐉
+        </motion.div>
+        <motion.div 
+          animate={{ y: [0, 20, 0] }} 
+          transition={{ duration: 8, repeat: Infinity }}
+          className="absolute bottom-1/4 -right-12 text-9xl blur-sm"
+        >
+          🐢
+        </motion.div>
+      </div>
+      
+      <div className="fixed bottom-0 left-0 w-full h-64 bg-gradient-to-t from-primary/10 to-transparent pointer-events-none z-0" />
     </div>
   );
 }

@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export interface GameStateResponse {
   balance: number;
-  gameStates: any[]; // Typed loosely for MVP
+  gameStates: any[]; 
 }
 
 export interface SpinResponse {
-  result: string[]; // Array of symbols like ["Dragon", "Coin", "Lotus"]
+  result: string[]; 
   winAmount: number;
   newBalance: number;
   freeSpinsAwarded: number;
@@ -22,6 +22,11 @@ export interface LeaderboardEntry {
 export function useGameState() {
   return useQuery<GameStateResponse>({
     queryKey: ["/api/game/state"],
+    queryFn: async () => {
+      const res = await fetch("/api/game/state");
+      if (!res.ok) throw new Error("Failed to fetch game state");
+      return res.json();
+    }
   });
 }
 
@@ -42,7 +47,6 @@ export function useSpin() {
       return res.json() as Promise<SpinResponse>;
     },
     onSuccess: (data) => {
-      // Optimistically update balance if needed, but the response has new balance
       queryClient.setQueryData(["/api/game/state"], (old: GameStateResponse | undefined) => {
         if (!old) return old;
         return {
@@ -50,6 +54,7 @@ export function useSpin() {
           balance: data.newBalance,
         };
       });
+      // Also update auth user balance if possible, but state is main
     },
   });
 }
@@ -57,13 +62,23 @@ export function useSpin() {
 export function useLeaderboard() {
   return useQuery<LeaderboardEntry[]>({
     queryKey: ["/api/game/leaderboard"],
-    refetchInterval: 30000, // Refresh every 30s
+    queryFn: async () => {
+      const res = await fetch("/api/game/leaderboard");
+      if (!res.ok) throw new Error("Failed to fetch leaderboard");
+      return res.json();
+    },
+    refetchInterval: 30000, 
   });
 }
 
 export function useAiPredict() {
   return useQuery<{ advice: string }>({
     queryKey: ["/api/ai/predict"],
-    enabled: false, // Only run when manually triggered
+    queryFn: async () => {
+      const res = await fetch("/api/ai/predict");
+      if (!res.ok) throw new Error("Failed to fetch advice");
+      return res.json();
+    },
+    enabled: false, 
   });
 }

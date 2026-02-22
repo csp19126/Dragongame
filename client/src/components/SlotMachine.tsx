@@ -122,24 +122,35 @@ export function SlotMachine({ balance }: { balance: number }) {
   return (
     <div className="flex flex-col items-center gap-8 w-full max-w-lg mx-auto p-4">
       {/* Slot Frame */}
-      <div className="slot-machine-frame p-6 rounded-3xl w-full relative">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", damping: 15 }}
+        className="slot-machine-frame p-8 rounded-[2rem] w-full relative"
+      >
         {/* Decorative Top */}
-        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-yellow-400 text-red-900 px-6 py-1 rounded-full font-bold border-4 border-red-800 shadow-lg z-10 whitespace-nowrap">
-           VnSlot 888 
+        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gradient-to-b from-yellow-300 to-yellow-500 text-red-900 px-8 py-2 rounded-full font-bold border-4 border-red-800 shadow-[0_5px_15px_rgba(0,0,0,0.3)] z-10 whitespace-nowrap text-lg uppercase tracking-widest">
+           ✨ VnSlot 888 ✨
         </div>
 
         {/* Reels */}
-        <div className="bg-white rounded-xl border-4 border-gray-800 p-4 flex justify-between items-center h-48 reel-container overflow-hidden shadow-inner gap-2">
+        <div className="bg-gradient-to-b from-gray-900 to-black rounded-2xl border-4 border-yellow-500/50 p-4 flex justify-between items-center h-56 reel-container overflow-hidden shadow-[inset_0_10px_30px_rgba(0,0,0,1)] gap-3">
           {reels.map((symbol, i) => (
-            <div key={i} className="flex-1 h-full bg-gray-100 rounded-lg border-2 border-gray-300 flex items-center justify-center text-6xl shadow-inner relative overflow-hidden">
+            <div key={i} className="flex-1 h-full bg-gradient-to-b from-white to-gray-200 rounded-xl border-2 border-yellow-600/30 flex items-center justify-center text-7xl shadow-xl relative overflow-hidden">
+               <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none" />
                <AnimatePresence mode="popLayout">
                  <motion.div
-                   key={isSpinning ? Math.random() : symbol}
-                   initial={{ y: isSpinning ? -100 : 0, opacity: 0.5 }}
+                   key={isSpinning ? `spinning-${i}-${Math.random()}` : symbol}
+                   initial={{ y: isSpinning ? -150 : -20, opacity: 0 }}
                    animate={{ y: 0, opacity: 1 }}
-                   exit={{ y: 100, opacity: 0.5 }}
-                   transition={{ duration: 0.1 }}
-                   className="absolute inset-0 flex items-center justify-center"
+                   exit={{ y: 150, opacity: 0 }}
+                   transition={{ 
+                     type: "spring", 
+                     stiffness: isSpinning ? 300 : 200, 
+                     damping: 20,
+                     delay: i * 0.1 
+                   }}
+                   className="absolute inset-0 flex items-center justify-center filter drop-shadow-md"
                  >
                    {symbol}
                  </motion.div>
@@ -149,28 +160,41 @@ export function SlotMachine({ balance }: { balance: number }) {
         </div>
         
         {/* Machine details */}
-        <div className="mt-4 flex justify-between items-center text-yellow-100 px-2">
-           <div className="flex items-center gap-2">
-             <span className="text-sm uppercase tracking-wider opacity-80">{t.win}:</span>
-             <span className="font-mono text-xl text-yellow-400 font-bold">{lastWin}</span>
+        <div className="mt-6 flex justify-between items-center text-yellow-100 px-4">
+           <div className="flex flex-col">
+             <span className="text-xs uppercase tracking-[0.2em] text-yellow-500/80 font-bold">{t.win}</span>
+             <motion.span 
+               key={lastWin}
+               initial={{ scale: 1.5, color: "#fcd34d" }}
+               animate={{ scale: 1, color: "#fbbf24" }}
+               className="font-mono text-3xl font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+             >
+               {lastWin.toLocaleString()}
+             </motion.span>
+           </div>
+           <div className="h-12 w-12 rounded-full border-2 border-yellow-500/30 flex items-center justify-center bg-black/20">
+              <Coins className="w-6 h-6 text-yellow-400 animate-bounce" />
            </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Controls */}
-      <div className="w-full bg-card/80 backdrop-blur-md p-6 rounded-2xl border border-border shadow-xl space-y-6">
+      <div className="w-full bg-white/5 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] space-y-8">
         {/* Bet Selector */}
-        <div className="flex justify-between items-center">
-          <span className="font-bold text-lg text-primary">{t.bet}</span>
-          <div className="flex gap-2">
-            {[10, 50, 100].map((amount) => (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-2">
+            <span className="font-black text-xl uppercase tracking-tighter gold-gradient-text">{t.bet}</span>
+            <span className="font-mono text-2xl text-yellow-400/90 font-bold">{bet}</span>
+          </div>
+          <div className="flex gap-3">
+            {[10, 50, 100, 500].map((amount) => (
               <button
                 key={amount}
                 onClick={() => setBet(amount)}
-                className={`px-4 py-2 rounded-lg font-bold transition-all ${
+                className={`flex-1 py-3 rounded-2xl font-black transition-all duration-300 border-2 ${
                   bet === amount 
-                    ? "bg-primary text-primary-foreground shadow-lg scale-105" 
-                    : "bg-secondary/20 hover:bg-secondary/40 text-foreground"
+                    ? "bg-yellow-500 text-purple-900 border-yellow-300 shadow-[0_0_20px_rgba(234,179,8,0.4)] scale-105" 
+                    : "bg-white/5 hover:bg-white/10 text-white/70 border-white/10"
                 }`}
               >
                 {amount}
@@ -184,18 +208,18 @@ export function SlotMachine({ balance }: { balance: number }) {
           <Button 
             onClick={handleSpin} 
             disabled={isSpinning}
-            className="flex-1 h-16 text-2xl font-display uppercase tracking-widest bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 border-b-4 border-red-800 active:border-b-0 active:translate-y-1 transition-all shadow-xl hover:shadow-red-500/25"
+            className="flex-1 h-20 text-3xl font-display uppercase tracking-[0.1em] purple-button text-yellow-300 border-yellow-500/50 rounded-2xl"
           >
-            {isSpinning ? <Loader2 className="animate-spin w-8 h-8" /> : t.spin}
+            {isSpinning ? <Loader2 className="animate-spin w-10 h-10" /> : t.spin}
           </Button>
           
           <Button
             variant="outline"
             onClick={handleAiAdvice}
-            className="h-16 w-16 rounded-xl border-2 border-purple-200 hover:bg-purple-50 hover:border-purple-300 text-purple-600"
+            className="h-20 w-20 rounded-2xl border-2 border-white/10 bg-white/5 hover:bg-white/10 text-yellow-400 group transition-all duration-500"
             title={t.aiPredict}
           >
-            <Brain className="w-6 h-6" />
+            <Brain className="w-8 h-8 group-hover:scale-125 transition-transform" />
           </Button>
         </div>
       </div>

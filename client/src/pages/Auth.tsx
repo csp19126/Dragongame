@@ -30,7 +30,7 @@ export default function Auth() {
     e.preventDefault();
     try {
       await login.mutateAsync({ username, password });
-      toast({ title: "Welcome back!", className: "bg-green-600 text-white" });
+      toast({ title: "Welcome back!", className: "bg-primary text-white border-primary/20 font-bold" });
     } catch (error) {
       toast({ 
         title: "Login failed", 
@@ -44,7 +44,7 @@ export default function Auth() {
     e.preventDefault();
     try {
       await register.mutateAsync({ username, password });
-      toast({ title: "Account created!", className: "bg-green-600 text-white" });
+      toast({ title: "Account created!", className: "bg-primary text-white border-primary/20 font-bold" });
     } catch (error) {
       toast({ 
         title: "Registration failed", 
@@ -73,68 +73,68 @@ export default function Auth() {
           <p className="text-muted-foreground">Gateway to Fortune</p>
         </div>
 
-        <Card className="border-2 border-primary/10 shadow-xl backdrop-blur-sm bg-white/90">
-          <CardHeader>
-            <CardTitle className="text-center text-2xl font-bold">{activeTab === "login" ? t.login : t.register}</CardTitle>
-            <CardDescription className="text-center">Enter your details to continue</CardDescription>
+        <Card className="border-0 shadow-2xl backdrop-blur-2xl bg-black/40 rounded-[2rem] overflow-hidden">
+          <CardHeader className="pt-10">
+            <CardTitle className="text-center text-3xl font-black gold-gradient-text uppercase tracking-tighter">{activeTab === "login" ? t.login : t.register}</CardTitle>
+            <CardDescription className="text-center text-white/50 font-medium">Step into the Realm of Fortune</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pb-10 px-8">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login">{t.login}</TabsTrigger>
-                <TabsTrigger value="register">{t.register}</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 mb-10 bg-white/5 p-1 rounded-2xl h-14">
+                <TabsTrigger value="login" className="rounded-xl font-bold data-[state=active]:bg-primary data-[state=active]:text-white transition-all">{t.login}</TabsTrigger>
+                <TabsTrigger value="register" className="rounded-xl font-bold data-[state=active]:bg-primary data-[state=active]:text-white transition-all">{t.register}</TabsTrigger>
               </TabsList>
               
               <TabsContent value="login">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t.username}</label>
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-2">{t.username}</label>
                     <Input 
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)}
                       required 
-                      className="rounded-xl border-gray-200 focus:border-primary focus:ring-primary/20"
+                      className="rounded-2xl h-14 bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t.password}</label>
+                  <div className="space-y-3">
+                    <label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-2">{t.password}</label>
                     <Input 
                       type="password"
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)}
                       required 
-                      className="rounded-xl border-gray-200 focus:border-primary focus:ring-primary/20"
+                      className="rounded-2xl h-14 bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
                     />
                   </div>
-                  <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={isLoading}>
-                    {isLoading ? <Loader2 className="animate-spin" /> : t.login}
+                  <Button type="submit" className="w-full rounded-2xl h-16 font-black text-xl bg-gradient-to-r from-primary to-purple-600 shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all" disabled={isLoading}>
+                    {isLoading ? <Loader2 className="animate-spin w-8 h-8" /> : t.login}
                   </Button>
                 </form>
               </TabsContent>
 
               <TabsContent value="register">
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t.username}</label>
+                <form onSubmit={handleRegister} className="space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-2">{t.username}</label>
                     <Input 
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)}
                       required 
-                      className="rounded-xl border-gray-200 focus:border-primary focus:ring-primary/20"
+                      className="rounded-2xl h-14 bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t.password}</label>
+                  <div className="space-y-3">
+                    <label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-2">{t.password}</label>
                     <Input 
                       type="password"
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)}
                       required 
-                      className="rounded-xl border-gray-200 focus:border-primary focus:ring-primary/20"
+                      className="rounded-2xl h-14 bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg px-6"
                     />
                   </div>
-                  <Button type="submit" className="w-full rounded-xl py-6 font-bold text-lg" disabled={isLoading}>
-                    {isLoading ? <Loader2 className="animate-spin" /> : t.register}
+                  <Button type="submit" className="w-full rounded-2xl h-16 font-black text-xl bg-gradient-to-r from-primary to-purple-600 shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all" disabled={isLoading}>
+                    {isLoading ? <Loader2 className="animate-spin w-8 h-8" /> : t.register}
                   </Button>
                 </form>
               </TabsContent>
