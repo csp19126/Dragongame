@@ -25,7 +25,7 @@ export default function Home() {
   // If not logged in, show landing page
   if (!user) {
     return (
-      <div className="min-h-screen bg-background flex flex-col selection:bg-primary selection:text-white">
+      <div className="min-h-screen bg-background flex flex-col selection:bg-primary selection:text-gold-400">
         <Header />
         <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
           <motion.div 
@@ -54,13 +54,13 @@ export default function Home() {
               </motion.div>
             </div>
             
-            <p className="text-2xl md:text-3xl font-light text-muted-foreground/80 tracking-wide max-w-xl mx-auto leading-relaxed">
+            <p className="text-2xl md:text-3xl font-light text-primary-foreground/80 tracking-wide max-w-xl mx-auto leading-relaxed">
               Unlock the secrets of the <span className="text-primary font-bold">Dragon</span> in our premium Vietnamese slot experience.
             </p>
 
             <Link href="/auth">
-              <Button size="lg" className="text-2xl px-16 py-10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(139,92,246,0.5)] bg-gradient-to-r from-primary via-purple-600 to-accent hover:scale-105 transition-all duration-500 font-display tracking-widest group">
-                <span className="group-hover:tracking-[0.2em] transition-all duration-500">{t.playNow}</span>
+              <Button size="lg" className="text-2xl px-16 py-10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(139,92,246,0.5)] bg-gradient-to-r from-primary via-purple-600 to-accent hover:scale-105 transition-all duration-500 font-display tracking-widest group border-2 border-yellow-500/50">
+                <span className="group-hover:tracking-[0.2em] transition-all duration-500 text-yellow-100">{t.playNow}</span>
               </Button>
             </Link>
 

@@ -5,9 +5,9 @@
 @tailwind utilities;
 
 :root {
-  /* Royal Purple, Gold, and Lucky Red palette */
-  --background: 270 50% 98%;
-  --foreground: 270 50% 10%;
+  /* Royal Purple, Gold, and Lucky Red palette - No White */
+  --background: 270 50% 5%;    /* Very Dark Purple instead of White */
+  --foreground: 270 20% 90%;   /* Light Purple/Grey text */
   
   --primary: 270 70% 40%;      /* Deep Purple */
   --primary-foreground: 48 96% 89%; /* Gold text on Purple */
@@ -15,17 +15,17 @@
   --secondary: 43 96% 58%;     /* Gold/Yellow */
   --secondary-foreground: 270 70% 20%;
   
-  --muted: 270 20% 90%;
-  --muted-foreground: 270 20% 40%;
+  --muted: 270 20% 15%;        /* Darker Purple for muted elements */
+  --muted-foreground: 270 20% 65%;
   
   --accent: 348 83% 47%;       /* Lucky Red for highlights */
-  --accent-foreground: 0 0% 100%;
+  --accent-foreground: 48 96% 89%; /* Gold text on Red */
   
   --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 98%;
+  --destructive-foreground: 48 96% 89%;
 
-  --border: 270 30% 85%;
-  --input: 270 30% 90%;
+  --border: 270 30% 20%;
+  --input: 270 30% 20%;
   --ring: 270 70% 40%;
   
   --radius: 1rem; /* More rounded for smoother feel */
@@ -37,7 +37,7 @@
 }
 
 .dark {
-  --background: 270 50% 5%;
+  --background: 270 50% 3%;    /* Even darker for dark mode */
   --foreground: 270 20% 90%;
   
   --primary: 270 70% 50%;
@@ -46,17 +46,17 @@
   --secondary: 43 96% 58%;
   --secondary-foreground: 270 70% 20%;
   
-  --muted: 270 20% 15%;
+  --muted: 270 20% 10%;
   --muted-foreground: 270 20% 65%;
   
   --accent: 348 83% 47%;
-  --accent-foreground: 0 0% 100%;
+  --accent-foreground: 48 96% 89%;
   
   --destructive: 0 62% 30%;
-  --destructive-foreground: 0 0% 98%;
+  --destructive-foreground: 48 96% 89%;
   
-  --border: 270 30% 20%;
-  --input: 270 30% 20%;
+  --border: 270 30% 15%;
+  --input: 270 30% 15%;
   --ring: 270 70% 50%;
 }
 
@@ -83,7 +83,7 @@
   background: linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%);
   box-shadow: 
     0 20px 50px -10px rgba(109, 40, 217, 0.5),
-    inset 0 2px 15px rgba(255, 255, 255, 0.3),
+    inset 0 2px 15px rgba(251, 191, 36, 0.3), /* Changed white to Gold #fbbf24 */
     inset 0 -8px 20px rgba(0, 0, 0, 0.4);
   border: 6px solid #fcd34d;
   position: relative;
@@ -94,7 +94,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(45deg, transparent 45%, rgba(255, 255, 255, 0.1) 50%, transparent 55%);
+  background: linear-gradient(45deg, transparent 45%, rgba(251, 191, 36, 0.15) 50%, transparent 55%); /* Changed white to Gold */
   background-size: 200% 200%;
   animation: shine 3s infinite linear;
   pointer-events: none;
