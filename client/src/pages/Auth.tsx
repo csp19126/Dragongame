@@ -9,10 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { SiReplit } from "react-icons/si";
 
 export default function Auth() {
   const { login, register, user } = useAuth();
-  const { t } = useLang();
+  const { t, language } = useLang();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -76,7 +77,7 @@ export default function Auth() {
             }}
             transition={{ duration: 5, repeat: Infinity }}
           >
-            <h1 className="font-display text-7xl gold-gradient-text drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] mb-2">VnSlot</h1>
+            <h1 className="font-display text-7xl gold-gradient-text drop-shadow-[0_10px_20_rgba(0,0,0,0.5)] mb-2">VnSlot</h1>
           </motion.div>
           <p className="text-primary/60 font-black uppercase tracking-[0.4em] text-xs">Gateway to Fortune</p>
           <div className="absolute -top-8 -left-8 text-6xl opacity-10 rotate-12">🧧</div>
@@ -85,10 +86,33 @@ export default function Auth() {
 
         <Card className="border-0 shadow-2xl backdrop-blur-2xl bg-purple-950/40 rounded-[2rem] overflow-hidden">
           <CardHeader className="pt-10">
-            <CardTitle className="text-center text-3xl font-black gold-gradient-text uppercase tracking-tighter">{activeTab === "login" ? t.login : t.register}</CardTitle>
+            <CardTitle className="text-center text-3xl font-black gold-gradient-text uppercase tracking-tighter">
+              {activeTab === "login" ? t.login : t.register}
+            </CardTitle>
             <CardDescription className="text-center text-yellow-100/50 font-medium">Step into the Realm of Fortune</CardDescription>
           </CardHeader>
           <CardContent className="pb-10 px-8">
+            <div className="flex flex-col gap-4 mb-6">
+              <Button 
+                onClick={() => window.location.href = "/api/login"}
+                className="w-full h-14 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white border-2 border-orange-400 shadow-[0_0_15px_rgba(234,88,12,0.4)] transition-all group rounded-2xl"
+              >
+                <SiReplit className="mr-3 h-6 w-6 group-hover:scale-110 transition-transform" />
+                {language === "en" ? "Login with Replit" : "Đăng nhập với Replit"}
+              </Button>
+              
+              <div className="relative my-2">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-yellow-500/20" />
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase">
+                  <span className="bg-[#0a0510] px-3 text-yellow-500/40 font-black tracking-[0.2em]">
+                    {language === "en" ? "OR USE GUEST" : "HOẶC DÙNG KHÁCH"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-10 bg-purple-900/20 p-1 rounded-2xl h-14">
                 <TabsTrigger value="login" className="rounded-xl font-bold data-[state=active]:bg-primary data-[state=active]:text-yellow-100 transition-all">{t.login}</TabsTrigger>

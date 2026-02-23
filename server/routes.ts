@@ -27,6 +27,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Username exists" });
       }
       const user = await storage.createUser({ ...input, email: `${input.username}@example.com` });
+      (req.session as any).userId = user.id;
       res.status(201).json(user);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -47,6 +48,7 @@ export async function registerRoutes(
       if (!user || user.password !== input.password) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
+      (req.session as any).userId = user.id;
       res.status(200).json(user);
     } catch (err) {
       res.status(400).json({ message: "Invalid input" });
@@ -55,35 +57,52 @@ export async function registerRoutes(
 
   app.get(api.game.state.path, async (req: any, res) => {
     try {
-      if (!req.user || !req.user.claims) {
+      let userId = (req.session as any).userId;
+      
+      // Fallback to Replit Auth if no session userId
+      if (!userId && req.user && req.user.claims) {
+        userId = req.user.claims.sub;
+      }
+
+      if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      const userId = req.user.claims.sub;
+
       let user = await storage.getUser(userId);
       if (!user) {
-        user = await storage.createUser({ 
-          username: req.user.claims.nickname || userId, 
-          password: "oidc-user",
-          email: req.user.claims.email || `${userId}@replit.com`
-        });
+        // Try getting by username if userId was nickname
+        user = await storage.getUserByUsername(userId);
       }
+
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
       res.json({ balance: user.balance, gameStates: [] });
     } catch (err) {
       res.status(500).json({ message: "Failed to fetch state" });
     }
   });
 
-  app.post(api.game.spin.path, isAuthenticated, async (req: any, res) => {
+  app.post(api.game.spin.path, async (req: any, res) => {
     try {
+      let userId = (req.session as any).userId;
+      if (!userId && req.user && req.user.claims) {
+        userId = req.user.claims.sub;
+      }
+
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
       const input = api.game.spin.input.parse(req.body);
-      const userId = req.user.claims.sub;
       let user = await storage.getUser(userId);
       if (!user) {
-        user = await storage.createUser({ 
-          username: req.user.claims.nickname || userId, 
-          password: "oidc-user",
-          email: req.user.claims.email || `${userId}@replit.com`
-        });
+        user = await storage.getUserByUsername(userId);
+      }
+
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
       }
       
       let gameState = await storage.getGameState(user.id, input.slotId);
