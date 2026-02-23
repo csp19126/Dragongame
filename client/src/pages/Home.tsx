@@ -54,7 +54,7 @@ export default function Home() {
               </motion.div>
             </div>
             
-            <p className="text-2xl md:text-3xl font-light text-primary-foreground/80 tracking-wide max-w-xl mx-auto leading-relaxed">
+            <p className="text-2xl md:text-3xl font-light text-yellow-100/80 tracking-wide max-w-xl mx-auto leading-relaxed">
               Unlock the secrets of the <span className="text-primary font-bold">Dragon</span> in our premium Vietnamese slot experience.
             </p>
 

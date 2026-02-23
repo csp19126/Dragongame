@@ -3,17 +3,17 @@ import { users, gameStates, type InsertUser, type User, type InsertGameState, ty
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateBalance(userId: number, newBalance: number): Promise<User>;
-  getGameState(userId: number, slotId: string): Promise<GameState | undefined>;
-  updateGameState(userId: number, slotId: string, state: Partial<InsertGameState>): Promise<GameState>;
+  updateBalance(userId: string, newBalance: number): Promise<User>;
+  getGameState(userId: string, slotId: string): Promise<GameState | undefined>;
+  updateGameState(userId: string, slotId: string, state: Partial<InsertGameState>): Promise<GameState>;
   getLeaderboard(): Promise<User[]>;
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: number): Promise<User | undefined> {
+  async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
@@ -28,23 +28,23 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateBalance(userId: number, newBalance: number): Promise<User> {
+  async updateBalance(userId: string, newBalance: number): Promise<User> {
     const [user] = await db.update(users).set({ balance: newBalance }).where(eq(users.id, userId)).returning();
     return user;
   }
 
-  async getGameState(userId: number, slotId: string): Promise<GameState | undefined> {
+  async getGameState(userId: string, slotId: string): Promise<GameState | undefined> {
     const [state] = await db.select().from(gameStates).where(eq(gameStates.userId, userId));
     return state;
   }
 
-  async updateGameState(userId: number, slotId: string, state: Partial<InsertGameState>): Promise<GameState> {
+  async updateGameState(userId: string, slotId: string, state: Partial<InsertGameState>): Promise<GameState> {
     const existing = await this.getGameState(userId, slotId);
     if (existing) {
       const [updated] = await db.update(gameStates).set(state).where(eq(gameStates.id, existing.id)).returning();
       return updated;
     } else {
-      const [created] = await db.insert(gameStates).values({ userId, slotId, ...state } as InsertGameState).returning();
+      const [created] = await db.insert(gameStates).values({ userId, slotId, ...state } as any).returning();
       return created;
     }
   }

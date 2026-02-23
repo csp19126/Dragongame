@@ -23,9 +23,10 @@ export function SlotMachine({ balance }: { balance: number }) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [bet, setBet] = useState(10);
   const [lastWin, setLastWin] = useState(0);
+  const [freeSpins, setFreeSpins] = useState(0);
 
   const handleSpin = async () => {
-    if (balance < bet) {
+    if (balance < bet && freeSpins === 0) {
       toast({
         title: "Insufficient Balance",
         description: "Please top up to continue playing!",
@@ -51,17 +52,25 @@ export function SlotMachine({ balance }: { balance: number }) {
         clearInterval(interval);
         setReels(result.result);
         setIsSpinning(false);
+        setFreeSpins(result.totalFreeSpins);
         
         if (result.winAmount > 0) {
           setLastWin(result.winAmount);
-          if (result.isJackpot) {
+          if (result.isJackpot || result.winAmount >= bet * 10) {
             triggerJackpotConfetti();
           }
           toast({
-            title: result.isJackpot ? t.jackpot : `${t.win} +${result.winAmount}`,
-            className: result.isJackpot 
-              ? "bg-yellow-500 text-purple-900 border-yellow-600 font-bold text-xl"
-              : "bg-purple-600 text-yellow-100 border-yellow-700",
+            title: result.isJackpot ? t.jackpot : (result.winAmount >= bet * 5 ? "🔥 BIG WIN! 🔥" : `${t.win} +${result.winAmount}`),
+            className: result.winAmount >= bet * 5
+              ? "bg-yellow-500 text-purple-950 border-yellow-600 font-bold text-xl"
+              : "bg-purple-900 text-yellow-100 border-yellow-500/20",
+          });
+        }
+
+        if (result.freeSpinsAwarded > 0) {
+          toast({
+            title: `✨ ${result.freeSpinsAwarded} Free Spins Awarded! ✨`,
+            className: "bg-purple-900 text-yellow-100 border-yellow-500",
           });
         }
       }, 1500); // 1.5s spin duration
@@ -83,7 +92,7 @@ export function SlotMachine({ balance }: { balance: number }) {
       toast({
         title: t.aiAdviceTitle,
         description: data.advice,
-        className: "bg-purple-600 text-white border-purple-700",
+        className: "bg-purple-900 text-yellow-100 border-yellow-500/20",
       });
     } catch (e) {
         // ignore
@@ -131,29 +140,44 @@ export function SlotMachine({ balance }: { balance: number }) {
         </div>
 
         {/* Reels */}
-        <div className="bg-gradient-to-b from-gray-900 to-black rounded-2xl border-4 border-yellow-500/50 p-4 flex justify-between items-center h-56 reel-container overflow-hidden shadow-[inset_0_10px_30px_rgba(0,0,0,1)] gap-3">
-          {reels.map((symbol, i) => (
-            <div key={i} className="flex-1 h-full bg-gradient-to-b from-purple-900 to-purple-950 rounded-xl border-2 border-yellow-600/30 flex items-center justify-center text-7xl shadow-xl relative overflow-hidden">
-               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-               <AnimatePresence mode="popLayout">
-                 <motion.div
-                   key={isSpinning ? `spinning-${i}-${Math.random()}` : symbol}
-                   initial={{ y: isSpinning ? -150 : -20, opacity: 0 }}
-                   animate={{ y: 0, opacity: 1 }}
-                   exit={{ y: 150, opacity: 0 }}
-                   transition={{ 
-                     type: "spring", 
-                     stiffness: isSpinning ? 300 : 200, 
-                     damping: 20,
-                     delay: i * 0.1 
-                   }}
-                   className="absolute inset-0 flex items-center justify-center filter drop-shadow-md"
-                 >
-                   {symbol}
-                 </motion.div>
-               </AnimatePresence>
-            </div>
-          ))}
+        <div className="bg-gradient-to-b from-purple-950 to-black rounded-2xl border-4 border-yellow-500/50 p-4 flex justify-between items-center h-56 reel-container overflow-hidden shadow-[inset_0_10px_30px_rgba(0,0,0,1)] gap-3">
+          {reels.map((symbol, i) => {
+            const isNearMiss = !isSpinning && lastWin === 0 && (
+              (reels[0] === reels[1] && i < 2) || 
+              (reels[1] === reels[2] && i > 0) || 
+              (reels[0] === reels[2] && (i === 0 || i === 2))
+            );
+            
+            return (
+              <div key={i} className={`flex-1 h-full bg-gradient-to-b from-purple-900 to-purple-950 rounded-xl border-2 flex items-center justify-center text-7xl shadow-xl relative overflow-hidden transition-all duration-500 ${isNearMiss ? "border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)]" : "border-yellow-600/30"}`}>
+                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                 {isNearMiss && (
+                   <motion.div 
+                     animate={{ opacity: [0, 0.2, 0] }}
+                     transition={{ duration: 1, repeat: Infinity }}
+                     className="absolute inset-0 bg-red-500/10 pointer-events-none"
+                   />
+                 )}
+                 <AnimatePresence mode="popLayout">
+                   <motion.div
+                     key={isSpinning ? `spinning-${i}-${Math.random()}` : symbol}
+                     initial={{ y: isSpinning ? -150 : -20, opacity: 0 }}
+                     animate={{ y: 0, opacity: 1 }}
+                     exit={{ y: 150, opacity: 0 }}
+                     transition={{ 
+                       type: "spring", 
+                       stiffness: isSpinning ? 300 : 200, 
+                       damping: 20,
+                       delay: i * 0.1 
+                     }}
+                     className="absolute inset-0 flex items-center justify-center filter drop-shadow-md"
+                   >
+                     {symbol}
+                   </motion.div>
+                 </AnimatePresence>
+              </div>
+            );
+          })}
         </div>
         
         {/* Machine details */}
@@ -205,9 +229,9 @@ export function SlotMachine({ balance }: { balance: number }) {
           <Button 
             onClick={handleSpin} 
             disabled={isSpinning}
-            className="flex-1 h-20 text-3xl font-display uppercase tracking-[0.1em] purple-button text-yellow-300 border-yellow-500/50 rounded-2xl"
+            className={`flex-1 h-20 text-3xl font-display uppercase tracking-[0.1em] purple-button border-yellow-500/50 rounded-2xl ${freeSpins > 0 ? "text-yellow-400 animate-pulse border-yellow-400" : "text-yellow-300"}`}
           >
-            {isSpinning ? <Loader2 className="animate-spin w-10 h-10" /> : t.spin}
+            {isSpinning ? <Loader2 className="animate-spin w-10 h-10" /> : (freeSpins > 0 ? `Free (${freeSpins})` : t.spin)}
           </Button>
           
           <Button

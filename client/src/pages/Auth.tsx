@@ -98,7 +98,7 @@ export default function Auth() {
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-6">
                   <div className="space-y-3">
-                    <label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-2">{t.username}</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 ml-2">{t.username}</label>
                     <Input 
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)}
@@ -107,7 +107,7 @@ export default function Auth() {
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-2">{t.password}</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 ml-2">{t.password}</label>
                     <Input 
                       type="password"
                       value={password} 
@@ -125,7 +125,7 @@ export default function Auth() {
               <TabsContent value="register">
                 <form onSubmit={handleRegister} className="space-y-6">
                   <div className="space-y-3">
-                    <label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-2">{t.username}</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 ml-2">{t.username}</label>
                     <Input 
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)}
@@ -134,7 +134,7 @@ export default function Auth() {
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-2">{t.password}</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 ml-2">{t.password}</label>
                     <Input 
                       type="password"
                       value={password} 

@@ -26,7 +26,7 @@ export async function registerRoutes(
       if (existing) {
         return res.status(400).json({ message: "Username exists" });
       }
-      const user = await storage.createUser(input);
+      const user = await storage.createUser({ ...input, email: `${input.username}@example.com` });
       res.status(201).json(user);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -59,9 +59,13 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Unauthorized" });
       }
       const userId = req.user.claims.sub;
-      let user = await storage.getUserByUsername(userId);
+      let user = await storage.getUser(userId);
       if (!user) {
-        user = await storage.createUser({ username: userId, password: "oidc-user" });
+        user = await storage.createUser({ 
+          username: req.user.claims.nickname || userId, 
+          password: "oidc-user",
+          email: req.user.claims.email || `${userId}@replit.com`
+        });
       }
       res.json({ balance: user.balance, gameStates: [] });
     } catch (err) {
@@ -73,12 +77,23 @@ export async function registerRoutes(
     try {
       const input = api.game.spin.input.parse(req.body);
       const userId = req.user.claims.sub;
-      let user = await storage.getUserByUsername(userId);
+      let user = await storage.getUser(userId);
       if (!user) {
-        user = await storage.createUser({ username: userId, password: "oidc-user" });
+        user = await storage.createUser({ 
+          username: req.user.claims.nickname || userId, 
+          password: "oidc-user",
+          email: req.user.claims.email || `${userId}@replit.com`
+        });
       }
       
-      if (user.balance < input.betAmount) {
+      let gameState = await storage.getGameState(user.id, input.slotId);
+      if (!gameState) {
+        gameState = await storage.updateGameState(user.id, input.slotId, { freeSpins: 0 });
+      }
+
+      const isFreeSpin = (gameState?.freeSpins ?? 0) > 0;
+      
+      if (!isFreeSpin && user.balance < input.betAmount) {
         return res.status(400).json({ message: "Insufficient balance" });
       }
 
@@ -91,24 +106,31 @@ export async function registerRoutes(
 
       let winAmount = 0;
       let isJackpot = false;
+      let freeSpinsAwarded = 0;
 
-      // Simple winning logic
+      // RTP Tuning: 3-match pays 15x, 2-match pays 1.2x
       if (result[0] === result[1] && result[1] === result[2]) {
-        winAmount = input.betAmount * 50; // Increased jackpot for "shiny" feel
+        winAmount = input.betAmount * 15;
         isJackpot = true;
+        freeSpinsAwarded = 10;
       } else if (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]) {
-        winAmount = input.betAmount * 3;
+        winAmount = Math.floor(input.betAmount * 1.2);
+        // 10% chance of 3 free spins on 2-match
+        if (Math.random() < 0.1) freeSpinsAwarded = 3;
       }
 
-      const newBalance = user.balance - input.betAmount + winAmount;
+      const newBalance = isFreeSpin ? user.balance + winAmount : user.balance - input.betAmount + winAmount;
+      const newFreeSpins = (gameState?.freeSpins ?? 0) - (isFreeSpin ? 1 : 0) + freeSpinsAwarded;
+
       await storage.updateBalance(user.id, newBalance);
+      await storage.updateGameState(user.id, input.slotId, { freeSpins: newFreeSpins });
 
       res.json({
         result,
         winAmount,
         newBalance,
-        freeSpinsAwarded: 0,
-        totalFreeSpins: 0,
+        freeSpinsAwarded,
+        totalFreeSpins: newFreeSpins,
         isJackpot
       });
     } catch (err) {

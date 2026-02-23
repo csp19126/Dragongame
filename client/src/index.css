@@ -30,6 +30,23 @@
   
   --radius: 1rem; /* More rounded for smoother feel */
   
+  --sidebar: 270 50% 5%;
+  --sidebar-foreground: 270 20% 90%;
+  --sidebar-primary: 270 70% 40%;
+  --sidebar-primary-foreground: 48 96% 89%;
+  --sidebar-accent: 270 20% 15%;
+  --sidebar-accent-foreground: 48 96% 89%;
+  --sidebar-border: 270 30% 20%;
+  --sidebar-ring: 270 70% 40%;
+  
+  --card: 270 50% 5%;
+  --card-foreground: 270 20% 90%;
+  --card-border: 270 30% 20%;
+  
+  --popover: 270 50% 5%;
+  --popover-foreground: 270 20% 90%;
+  --popover-border: 270 30% 20%;
+
   /* Fonts */
   --font-display: 'Lobster', cursive;
   --font-sans: 'Nunito', sans-serif;

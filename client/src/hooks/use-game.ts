@@ -54,7 +54,7 @@ export function useSpin() {
           balance: data.newBalance,
         };
       });
-      // Also update auth user balance if possible, but state is main
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
     },
   });
 }
