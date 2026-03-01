@@ -16,13 +16,14 @@ class AuthStorage implements IAuthStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
+    const { id, ...updateData } = userData;
     const [user] = await db
       .insert(users)
       .values(userData)
       .onConflictDoUpdate({
         target: users.id,
         set: {
-          ...userData,
+          ...updateData,
           updatedAt: new Date(),
         },
       })
