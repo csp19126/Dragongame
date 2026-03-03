@@ -56,9 +56,7 @@ async function upsertUser(claims: any) {
       id: claims["sub"],
       email: claims["email"],
       username: claims["nickname"] || claims["preferred_username"] || `user_${claims["sub"]}`,
-      firstName: claims["first_name"],
-      lastName: claims["last_name"],
-      profileImageUrl: claims["profile_image_url"],
+      password: "", // Added to satisfy DB schema
     });
   } catch (error) {
     console.error("Failed to upsert user during auth:", error);
@@ -118,8 +116,16 @@ export async function setupAuth(app: Express) {
   app.get("/api/callback", (req, res, next) => {
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
+    }, (err: any, user: any) => {
+      if (err) return next(err);
+      if (!user) return res.redirect("/api/login");
+      req.logIn(user, (err) => {
+        if (err) return next(err);
+        // Explicitly set session userId for the game logic
+        (req.session as any).userId = user.claims.sub;
+        res.redirect("/");
+      });
     })(req, res, next);
   });
 

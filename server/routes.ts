@@ -60,8 +60,8 @@ export async function registerRoutes(
       let userId = (req.session as any).userId;
       
       // Fallback to Replit Auth if no session userId
-      if (!userId && req.user && req.user.claims) {
-        userId = req.user.claims.sub;
+      if (!userId && req.user && (req.user as any).claims) {
+        userId = (req.user as any).claims.sub;
       }
 
       if (!userId) {
@@ -75,11 +75,13 @@ export async function registerRoutes(
       }
 
       if (!user) {
+        // If still not found, we might need to create it (should have been done in upsertUser)
         return res.status(401).json({ message: "Unauthorized" });
       }
 
       res.json({ balance: user.balance, gameStates: [] });
     } catch (err) {
+      console.error("Error fetching game state:", err);
       res.status(500).json({ message: "Failed to fetch state" });
     }
   });

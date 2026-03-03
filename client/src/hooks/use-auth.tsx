@@ -30,14 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const res = await fetch("/api/game/state");
         if (res.ok) {
           const gameState = await res.json();
+          // The backend returns { balance, gameStates }
+          // We need to return a user object that client components expect
           return {
-            id: 0,
+            id: "replit-user",
             username: "replit-user",
             password: "",
             balance: gameState.balance
           } as SelectUser;
         }
-        // If not logged in, game state returns 401
         return null;
       } catch (e) {
         return null;

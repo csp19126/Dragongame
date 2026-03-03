@@ -15,7 +15,7 @@ class AuthStorage implements IAuthStorage {
     return user;
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
+  async upsertUser(userData: any): Promise<any> {
     const { id, ...updateData } = userData;
     const [user] = await db
       .insert(users)
@@ -24,7 +24,6 @@ class AuthStorage implements IAuthStorage {
         target: users.id,
         set: {
           ...updateData,
-          updatedAt: new Date(),
         },
       })
       .returning();
