@@ -56,6 +56,9 @@ async function upsertUser(claims: any) {
       id: claims["sub"],
       email: claims["email"],
       username: claims["nickname"] || claims["preferred_username"] || `user_${claims["sub"]}`,
+      firstName: claims["first_name"],
+      lastName: claims["last_name"],
+      profileImageUrl: claims["profile_image_url"],
       password: "", // Added to satisfy DB schema
     });
   } catch (error) {
