@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { users, gameStates, type InsertUser, type User, type InsertGameState, type GameState } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -34,7 +34,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getGameState(userId: string, slotId: string): Promise<GameState | undefined> {
-    const [state] = await db.select().from(gameStates).where(eq(gameStates.userId, userId));
+    const [state] = await db.select().from(gameStates).where(
+      sql`${gameStates.userId} = ${userId} AND ${gameStates.slotId} = ${slotId}`
+    );
     return state;
   }
 

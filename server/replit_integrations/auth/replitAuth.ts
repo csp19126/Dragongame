@@ -127,7 +127,10 @@ export async function setupAuth(app: Express) {
         if (err) return next(err);
         // Explicitly set session userId for the game logic
         (req.session as any).userId = user.claims.sub;
-        res.redirect("/");
+        req.session.save((err) => {
+          if (err) return next(err);
+          res.redirect("/");
+        });
       });
     })(req, res, next);
   });
