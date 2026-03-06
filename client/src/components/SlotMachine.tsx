@@ -172,7 +172,7 @@ export function SlotMachine({ balance }: { balance: number }) {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", damping: 15 }}
-        className="slot-machine-frame p-8 rounded-[2rem] w-full relative border-yellow-500/40 shadow-[0_0_50px_rgba(109,40,217,0.3)] overflow-hidden"
+        className="slot-machine-frame p-10 rounded-[4rem] w-full relative bg-[#4c1d95] border-[12px] border-[#31106e] shadow-[0_0_80px_rgba(0,0,0,0.6)] overflow-hidden"
       >
         {/* Animated Glow */}
         <motion.div
@@ -186,7 +186,7 @@ export function SlotMachine({ balance }: { balance: number }) {
         </div>
 
         {/* Reels */}
-        <div className="bg-gradient-to-b from-purple-950 to-black rounded-2xl border-4 border-yellow-500/50 p-4 flex justify-between items-center h-56 reel-container overflow-hidden shadow-[inset_0_10px_30px_rgba(0,0,0,1)] gap-3">
+        <div className="bg-[#1a0b3c] rounded-[2.5rem] border-[10px] border-[#3d1a8a] p-6 flex justify-between items-center h-80 reel-container overflow-hidden shadow-[inset_0_20px_50px_rgba(0,0,0,0.8)] gap-6">
           {reels.map((symbol, i) => {
             const isNearMiss = !isSpinning && lastWin === 0 && (
               (reels[0] === reels[1] && i < 2) || 
@@ -195,8 +195,9 @@ export function SlotMachine({ balance }: { balance: number }) {
             );
             
             return (
-              <div key={i} className={`flex-1 h-full bg-gradient-to-b from-purple-900 to-purple-950 rounded-xl border-2 flex items-center justify-center text-7xl shadow-xl relative overflow-hidden transition-all duration-500 ${isNearMiss ? "border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.3)]" : "border-yellow-600/30"}`}>
-                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+              <div key={i} className={`flex-1 h-full bg-[#2a1061] rounded-2xl border-[3px] flex items-center justify-center text-8xl shadow-2xl relative overflow-hidden transition-all duration-500 ${isNearMiss ? "border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.4)]" : "border-[#4a2b9d]"}`}>
+                 <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
+                 <div className="absolute inset-0 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] pointer-events-none" />
                  {isNearMiss && (
                    <motion.div 
                      animate={{ opacity: [0, 0.2, 0] }}
