@@ -126,14 +126,44 @@ export function SlotMachine({ balance }: { balance: number }) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-8 w-full max-w-lg mx-auto p-4">
+    <div className="flex flex-col items-center gap-8 w-full max-w-lg mx-auto p-4 relative">
+      {/* Big Win Overlay */}
+      <AnimatePresence>
+        {lastWin >= bet * 5 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.5 }}
+            className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none"
+          >
+            <motion.div 
+              animate={{ 
+                rotate: [0, -5, 5, 0],
+                scale: [1, 1.1, 1]
+              }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+              className="bg-yellow-500 text-purple-900 p-12 rounded-[3rem] text-center shadow-[0_0_100px_#eab308] border-8 border-white"
+            >
+              <div className="text-4xl font-black uppercase mb-2">💰 BIG WIN 💰</div>
+              <div className="text-6xl font-display font-black">${lastWin.toLocaleString()}</div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Slot Frame */}
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", damping: 15 }}
-        className="slot-machine-frame p-8 rounded-[2rem] w-full relative border-yellow-500/40 shadow-[0_0_50px_rgba(109,40,217,0.3)]"
+        className="slot-machine-frame p-8 rounded-[2rem] w-full relative border-yellow-500/40 shadow-[0_0_50px_rgba(109,40,217,0.3)] overflow-hidden"
       >
+        {/* Animated Glow */}
+        <motion.div
+          animate={{ opacity: [0.1, 0.3, 0.1] }}
+          transition={{ duration: 3, repeat: Infinity }}
+          className="absolute inset-0 bg-gradient-to-br from-yellow-500/20 to-purple-500/20 pointer-events-none"
+        />
         {/* Decorative Top */}
         <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gradient-to-b from-yellow-300 to-yellow-500 text-red-900 px-8 py-2 rounded-full font-bold border-4 border-red-800 shadow-[0_5px_15px_rgba(0,0,0,0.3)] z-10 whitespace-nowrap text-lg uppercase tracking-widest">
            ✨ VnSlot 888 ✨

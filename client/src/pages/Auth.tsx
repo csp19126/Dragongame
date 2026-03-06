@@ -98,7 +98,10 @@ export default function Auth() {
           <CardContent className="pb-10 px-8">
             <div className="flex flex-col gap-4 mb-6">
               <Button 
-                onClick={() => window.location.href = "/api/login"}
+                onClick={() => {
+                  console.log("Login button clicked, redirecting to /api/login");
+                  window.location.href = "/api/login";
+                }}
                 className="w-full h-14 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white border-2 border-orange-400 shadow-[0_0_15px_rgba(234,88,12,0.4)] transition-all group rounded-2xl"
               >
                 <SiReplit className="mr-3 h-6 w-6 group-hover:scale-110 transition-transform" />
