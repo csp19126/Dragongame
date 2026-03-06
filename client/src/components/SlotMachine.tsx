@@ -8,7 +8,7 @@ import confetti from "canvas-confetti";
 import { Coins, Sparkles, Loader2, Brain } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-const SYMBOLS = ["🐉", "🐯", "🐢", "🌺", "🪙", "🏮"];
+const SYMBOLS = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎"];
 
 // Helper to get random symbol for initial state
 const getRandomSymbol = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
@@ -39,41 +39,57 @@ export function SlotMachine({ balance }: { balance: number }) {
     setLastWin(0);
 
     try {
-      // Start spin animation (visual only)
-      const interval = setInterval(() => {
-        setReels([getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
-      }, 100);
+      // Start independent spin animations for all reels
+      const intervals = reels.map((_, i) => {
+        return setInterval(() => {
+          setReels(prev => {
+            const next = [...prev];
+            next[i] = getRandomSymbol();
+            return next;
+          });
+        }, 80 + (i * 30)); // Staggered speeds for more realism
+      });
 
       // Perform actual API call
       const result = await spinMutation.mutateAsync({ slotId: "main", betAmount: bet });
 
-      // Stop animation after a delay and show result
-      setTimeout(() => {
-        clearInterval(interval);
-        setReels(result.result);
-        setIsSpinning(false);
-        setFreeSpins(result.totalFreeSpins);
-        
-        if (result.winAmount > 0) {
-          setLastWin(result.winAmount);
-          if (result.isJackpot || result.winAmount >= bet * 10) {
-            triggerJackpotConfetti();
-          }
-          toast({
-            title: result.isJackpot ? t.jackpot : (result.winAmount >= bet * 5 ? "🔥 BIG WIN! 🔥" : `${t.win} +${result.winAmount}`),
-            className: result.winAmount >= bet * 5
-              ? "bg-yellow-500 text-purple-950 border-yellow-600 font-bold text-xl"
-              : "bg-purple-900 text-yellow-100 border-yellow-500/20",
+      // Stop animations with a staggered delay
+      result.result.forEach((symbol, i) => {
+        setTimeout(() => {
+          clearInterval(intervals[i]);
+          setReels(prev => {
+            const next = [...prev];
+            next[i] = symbol;
+            return next;
           });
-        }
+          
+          // If it's the last reel, finish the spin
+          if (i === result.result.length - 1) {
+            setIsSpinning(false);
+            setFreeSpins(result.totalFreeSpins);
+            
+            if (result.winAmount > 0) {
+              setLastWin(result.winAmount);
+              if (result.isJackpot || result.winAmount >= bet * 10) {
+                triggerJackpotConfetti();
+              }
+              toast({
+                title: result.isJackpot ? t.jackpot : (result.winAmount >= bet * 5 ? "🔥 BIG WIN! 🔥" : `${t.win} +${result.winAmount}`),
+                className: result.winAmount >= bet * 5
+                  ? "bg-yellow-500 text-purple-950 border-yellow-600 font-bold text-xl"
+                  : "bg-purple-900 text-yellow-100 border-yellow-500/20",
+              });
+            }
 
-        if (result.freeSpinsAwarded > 0) {
-          toast({
-            title: `✨ ${result.freeSpinsAwarded} Free Spins Awarded! ✨`,
-            className: "bg-purple-900 text-yellow-100 border-yellow-500",
-          });
-        }
-      }, 1500); // 1.5s spin duration
+            if (result.freeSpinsAwarded > 0) {
+              toast({
+                title: `✨ ${result.freeSpinsAwarded} Free Spins Awarded! ✨`,
+                className: "bg-purple-900 text-yellow-100 border-yellow-500",
+              });
+            }
+          }
+        }, 1000 + (i * 600)); // Staggered stop times
+      });
     } catch (error) {
       setIsSpinning(false);
       toast({
@@ -196,9 +212,9 @@ export function SlotMachine({ balance }: { balance: number }) {
                      exit={{ y: 150, opacity: 0 }}
                      transition={{ 
                        type: "spring", 
-                       stiffness: isSpinning ? 300 : 200, 
-                       damping: 20,
-                       delay: i * 0.1 
+                       stiffness: isSpinning ? 400 : 150, 
+                       damping: isSpinning ? 15 : 25,
+                       delay: i * 0.05 
                      }}
                      className="absolute inset-0 flex items-center justify-center filter drop-shadow-md"
                    >
