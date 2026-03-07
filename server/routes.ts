@@ -118,7 +118,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Insufficient balance" });
       }
 
-      const symbols = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎"];
+      const symbols = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎", "🌸", "🏯", "⚔️", "📜"];
       const result = [
         symbols[Math.floor(Math.random() * symbols.length)],
         symbols[Math.floor(Math.random() * symbols.length)],

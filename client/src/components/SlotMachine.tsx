@@ -8,7 +8,7 @@ import confetti from "canvas-confetti";
 import { Coins, Sparkles, Loader2, Brain } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-const SYMBOLS = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎"];
+const SYMBOLS = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎", "🌸", "🏯", "⚔️", "📜"];
 
 // Helper to get random symbol for initial state
 const getRandomSymbol = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
@@ -44,10 +44,11 @@ export function SlotMachine({ balance }: { balance: number }) {
         return setInterval(() => {
           setReels(prev => {
             const next = [...prev];
-            next[i] = getRandomSymbol();
+            // Use a larger pool for the visual spin to prevent "fading" appearance
+            next[i] = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
             return next;
           });
-        }, 80 + (i * 30)); // Staggered speeds for more realism
+        }, 60 + (i * 20)); // Faster, more intense spin
       });
 
       // Perform actual API call
@@ -70,25 +71,42 @@ export function SlotMachine({ balance }: { balance: number }) {
             
             if (result.winAmount > 0) {
               setLastWin(result.winAmount);
+              
+              // Enhanced win celebrations
               if (result.isJackpot || result.winAmount >= bet * 10) {
                 triggerJackpotConfetti();
+                // Intense confetti burst
+                confetti({
+                  particleCount: 150,
+                  spread: 70,
+                  origin: { y: 0.6 },
+                  colors: ['#FFD700', '#FFA500', '#FF4500']
+                });
+              } else {
+                // Standard win confetti
+                confetti({
+                  particleCount: 40,
+                  spread: 50,
+                  origin: { y: 0.7 }
+                });
               }
+
               toast({
-                title: result.isJackpot ? t.jackpot : (result.winAmount >= bet * 5 ? "🔥 BIG WIN! 🔥" : `${t.win} +${result.winAmount}`),
+                title: result.isJackpot ? "🎊 ROYAL JACKPOT! 🎊" : (result.winAmount >= bet * 5 ? "🔥 MEGA WIN! 🔥" : `💰 ${t.win} +${result.winAmount} 💰`),
                 className: result.winAmount >= bet * 5
-                  ? "bg-yellow-500 text-purple-950 border-yellow-600 font-bold text-xl"
-                  : "bg-purple-900 text-yellow-100 border-yellow-500/20",
+                  ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-yellow-200 font-black text-2xl shadow-[0_0_30px_rgba(251,191,36,0.5)] animate-bounce"
+                  : "bg-[#4c1d95] text-yellow-100 border-yellow-500/50 font-bold",
               });
             }
 
             if (result.freeSpinsAwarded > 0) {
               toast({
-                title: `✨ ${result.freeSpinsAwarded} Free Spins Awarded! ✨`,
-                className: "bg-purple-900 text-yellow-100 border-yellow-500",
+                title: `✨ ${result.freeSpinsAwarded} FREE SPINS AWARDED! ✨`,
+                className: "bg-gradient-to-r from-purple-600 to-blue-600 text-white border-white shadow-[0_0_20px_rgba(255,255,255,0.3)] font-black animate-pulse",
               });
             }
           }
-        }, 1000 + (i * 600)); // Staggered stop times
+        }, 1200 + (i * 800)); // Longer, more dramatic reveal
       });
     } catch (error) {
       setIsSpinning(false);
@@ -208,18 +226,18 @@ export function SlotMachine({ balance }: { balance: number }) {
                  <AnimatePresence mode="popLayout">
                    <motion.div
                      key={isSpinning ? `spinning-${i}-${Math.random()}` : symbol}
-                     initial={{ y: isSpinning ? -150 : -20, opacity: 0 }}
-                     animate={{ y: 0, opacity: 1 }}
-                     exit={{ y: 150, opacity: 0 }}
+                     initial={{ y: -100, opacity: 0, filter: "blur(10px)" }}
+                     animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
+                     exit={{ y: 100, opacity: 0, filter: "blur(10px)" }}
                      transition={{ 
                        type: "spring", 
-                       stiffness: isSpinning ? 400 : 150, 
-                       damping: isSpinning ? 15 : 25,
+                       stiffness: isSpinning ? 600 : 200, 
+                       damping: isSpinning ? 20 : 30,
                        delay: i * 0.05 
                      }}
-                     className="absolute inset-0 flex items-center justify-center filter drop-shadow-md"
+                     className="absolute inset-0 flex items-center justify-center"
                    >
-                     {symbol}
+                     <span className="drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">{symbol}</span>
                    </motion.div>
                  </AnimatePresence>
               </div>
