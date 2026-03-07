@@ -91,19 +91,60 @@ export function SlotMachine({ balance }: { balance: number }) {
                 });
               }
 
-              toast({
-                title: result.isJackpot ? "🎊 ROYAL JACKPOT! 🎊" : (result.winAmount >= bet * 5 ? "🔥 MEGA WIN! 🔥" : `💰 ${t.win} +${result.winAmount} 💰`),
-                className: result.winAmount >= bet * 5
-                  ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-yellow-200 font-black text-2xl shadow-[0_0_30px_rgba(251,191,36,0.5)] animate-bounce"
-                  : "bg-[#4c1d95] text-yellow-100 border-yellow-500/50 font-bold",
+              const messages = [];
+              
+              if (result.isJackpot) {
+                messages.push({
+                  title: "🎊 ROYAL JACKPOT! 🎊",
+                  className: "bg-gradient-to-r from-red-600 to-red-700 text-white border-red-300 font-black text-2xl shadow-[0_0_50px_rgba(220,38,38,0.6)] animate-bounce"
+                });
+              }
+
+              if (result.isRepeater) {
+                messages.push({
+                  title: "🔄 REPEATER! SPIN AGAIN! 🔄",
+                  className: "bg-gradient-to-r from-cyan-500 to-blue-600 text-white border-cyan-300 font-black text-xl shadow-[0_0_30px_rgba(34,211,238,0.5)] animate-pulse"
+                });
+              }
+
+              if (result.isBonusRound) {
+                messages.push({
+                  title: "🎁 BONUS ROUND ACTIVATED! 🎁",
+                  className: "bg-gradient-to-r from-purple-600 to-pink-600 text-white border-pink-300 font-black text-xl shadow-[0_0_30px_rgba(236,72,153,0.5)]"
+                });
+              }
+
+              if (result.multiplier && result.multiplier > 1) {
+                messages.push({
+                  title: `⚡ ${result.multiplier}x MULTIPLIER! ⚡`,
+                  className: "bg-gradient-to-r from-yellow-400 to-orange-500 text-purple-900 border-yellow-300 font-black text-lg shadow-[0_0_25px_rgba(251,191,36,0.5)]"
+                });
+              }
+
+              if (!result.isJackpot && !result.isRepeater && !result.isBonusRound && result.winAmount > 0) {
+                messages.push({
+                  title: `💰 WIN: +${result.winAmount} 💰`,
+                  className: "bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold text-lg shadow-[0_0_20px_rgba(251,191,36,0.4)]"
+                });
+              }
+
+              messages.forEach((msg, idx) => {
+                setTimeout(() => {
+                  toast({ 
+                    title: msg.title,
+                    className: msg.className
+                  });
+                }, idx * 500);
               });
             }
 
             if (result.freeSpinsAwarded > 0) {
-              toast({
-                title: `✨ ${result.freeSpinsAwarded} FREE SPINS AWARDED! ✨`,
-                className: "bg-gradient-to-r from-purple-600 to-blue-600 text-white border-white shadow-[0_0_20px_rgba(255,255,255,0.3)] font-black animate-pulse",
-              });
+              setTimeout(() => {
+                toast({
+                  title: `✨ +${result.freeSpinsAwarded} FREE SPINS! ✨`,
+                  className: "bg-gradient-to-r from-purple-600 to-blue-600 text-white border-white shadow-[0_0_20px_rgba(255,255,255,0.3)] font-black animate-pulse text-lg",
+                });
+              }, 2000);
             }
           }
         }, 1200 + (i * 800)); // Longer, more dramatic reveal

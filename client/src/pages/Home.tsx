@@ -13,7 +13,6 @@ export default function Home() {
   const { data: gameState, isLoading: isGameLoading } = useGameState();
   const { t } = useLang();
 
-  // If auth is loading, show spinner
   if (isAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -22,99 +21,136 @@ export default function Home() {
     );
   }
 
-  // If not logged in, show landing page
   if (!user) {
+    // LANDING PAGE - Epic and immersive
     return (
-      <div className="min-h-screen bg-background flex flex-col selection:bg-primary selection:text-gold-400">
+      <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] flex flex-col selection:bg-yellow-500 selection:text-purple-900 relative overflow-hidden">
+        {/* Animated background orbs */}
+        <motion.div
+          animate={{ 
+            x: [0, 100, -100, 0],
+            y: [0, -50, 50, 0],
+            scale: [1, 1.2, 0.9, 1]
+          }}
+          transition={{ duration: 20, repeat: Infinity }}
+          className="absolute top-10 left-10 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none"
+        />
+        <motion.div
+          animate={{ 
+            x: [0, -100, 100, 0],
+            y: [0, 50, -50, 0],
+            scale: [1, 0.9, 1.2, 1]
+          }}
+          transition={{ duration: 25, repeat: Infinity, delay: 2 }}
+          className="absolute bottom-10 right-10 w-96 h-96 bg-yellow-500/15 rounded-full blur-3xl pointer-events-none"
+        />
+
         <Header />
+        
         <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="text-center space-y-12 max-w-3xl"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1 }}
+            className="text-center space-y-8 max-w-4xl"
           >
-            <div className="relative inline-block group">
-              <motion.div
-                animate={{ 
-                  filter: ["drop-shadow(0 0 20px rgba(139, 92, 246, 0.3))", "drop-shadow(0 0 40px rgba(139, 92, 246, 0.6))", "drop-shadow(0 0 20px rgba(139, 92, 246, 0.3))"]
-                }}
-                transition={{ duration: 4, repeat: Infinity }}
-              >
-                <h1 className="text-7xl md:text-9xl font-display gold-gradient-text drop-shadow-2xl py-8 px-4 leading-tight">
-                  VnSlot
-                </h1>
-              </motion.div>
-              <motion.div 
-                animate={{ rotate: 360, scale: [1, 1.2, 1] }}
-                transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                className="absolute -top-16 -right-16 text-8xl opacity-30 pointer-events-none filter blur-[1px]"
-              >
-                🏮
-              </motion.div>
-            </div>
-            
-            <p className="text-2xl md:text-3xl font-light text-yellow-100/80 tracking-wide max-w-xl mx-auto leading-relaxed">
-              Unlock the secrets of the <span className="text-primary font-bold">Dragon</span> in our premium Vietnamese slot experience.
-            </p>
+            {/* Main Title */}
+            <motion.div 
+              animate={{ 
+                textShadow: ["0 0 20px rgba(234,179,8,0.3)", "0 0 60px rgba(234,179,8,0.6)", "0 0 20px rgba(234,179,8,0.3)"]
+              }}
+              transition={{ duration: 3, repeat: Infinity }}
+              className="relative"
+            >
+              <h1 className="text-8xl md:text-9xl font-display font-black bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-500 bg-clip-text text-transparent leading-tight">
+                VnSlot
+              </h1>
+              <p className="text-2xl md:text-4xl text-yellow-500/80 font-bold tracking-[0.3em] uppercase mt-4">888 Dragon Fortune</p>
+            </motion.div>
 
-            <Link href="/auth">
-              <Button size="lg" className="text-2xl px-16 py-10 rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(139,92,246,0.5)] bg-gradient-to-r from-primary via-purple-600 to-accent hover:scale-105 transition-all duration-500 font-display tracking-widest group border-2 border-yellow-500/50">
-                <span className="group-hover:tracking-[0.2em] transition-all duration-500 text-yellow-100">{t.playNow}</span>
-              </Button>
-            </Link>
+            {/* Tagline */}
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.8 }}
+              className="text-xl md:text-2xl text-yellow-100/70 max-w-2xl mx-auto leading-relaxed font-light"
+            >
+              Experience the legendary power of the <span className="text-yellow-400 font-bold">Dragon</span>. Win massive rewards, unlock bonus rounds, and claim your fortune in the ultimate Oriental slot experience.
+            </motion.p>
 
-            <div className="grid grid-cols-3 gap-8 mt-20">
+            {/* Stats Row */}
+            <div className="grid grid-cols-3 gap-4 md:gap-8 mt-12 mb-8">
               {[
-                { icon: "💰", label: "Massive Wins" },
-                { icon: "🧧", label: "Lucky Daily" },
-                { icon: "✨", label: "Royal Perks" }
-              ].map((item, i) => (
-                <motion.div 
+                { label: "MAX WIN", value: "$1M+", icon: "💰" },
+                { label: "FREE SPINS", value: "∞", icon: "✨" },
+                { label: "BONUS ROUNDS", value: "5+", icon: "🎁" }
+              ].map((stat, i) => (
+                <motion.div
                   key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 0.8, y: 0 }}
-                  transition={{ delay: 0.5 + (i * 0.2) }}
-                  className="flex flex-col items-center group cursor-default"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.5 + i * 0.1 }}
+                  className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-yellow-500/30 rounded-2xl p-4 md:p-6 backdrop-blur-xl"
                 >
-                  <span className="text-5xl mb-4 group-hover:scale-125 transition-transform duration-300">{item.icon}</span>
-                  <span className="font-black text-xs uppercase tracking-[0.3em] text-yellow-500/60">{item.label}</span>
+                  <div className="text-3xl md:text-4xl mb-2">{stat.icon}</div>
+                  <div className="text-yellow-500/70 text-xs uppercase tracking-widest font-black">{stat.label}</div>
+                  <div className="text-yellow-400 text-2xl md:text-3xl font-display font-black mt-1">{stat.value}</div>
                 </motion.div>
               ))}
             </div>
+
+            {/* CTA Button */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.8 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Link href="/auth">
+                <Button size="lg" className="text-2xl px-20 py-12 rounded-[3rem] font-display font-black uppercase tracking-[0.2em] bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white border-4 border-yellow-300 shadow-[0_0_50px_rgba(234,179,8,0.6)] hover:shadow-[0_0_80px_rgba(234,179,8,0.8)] transition-all duration-300">
+                  💎 Begin Your Quest 💎
+                </Button>
+              </Link>
+            </motion.div>
+
+            {/* Feature Row */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1 }}
+              className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 pt-8 border-t border-yellow-500/20"
+            >
+              {[
+                { title: "REPEATER WINS", desc: "Chain matching symbols for exponential rewards" },
+                { title: "WILD MULTIPLIERS", desc: "Unlock 2x, 5x, 10x bonus multipliers" },
+                { title: "DRAGON JACKPOT", desc: "Hit the legendary jackpot for ultimate glory" }
+              ].map((feature, i) => (
+                <motion.div
+                  key={i}
+                  whileHover={{ y: -5 }}
+                  className="text-center"
+                >
+                  <h3 className="text-lg md:text-xl font-black text-yellow-400 uppercase tracking-widest mb-2">{feature.title}</h3>
+                  <p className="text-yellow-100/60 text-sm md:text-base">{feature.desc}</p>
+                </motion.div>
+              ))}
+            </motion.div>
           </motion.div>
         </main>
-        {/* Decorative background elements */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20 z-0">
-          <motion.div 
-            animate={{ y: [0, -20, 0] }} 
-            transition={{ duration: 6, repeat: Infinity }}
-            className="absolute top-1/4 -left-12 text-9xl blur-sm"
-          >
-            🐉
-          </motion.div>
-          <motion.div 
-            animate={{ y: [0, 20, 0] }} 
-            transition={{ duration: 8, repeat: Infinity }}
-            className="absolute bottom-1/4 -right-12 text-9xl blur-sm"
-          >
-            🐢
-          </motion.div>
-        </div>
-        <div className="fixed bottom-0 left-0 w-full h-64 bg-gradient-to-t from-primary/10 to-transparent pointer-events-none z-0" />
       </div>
     );
   }
 
-  // If logged in, show game UI
+  // GAME PAGE
   return (
-    <div className="min-h-screen bg-background flex flex-col selection:bg-primary selection:text-white">
+    <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] flex flex-col selection:bg-primary selection:text-white">
       <Header />
       <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="w-full max-w-4xl mx-auto space-y-12 py-8"
+          className="w-full max-w-4xl mx-auto space-y-8 py-8"
         >
           {isGameLoading ? (
             <div className="flex justify-center p-20">
@@ -123,41 +159,8 @@ export default function Home() {
           ) : (
             <SlotMachine balance={gameState?.balance ?? user.balance} />
           )}
-          
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            className="flex justify-center"
-          >
-            <div className="bg-gradient-to-r from-gray-950 to-gray-900 text-yellow-500 px-10 py-4 rounded-3xl border-2 border-yellow-500/40 flex items-center gap-4 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-              <span className="text-3xl animate-pulse">👑</span>
-              <div className="flex flex-col">
-                <span className="font-display tracking-[0.3em] text-sm text-yellow-400">ROYAL VIP</span>
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-50">Level 1 Privelege</span>
-              </div>
-            </div>
-          </motion.div>
         </motion.div>
       </main>
-
-      {/* Decorative background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20 z-0">
-        <motion.div 
-          animate={{ y: [0, -20, 0] }} 
-          transition={{ duration: 6, repeat: Infinity }}
-          className="absolute top-1/4 -left-12 text-9xl blur-sm"
-        >
-          🐉
-        </motion.div>
-        <motion.div 
-          animate={{ y: [0, 20, 0] }} 
-          transition={{ duration: 8, repeat: Infinity }}
-          className="absolute bottom-1/4 -right-12 text-9xl blur-sm"
-        >
-          🐢
-        </motion.div>
-      </div>
-      
-      <div className="fixed bottom-0 left-0 w-full h-64 bg-gradient-to-t from-primary/10 to-transparent pointer-events-none z-0" />
     </div>
   );
 }

@@ -128,16 +128,61 @@ export async function registerRoutes(
       let winAmount = 0;
       let isJackpot = false;
       let freeSpinsAwarded = 0;
+      let isBonusRound = false;
+      let multiplier = 1;
+      let isRepeater = false;
 
-      // RTP Tuning: 3-match pays 15x, 2-match pays 1.2x
-      if (result[0] === result[1] && result[1] === result[2]) {
-        winAmount = input.betAmount * 15;
+      // Enhanced RTP system with multipliers and repeaters
+      const allMatch = result[0] === result[1] && result[1] === result[2];
+      const twoMatch = result[0] === result[1] || result[1] === result[2] || result[0] === result[2];
+
+      if (allMatch) {
+        // JACKPOT: 3 matching symbols
+        winAmount = input.betAmount * 50;
         isJackpot = true;
-        freeSpinsAwarded = 10;
-      } else if (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]) {
-        winAmount = Math.floor(input.betAmount * 1.2);
-        // 10% chance of 3 free spins on 2-match
-        if (Math.random() < 0.1) freeSpinsAwarded = 3;
+        freeSpinsAwarded = 15;
+        
+        // 30% chance for bonus round on jackpot
+        if (Math.random() < 0.3) {
+          isBonusRound = true;
+          winAmount *= 2; // 2x multiplier in bonus
+        }
+
+        // 20% chance for repeater (re-spin with same symbols)
+        if (Math.random() < 0.2) {
+          isRepeater = true;
+          winAmount *= 2;
+        }
+      } else if (twoMatch) {
+        // BASE WIN: 2 matching symbols
+        const baseWin = input.betAmount * 5;
+        
+        // Dynamic multiplier based on symbol rarity
+        if (result[0] === "🐉" || result[1] === "🐉" || result[2] === "🐉") {
+          multiplier = 3;
+        } else if (result[0] === "💎" || result[1] === "💎" || result[2] === "💎") {
+          multiplier = 2.5;
+        }
+        
+        winAmount = Math.floor(baseWin * multiplier);
+        
+        // 25% chance for free spins
+        if (Math.random() < 0.25) {
+          freeSpinsAwarded = 8;
+        }
+        
+        // 15% chance for bonus round
+        if (Math.random() < 0.15) {
+          isBonusRound = true;
+          freeSpinsAwarded += 5;
+        }
+      }
+
+      // Wild multiplier chance (5%)
+      if (Math.random() < 0.05) {
+        const wildMultipliers = [2, 5, 10];
+        const wildMult = wildMultipliers[Math.floor(Math.random() * wildMultipliers.length)];
+        winAmount *= wildMult;
       }
 
       const newBalance = isFreeSpin ? user.balance + winAmount : user.balance - input.betAmount + winAmount;
@@ -152,7 +197,10 @@ export async function registerRoutes(
         newBalance,
         freeSpinsAwarded,
         totalFreeSpins: newFreeSpins,
-        isJackpot
+        isJackpot,
+        isBonusRound,
+        isRepeater,
+        multiplier: multiplier > 1 ? multiplier : undefined
       });
     } catch (err) {
       if (err instanceof z.ZodError) {

@@ -12,6 +12,9 @@ export interface SpinResponse {
   freeSpinsAwarded: number;
   totalFreeSpins: number;
   isJackpot: boolean;
+  isBonusRound?: boolean;
+  isRepeater?: boolean;
+  multiplier?: number;
 }
 
 export interface LeaderboardEntry {
