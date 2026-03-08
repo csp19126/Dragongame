@@ -127,11 +127,8 @@ export async function registerRoutes(
       }
 
       const symbols = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎", "🌸", "🏯", "⚔️", "📜"];
-      const result = [
-        symbols[Math.floor(Math.random() * symbols.length)],
-        symbols[Math.floor(Math.random() * symbols.length)],
-        symbols[Math.floor(Math.random() * symbols.length)],
-      ];
+      const pick = () => symbols[Math.floor(Math.random() * symbols.length)];
+      const pickDifferent = (s: string) => { let n = pick(); while (n === s) n = pick(); return n; };
 
       let winAmount = 0;
       let isJackpot = false;
@@ -139,58 +136,79 @@ export async function registerRoutes(
       let isBonusRound = false;
       let multiplier = 1;
       let isRepeater = false;
+      let isNearMiss = false;
+      let isFakeRepeater = false;
 
-      // Enhanced RTP system with multipliers and repeaters
-      const allMatch = result[0] === result[1] && result[1] === result[2];
-      const twoMatch = result[0] === result[1] || result[1] === result[2] || result[0] === result[2];
+      const roll = Math.random();
+      let result: string[];
 
-      if (allMatch) {
-        // JACKPOT: 3 matching symbols
-        winAmount = input.betAmount * 50;
-        isJackpot = true;
-        freeSpinsAwarded = 15;
-        
-        // 30% chance for bonus round on jackpot
-        if (Math.random() < 0.3) {
-          isBonusRound = true;
-          winAmount *= 2; // 2x multiplier in bonus
+      if (roll < 0.005) {
+        const s = pick();
+        result = [s, s, s];
+      } else if (roll < 0.12) {
+        const s = pick();
+        const pos = Math.floor(Math.random() * 3);
+        result = [s, s, s];
+        result[pos === 0 ? 2 : pos === 1 ? 0 : 1] = pickDifferent(s);
+        if (pos === 2) {
+          result = [s, s, pickDifferent(s)];
+        } else if (pos === 0) {
+          result = [pickDifferent(s), s, s];
+        } else {
+          result = [s, pickDifferent(s), s];
         }
-
-        // 20% chance for repeater (re-spin with same symbols)
-        if (Math.random() < 0.2) {
-          isRepeater = true;
-          winAmount *= 2;
+        winAmount = Math.floor(input.betAmount * (2 + Math.random() * 3));
+        if (result.includes("🐉")) multiplier = 2;
+        if (result.includes("💎")) multiplier = 1.5;
+        winAmount = Math.floor(winAmount * multiplier);
+      } else if (roll < 0.55) {
+        const s = pick();
+        const nearPos = Math.floor(Math.random() * 3);
+        result = [s, s, s];
+        if (nearPos === 2) {
+          const adj = symbols[(symbols.indexOf(s) + 1) % symbols.length];
+          result[2] = adj;
+        } else if (nearPos === 0) {
+          const adj = symbols[(symbols.indexOf(s) + 1) % symbols.length];
+          result[0] = adj;
+        } else {
+          const adj = symbols[(symbols.indexOf(s) + 1) % symbols.length];
+          result[1] = adj;
         }
-      } else if (twoMatch) {
-        // BASE WIN: 2 matching symbols
-        const baseWin = input.betAmount * 5;
-        
-        // Dynamic multiplier based on symbol rarity
-        if (result[0] === "🐉" || result[1] === "🐉" || result[2] === "🐉") {
-          multiplier = 3;
-        } else if (result[0] === "💎" || result[1] === "💎" || result[2] === "💎") {
-          multiplier = 2.5;
+        isNearMiss = true;
+      } else {
+        result = [pick(), pick(), pick()];
+        while (result[0] === result[1] && result[1] === result[2]) {
+          result[2] = pick();
         }
-        
-        winAmount = Math.floor(baseWin * multiplier);
-        
-        // 25% chance for free spins
-        if (Math.random() < 0.25) {
-          freeSpinsAwarded = 8;
-        }
-        
-        // 15% chance for bonus round
-        if (Math.random() < 0.15) {
-          isBonusRound = true;
-          freeSpinsAwarded += 5;
+        while (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]) {
+          result[Math.floor(Math.random() * 3)] = pick();
         }
       }
 
-      // Wild multiplier chance (5%)
-      if (Math.random() < 0.05) {
-        const wildMultipliers = [2, 5, 10];
-        const wildMult = wildMultipliers[Math.floor(Math.random() * wildMultipliers.length)];
-        winAmount *= wildMult;
+      const allMatch = result[0] === result[1] && result[1] === result[2];
+      const twoMatch = !allMatch && (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]);
+
+      if (allMatch) {
+        winAmount = input.betAmount * 50;
+        isJackpot = true;
+        freeSpinsAwarded = 15;
+        if (Math.random() < 0.3) { isBonusRound = true; winAmount *= 2; }
+        if (Math.random() < 0.15) { isRepeater = true; winAmount *= 2; }
+      }
+
+      if (isNearMiss && Math.random() < 0.12) {
+        isFakeRepeater = true;
+        isRepeater = true;
+      }
+
+      if (winAmount > 0 && !allMatch && Math.random() < 0.08) {
+        freeSpinsAwarded = Math.random() < 0.5 ? 3 : 5;
+      }
+
+      if (winAmount > 0 && Math.random() < 0.03) {
+        const wildMultipliers = [2, 3, 5];
+        winAmount *= wildMultipliers[Math.floor(Math.random() * wildMultipliers.length)];
       }
 
       const newBalance = isFreeSpin ? user.balance + winAmount : user.balance - input.betAmount + winAmount;
@@ -248,6 +266,8 @@ export async function registerRoutes(
         isJackpot,
         isBonusRound,
         isRepeater,
+        isFakeRepeater,
+        isNearMiss,
         multiplier: multiplier > 1 ? multiplier : undefined,
         streak: newConsecutiveWins,
         totalWins: newTotalWins,

@@ -338,3 +338,42 @@
   will-change: transform, opacity;
   z-index: 100;
 }
+
+@keyframes edgeGlow {
+  0%, 100% {
+    box-shadow: inset 0 0 30px rgba(139,92,246,0.05), inset 0 0 60px rgba(251,191,36,0.02);
+  }
+  50% {
+    box-shadow: inset 0 0 50px rgba(139,92,246,0.1), inset 0 0 80px rgba(251,191,36,0.05);
+  }
+}
+
+.edge-glow-ambient {
+  animation: edgeGlow 3s ease-in-out infinite;
+  will-change: box-shadow;
+}
+
+@keyframes spinButtonPulse {
+  0%, 100% {
+    box-shadow: 0 5px 0 #3b0764, 0 8px 25px rgba(109,40,217,0.5), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 30px rgba(139,92,246,0.2);
+  }
+  50% {
+    box-shadow: 0 5px 0 #3b0764, 0 8px 25px rgba(109,40,217,0.5), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 50px rgba(139,92,246,0.4);
+  }
+}
+
+.spin-button-active {
+  animation: spinButtonPulse 0.6s ease-in-out infinite;
+}
+
+@keyframes nearMissShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+.near-miss-shake {
+  animation: nearMissShake 0.3s ease-in-out;
+}

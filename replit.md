@@ -25,7 +25,7 @@ Target market: Vietnamese betting game players (Bắn Cá, Máy Xèng style)
 - **Path aliases**: `@/` → `client/src/`, `@shared/` → `shared/`
 
 ### Key Components
-- **SlotMachine** (`client/src/components/SlotMachine.tsx`): Core game with 3 reels, fast 1.5s spin cycles, auto-spin, near-miss highlighting, screen shake, particle effects, streak display, sound integration. Premium cabinet design with glass/scanline effects.
+- **SlotMachine** (`client/src/components/SlotMachine.tsx`): Core game with 3 reels, ~0.9s spin cycles, auto-spin, near-miss system with dramatic 3rd reel slowdown, fake repeater overlays, screen flash/shake effects, particle effects, share button, loss-streak encouragement, streak display, enhanced sound integration. Premium cabinet design with ambient edge glow, glass/scanline effects.
 - **AchievementBadge** (`client/src/components/AchievementBadge.tsx`): Badge display with Lucide icon mapping and pulse animations
 - **StreakDisplay** (`client/src/components/StreakDisplay.tsx`): Win streak counter with tier labels (On Fire, Unstoppable, Dragon Mode)
 - **Leaderboard** (`client/src/components/Leaderboard.tsx`): Ranked player list with Crown icons
@@ -67,12 +67,20 @@ Target market: Vietnamese betting game players (Bắn Cá, Máy Xèng style)
 ### Game Mechanics
 - **Symbols**: 🐉🧧🏮💎🪙🎎🌸🏯⚔️📜 (10 total)
 - **Bet Amounts**: 1000, 5000, 10000, 50000, 100000 (Vietnamese Đồng style)
-- **Win System**:
-  - 3 match (Jackpot): 50x bet + 15 free spins
-  - 2 match: 5x bet with dynamic multipliers (Dragon 3x, Gem 2.5x)
-  - Bonus round: 30% on jackpot, 15% on 2-match (2x multiplier)
-  - Repeater: 20% on jackpot (2x multiplier)
-  - Wild multiplier: 5% chance for 2x/5x/10x on any win
+- **Win System** (Designed for addiction/retention):
+  - 3 match (Jackpot): 50x bet + 15 free spins — 0.5% chance
+  - 2 match (real win): 2-5x bet with Dragon 2x / Gem 1.5x multipliers — ~11.5% chance
+  - Near-miss (forced 2-match-but-miss): ~43% of spins show 2 matching + adjacent symbol on 3rd reel, creating "almost won" feel
+  - Fake repeaters: ~12% of near-misses trigger a "REPEATER!" announcement with animation but the re-spin produces a loss
+  - Remaining ~45% are clean losses (all different symbols)
+  - Wild multiplier: 3% chance for 2x/3x/5x on any win
+  - Free spins on 2-match wins: 8% chance for 3-5 free spins
+- **Spin Speed**: ~900ms total cycle (250ms base + 180ms per reel gap), vs previous 1700ms. Near-miss spins use 350ms gap with dramatic 3rd reel slowdown
+- **Encouragement System**: After 5+ consecutive losses, shows motivating messages ("Almost there!", "Dragon stirs... BIG WIN incoming!")
+- **Share Feature**: Win amounts ≥3x bet show a "Share Win" button (Web Share API / clipboard fallback)
+- **Near-miss Effects**: "SO CLOSE!" overlay, screen shake, descending tension sound, red glow pulse on matched reels
+- **Fake Repeater Effects**: "REPEATER! Re-spinning for bonus..." overlay with cyan glow and spinning icon, disappears after 2.5s
+- **Screen Flash**: Purple flash on spin start, gold flash on big win, cyan flash on fake repeater
 - **Achievements**: 8 badges (first_win, hot_streak_3/5, dragon_master, high_roller, millionaire, jackpot_hunter, lucky_seven)
 - **Streak Tracking**: Consecutive wins tracked, displayed with tier labels
 

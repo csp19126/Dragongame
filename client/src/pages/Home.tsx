@@ -49,14 +49,18 @@ function FloatingSymbols() {
 }
 
 const FAKE_WINS = [
-  { user: "Dragon***", amount: 250000 },
-  { user: "Lucky***", amount: 500000 },
-  { user: "Pho***", amount: 125000 },
-  { user: "Viet***", amount: 1000000 },
-  { user: "Gold***", amount: 75000 },
-  { user: "King***", amount: 350000 },
-  { user: "Star***", amount: 850000 },
-  { user: "Fire***", amount: 420000 },
+  { user: "Dragon***", amount: 2500000, type: "JACKPOT" },
+  { user: "Lucky***", amount: 500000, type: "" },
+  { user: "Pho***", amount: 125000, type: "" },
+  { user: "Viet***", amount: 5000000, type: "JACKPOT" },
+  { user: "Gold***", amount: 750000, type: "REPEATER" },
+  { user: "King***", amount: 350000, type: "" },
+  { user: "Star***", amount: 8500000, type: "JACKPOT" },
+  { user: "Fire***", amount: 420000, type: "" },
+  { user: "Hoàng***", amount: 1200000, type: "BONUS" },
+  { user: "Minh***", amount: 680000, type: "" },
+  { user: "Phúc***", amount: 3200000, type: "JACKPOT" },
+  { user: "Lan***", amount: 950000, type: "REPEATER" },
 ];
 
 function LiveWinsTicker() {
@@ -65,7 +69,7 @@ function LiveWinsTicker() {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % FAKE_WINS.length);
-    }, 2500);
+    }, 1800);
     return () => clearInterval(interval);
   }, []);
 
@@ -85,14 +89,23 @@ function LiveWinsTicker() {
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -20, opacity: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
             className="flex items-center gap-2 text-sm"
           >
             <span className="text-yellow-100 font-bold">{FAKE_WINS[currentIndex].user}</span>
             <span className="text-yellow-100/60">won</span>
             <span className="text-yellow-400 font-black">
-              {FAKE_WINS[currentIndex].amount.toLocaleString()}d
+              {FAKE_WINS[currentIndex].amount.toLocaleString()}đ
             </span>
+            {FAKE_WINS[currentIndex].type && (
+              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                FAKE_WINS[currentIndex].type === 'JACKPOT' ? 'bg-red-500/80 text-white' :
+                FAKE_WINS[currentIndex].type === 'REPEATER' ? 'bg-cyan-500/80 text-white' :
+                'bg-purple-500/80 text-white'
+              }`}>
+                {FAKE_WINS[currentIndex].type}
+              </span>
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
