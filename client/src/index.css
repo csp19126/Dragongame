@@ -95,42 +95,10 @@
   }
 }
 
-/* Enhanced Slot Machine Aesthetics */
-.slot-machine-frame {
-  background: linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%);
-  box-shadow: 
-    0 20px 50px -10px rgba(109, 40, 217, 0.5),
-    inset 0 2px 15px rgba(251, 191, 36, 0.3), /* Changed white to Gold #fbbf24 */
-    inset 0 -8px 20px rgba(0, 0, 0, 0.4);
-  border: 6px solid #fcd34d;
-  position: relative;
-  overflow: hidden;
-}
-
-.slot-machine-frame::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(45deg, transparent 45%, rgba(251, 191, 36, 0.15) 50%, transparent 55%); /* Changed white to Gold */
-  background-size: 200% 200%;
-  animation: shine 3s infinite linear;
-  pointer-events: none;
-}
-
+/* Slot Machine Premium Aesthetics */
 @keyframes shine {
   0% { background-position: -100% -100%; }
   100% { background-position: 100% 100%; }
-}
-
-.reel-container {
-  mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-}
-
-.win-text-glow {
-  text-shadow: 0 0 15px rgba(234, 179, 8, 1), 0 0 30px rgba(234, 179, 8, 0.7);
-  animation: pulse 1s infinite alternate;
 }
 
 @keyframes pulse {
@@ -138,22 +106,16 @@
   to { transform: scale(1.05); }
 }
 
+.win-text-glow {
+  text-shadow: 0 0 15px rgba(234, 179, 8, 1), 0 0 30px rgba(234, 179, 8, 0.7);
+  animation: pulse 1s infinite alternate;
+}
+
 .gold-gradient-text {
   background: linear-gradient(to bottom, #fef3c7, #fcd34d, #d97706);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 4px 4px rgba(0,0,0,0.2));
-}
-
-.purple-button {
-  background: linear-gradient(to bottom, #8b5cf6, #6d28d9);
-  box-shadow: 0 4px 0 #4c1d95;
-  transition: all 0.1s;
-}
-
-.purple-button:active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 #4c1d95;
 }
 
 @keyframes symbolFloat {
