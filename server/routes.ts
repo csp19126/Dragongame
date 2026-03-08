@@ -295,6 +295,60 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/deposits/gift-card", async (req: any, res) => {
+    try {
+      let userId = (req.session as any)?.userId;
+      if (!userId && req.user && (req.user as any).claims) {
+        userId = (req.user as any).claims.sub;
+      }
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const codeSchema = z.object({ code: z.string().min(1).max(100) });
+      const parsed = codeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid gift card code" });
+      }
+
+      const code = parsed.data.code.trim().toUpperCase();
+
+      let user = await storage.getUser(userId);
+      if (!user) user = await storage.getUserByUsername(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      const result = await storage.redeemGiftCardAtomic(code, user.id);
+      if (!result) return res.status(400).json({ message: "Gift card not found or already redeemed" });
+
+      res.json({
+        amount: result.amount,
+        newBalance: result.newBalance,
+        message: `Successfully redeemed ${result.amount.toLocaleString()}đ gift card!`,
+      });
+    } catch (err) {
+      console.error("Gift card redeem error:", err);
+      res.status(500).json({ message: "Failed to redeem gift card" });
+    }
+  });
+
+  app.get("/api/deposits/history", async (req: any, res) => {
+    try {
+      let userId = (req.session as any)?.userId;
+      if (!userId && req.user && (req.user as any).claims) {
+        userId = (req.user as any).claims.sub;
+      }
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      let user = await storage.getUser(userId);
+      if (!user) user = await storage.getUserByUsername(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      const history = await storage.getDeposits(user.id);
+      res.json(history);
+    } catch (err) {
+      console.error("Deposit history error:", err);
+      res.status(500).json({ message: "Failed to fetch deposit history" });
+    }
+  });
+
   app.get(api.ai.predict.path, async (req, res) => {
     res.json({ advice: "The stars align! The next 5 spins have a higher chance of hitting the Dragon symbol." });
   });

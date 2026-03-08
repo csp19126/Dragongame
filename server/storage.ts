@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, gameStates, achievements, type InsertUser, type User, type InsertGameState, type GameState, type Achievement } from "@shared/schema";
+import { users, gameStates, achievements, deposits, giftCards, type InsertUser, type User, type InsertGameState, type GameState, type Achievement, type Deposit, type GiftCard } from "@shared/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 
 export interface IStorage {
@@ -13,6 +13,12 @@ export interface IStorage {
   getLeaderboard(): Promise<User[]>;
   getAchievements(userId: string): Promise<Achievement[]>;
   unlockAchievement(userId: string, badgeId: string, badgeName: string, description: string, icon: string): Promise<Achievement | null>;
+  createDeposit(userId: string, amount: number, method: string, cardCode?: string): Promise<Deposit>;
+  getDeposits(userId: string): Promise<Deposit[]>;
+  getGiftCard(code: string): Promise<GiftCard | undefined>;
+  redeemGiftCard(code: string, userId: string): Promise<GiftCard>;
+  redeemGiftCardAtomic(code: string, userId: string): Promise<{ amount: number; newBalance: number } | null>;
+  createGiftCard(code: string, denomination: number): Promise<GiftCard>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -86,6 +92,60 @@ export class DatabaseStorage implements IStorage {
       icon,
     }).returning();
     return achievement;
+  }
+
+  async createDeposit(userId: string, amount: number, method: string, cardCode?: string): Promise<Deposit> {
+    const [deposit] = await db.insert(deposits).values({ userId, amount, method, cardCode, status: "completed" }).returning();
+    return deposit;
+  }
+
+  async getDeposits(userId: string): Promise<Deposit[]> {
+    return await db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt));
+  }
+
+  async getGiftCard(code: string): Promise<GiftCard | undefined> {
+    const [card] = await db.select().from(giftCards).where(eq(giftCards.code, code));
+    return card;
+  }
+
+  async redeemGiftCard(code: string, userId: string): Promise<GiftCard> {
+    const [card] = await db.update(giftCards).set({
+      isRedeemed: true,
+      redeemedBy: userId,
+      redeemedAt: new Date(),
+    }).where(eq(giftCards.code, code)).returning();
+    return card;
+  }
+
+  async redeemGiftCardAtomic(code: string, userId: string): Promise<{ amount: number; newBalance: number } | null> {
+    const [claimed] = await db.update(giftCards).set({
+      isRedeemed: true,
+      redeemedBy: userId,
+      redeemedAt: new Date(),
+    }).where(
+      and(eq(giftCards.code, code), eq(giftCards.isRedeemed, false))
+    ).returning();
+
+    if (!claimed) return null;
+
+    const [updatedUser] = await db.update(users).set({
+      balance: sql`${users.balance} + ${claimed.denomination}`,
+    }).where(eq(users.id, userId)).returning();
+
+    await db.insert(deposits).values({
+      userId,
+      amount: claimed.denomination,
+      method: "gift_card",
+      cardCode: code,
+      status: "completed",
+    });
+
+    return { amount: claimed.denomination, newBalance: updatedUser.balance };
+  }
+
+  async createGiftCard(code: string, denomination: number): Promise<GiftCard> {
+    const [card] = await db.insert(giftCards).values({ code, denomination }).returning();
+    return card;
   }
 }
 

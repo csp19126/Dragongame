@@ -2,7 +2,7 @@
 
 ## Overview
 
-VnSlot 888 Dragon Fortune is a full-stack web application featuring a Vietnamese/Oriental-themed slot machine game designed for the Vietnamese gambling market. It features an addictive, fast-paced gaming experience with rich animations, sound effects, achievement systems, streak tracking, and a competitive leaderboard. The app supports bilingual UI (English and Vietnamese) and uses a deep purple/gold color scheme.
+VnSlot 888 Dragon Fortune is a full-stack web application featuring a Vietnamese/Oriental-themed slot machine game designed for the Vietnamese gambling market. It features an addictive, fast-paced gaming experience with rich animations, sound effects, achievement systems, streak tracking, and a competitive leaderboard. The app supports bilingual UI (English and Vietnamese) and uses a deep purple/gold color scheme. Includes a gift card deposit system and professional branding pages.
 
 ## User Preferences
 
@@ -15,21 +15,27 @@ Target market: Vietnamese betting game players (Bắn Cá, Máy Xèng style)
 
 ### Frontend (React + Vite)
 - **Framework**: React 18 with TypeScript, bundled by Vite
-- **Routing**: Wouter - pages: Home (landing + game), Auth, Leaderboard, 404
+- **Routing**: Wouter - pages: Home (landing + game), Auth, Leaderboard, Deposit, About, Terms, 404
 - **State Management**: TanStack React Query v5 for server state
 - **UI Components**: shadcn/ui (Radix primitives) with Tailwind CSS
 - **Animations**: Framer Motion for slot reels, page transitions, streak effects; canvas-confetti for wins
 - **Sound System**: Web Audio API-based `SoundManager` (`client/src/lib/sound.ts`) generating real-time sounds for spins, wins, bonuses, streaks
 - **Styling**: Tailwind CSS with CSS variables (purple/gold/red palette), custom fonts (Lobster, Nunito, Roboto Mono)
-- **Internationalization**: Custom `LanguageProvider` toggling EN/VI with keys for all game terms
+- **Internationalization**: Custom `LanguageProvider` toggling EN/VI with keys for all game terms + deposit/about/terms/privacy/support
 - **Path aliases**: `@/` → `client/src/`, `@shared/` → `shared/`
 
 ### Key Components
-- **SlotMachine** (`client/src/components/SlotMachine.tsx`): Core game with 3 reels, fast 1.5s spin cycles, auto-spin, near-miss highlighting, screen shake, particle effects, streak display, sound integration
+- **SlotMachine** (`client/src/components/SlotMachine.tsx`): Core game with 3 reels, fast 1.5s spin cycles, auto-spin, near-miss highlighting, screen shake, particle effects, streak display, sound integration. Premium cabinet design with glass/scanline effects.
 - **AchievementBadge** (`client/src/components/AchievementBadge.tsx`): Badge display with Lucide icon mapping and pulse animations
 - **StreakDisplay** (`client/src/components/StreakDisplay.tsx`): Win streak counter with tier labels (On Fire, Unstoppable, Dragon Mode)
 - **Leaderboard** (`client/src/components/Leaderboard.tsx`): Ranked player list with Crown icons
-- **Header** (`client/src/components/Header.tsx`): Animated balance counter, token display, notification bell, top-up button
+- **Header** (`client/src/components/Header.tsx`): Animated balance counter, token display, notification bell, top-up button linked to /deposit
+
+### Pages
+- **Home** (`client/src/pages/Home.tsx`): Landing page (unauthenticated) or 3-column game dashboard (authenticated) with footer
+- **Deposit** (`client/src/pages/Deposit.tsx`): Gift card redemption, deposit tiers, transaction history
+- **About** (`client/src/pages/About.tsx`): Company branding page with stats, features, team info (bilingual)
+- **Terms** (`client/src/pages/Terms.tsx`): Terms of service (bilingual, 9 sections)
 
 ### Backend (Express + Node.js)
 - **Framework**: Express.js with TypeScript via `tsx`
@@ -41,6 +47,8 @@ Target market: Vietnamese betting game players (Bắn Cá, Máy Xèng style)
   - `POST /api/game/spin` - Spin with bet, returns result + achievements
   - `GET /api/game/leaderboard` - Top 10 players
   - `GET /api/achievements/:userId` - User's unlocked badges (auth required)
+  - `POST /api/deposits/gift-card` - Redeem gift card code, add balance
+  - `GET /api/deposits/history` - User's deposit transaction history
   - `GET /api/ai/predict` - Oracle advice
 - **Route Definitions**: Shared in `shared/routes.ts` with Zod validation
 
@@ -52,6 +60,8 @@ Target market: Vietnamese betting game players (Bắn Cá, Máy Xèng style)
   - `users` - id, username, password, email, balance, tokens, streak, maxStreak, totalWins, maxWin, gamesPlayed, profile fields, timestamps
   - `game_states` - userId, slotId, lastSpinResult, freeSpins, consecutiveWins
   - `achievements` - userId, badgeId, badgeName, description, icon, unlockedAt
+  - `deposits` - userId, amount, method, cardCode, status, createdAt
+  - `gift_cards` - code (unique), denomination, isRedeemed, redeemedBy, createdAt, redeemedAt
   - `sessions` - Express session storage (connect-pg-simple)
 
 ### Game Mechanics
@@ -65,6 +75,12 @@ Target market: Vietnamese betting game players (Bắn Cá, Máy Xèng style)
   - Wild multiplier: 5% chance for 2x/5x/10x on any win
 - **Achievements**: 8 badges (first_win, hot_streak_3/5, dragon_master, high_roller, millionaire, jackpot_hunter, lucky_seven)
 - **Streak Tracking**: Consecutive wins tracked, displayed with tier labels
+
+### Deposit System
+- **Gift Cards**: Pre-seeded codes (DRAGON-50K-2024, FORTUNE-100K-888, etc.)
+- **Tiers**: 50K, 100K, 500K, 1M, 5M, 10M with bonus percentages
+- **Flow**: User enters code → backend validates → marks redeemed → adds balance → creates deposit record
+- **Contact**: Agents via Zalo/Telegram for card purchases
 
 ### Authentication
 - **Dual Auth**:

@@ -104,15 +104,17 @@ export function Header() {
                 <Coins className="w-4 h-4 text-emerald-400" />
               </motion.div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden md:flex items-center gap-1 border-yellow-500/30 text-yellow-400"
-                data-testid="button-top-up"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="font-bold text-xs">{t.topUp}</span>
-              </Button>
+              <Link href="/deposit">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hidden md:flex items-center gap-1 border-yellow-500/30 text-yellow-400"
+                  data-testid="button-top-up"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="font-bold text-xs">{t.topUp}</span>
+                </Button>
+              </Link>
 
               <div className="relative">
                 <Button
@@ -168,15 +170,17 @@ export function Header() {
                         </div>
                       </div>
                       <div className="p-3 border-b border-yellow-500/5 mb-1 md:hidden">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full border-yellow-500/30 text-yellow-400"
-                          data-testid="button-mobile-top-up"
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          <span className="font-bold text-xs">{t.topUp}</span>
-                        </Button>
+                        <Link href="/deposit">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full border-yellow-500/30 text-yellow-400"
+                            data-testid="button-mobile-top-up"
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            <span className="font-bold text-xs">{t.topUp}</span>
+                          </Button>
+                        </Link>
                       </div>
                       <DropdownMenuItem 
                         onClick={() => logout.mutate()} 

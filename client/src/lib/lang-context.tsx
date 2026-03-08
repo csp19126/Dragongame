@@ -28,6 +28,11 @@ interface Translations {
   totalWins: string;
   maxWin: string;
   gamesPlayed: string;
+  deposit: string;
+  about: string;
+  terms: string;
+  privacy: string;
+  support: string;
 }
 
 const translations: Record<Language, Translations> = {
@@ -57,6 +62,11 @@ const translations: Record<Language, Translations> = {
     totalWins: "Total Wins",
     maxWin: "Max Win",
     gamesPlayed: "Games Played",
+    deposit: "Deposit",
+    about: "About Us",
+    terms: "Terms of Service",
+    privacy: "Privacy Policy",
+    support: "Support",
   },
   vi: {
     welcome: "Chào mừng đến VnSlot",
@@ -84,6 +94,11 @@ const translations: Record<Language, Translations> = {
     totalWins: "Tổng Thắng",
     maxWin: "Thắng Lớn Nhất",
     gamesPlayed: "Lượt Chơi",
+    deposit: "Nạp Tiền",
+    about: "Về Chúng Tôi",
+    terms: "Điều Khoản",
+    privacy: "Bảo Mật",
+    support: "Hỗ Trợ",
   },
 };
 

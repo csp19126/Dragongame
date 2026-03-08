@@ -48,63 +48,97 @@ function ReelStrip({ symbol, isSpinning, index, nearMiss }: {
   index: number;
   nearMiss: boolean;
 }) {
-  const aboveSymbol = getRandomSymbol();
-  const belowSymbol = getRandomSymbol();
+  const [spinSymbols, setSpinSymbols] = useState([getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
+
+  useEffect(() => {
+    if (isSpinning) {
+      const interval = setInterval(() => {
+        setSpinSymbols([getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
+      }, 60);
+      return () => clearInterval(interval);
+    }
+  }, [isSpinning]);
+
+  const aboveSymbol = isSpinning ? spinSymbols[0] : getRandomSymbol();
+  const belowSymbol = isSpinning ? spinSymbols[2] : getRandomSymbol();
+  const aboveAbove = isSpinning ? spinSymbols[1] : getRandomSymbol();
 
   return (
     <div
       data-testid={`reel-${index}`}
-      className={`relative flex-1 overflow-hidden transition-all duration-300 ${
-        nearMiss ? "near-miss-pulse" : ""
-      }`}
-      style={{ minHeight: '180px' }}
+      className={`relative flex-1 overflow-hidden ${nearMiss ? "near-miss-pulse" : ""}`}
+      style={{ minHeight: '200px' }}
     >
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-3xl opacity-20 blur-[1px] mb-1 select-none">{aboveSymbol}</div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0">
+        <motion.div
+          className="text-xl opacity-[0.08] select-none"
+          animate={isSpinning ? { y: [0, 12, 0], opacity: [0.05, 0.1, 0.05] } : {}}
+          transition={{ duration: 0.12, repeat: isSpinning ? Infinity : 0 }}
+        >
+          {aboveAbove}
+        </motion.div>
+        <motion.div
+          className="text-3xl select-none"
+          style={{ opacity: isSpinning ? 0.3 : 0.15 }}
+          animate={isSpinning ? { y: [0, 14, 0] } : {}}
+          transition={{ duration: 0.12, repeat: isSpinning ? Infinity : 0 }}
+        >
+          {aboveSymbol}
+        </motion.div>
 
         <AnimatePresence mode="popLayout">
           <motion.div
             key={isSpinning ? `spin-${index}-${Math.random()}` : `stop-${symbol}`}
-            initial={{ y: -60, opacity: 0, scale: 0.7 }}
+            initial={{ y: isSpinning ? -40 : -50, opacity: 0, scale: 0.6 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 60, opacity: 0, scale: 0.7 }}
+            exit={{ y: 40, opacity: 0, scale: 0.6 }}
             transition={{
               type: "spring",
-              stiffness: isSpinning ? 900 : 120,
-              damping: isSpinning ? 12 : 20,
-              mass: isSpinning ? 0.3 : 1.2,
-              delay: isSpinning ? 0 : index * 0.1
+              stiffness: isSpinning ? 1000 : 100,
+              damping: isSpinning ? 15 : 22,
+              mass: isSpinning ? 0.2 : 1.4,
+              delay: isSpinning ? 0 : index * 0.12
             }}
-            className="text-6xl md:text-7xl select-none relative z-10"
+            className="text-6xl md:text-7xl select-none relative z-10 my-1"
             style={{
-              filter: isSpinning ? 'blur(2px)' : 'none',
-              textShadow: '0 4px 20px rgba(0,0,0,0.5), 0 0 40px rgba(251,191,36,0.15)'
+              filter: isSpinning ? 'blur(3px) brightness(0.7)' : 'drop-shadow(0 0 12px rgba(251,191,36,0.2))',
+              textShadow: isSpinning
+                ? 'none'
+                : '0 6px 25px rgba(0,0,0,0.6), 0 0 50px rgba(251,191,36,0.15), 0 2px 0 rgba(0,0,0,0.3)',
+              transform: isSpinning ? undefined : 'perspective(600px) rotateX(2deg)',
             }}
           >
             {symbol}
           </motion.div>
         </AnimatePresence>
 
-        <div className="text-3xl opacity-20 blur-[1px] mt-1 select-none">{belowSymbol}</div>
+        <motion.div
+          className="text-3xl select-none"
+          style={{ opacity: isSpinning ? 0.3 : 0.15 }}
+          animate={isSpinning ? { y: [0, 14, 0] } : {}}
+          transition={{ duration: 0.12, repeat: isSpinning ? Infinity : 0 }}
+        >
+          {belowSymbol}
+        </motion.div>
       </div>
 
       <div className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'linear-gradient(to bottom, rgba(10,5,21,0.9) 0%, transparent 25%, transparent 75%, rgba(10,5,21,0.9) 100%)',
+          background: 'linear-gradient(to bottom, rgba(8,3,24,0.95) 0%, rgba(8,3,24,0.4) 18%, transparent 30%, transparent 70%, rgba(8,3,24,0.4) 82%, rgba(8,3,24,0.95) 100%)',
         }}
       />
 
       <div className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'linear-gradient(to right, rgba(0,0,0,0.3) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.3) 100%)',
+          background: 'linear-gradient(to right, rgba(0,0,0,0.35) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.35) 100%)',
         }}
       />
 
       {nearMiss && !isSpinning && (
         <motion.div
-          animate={{ opacity: [0, 0.25, 0] }}
-          transition={{ duration: 0.6, repeat: Infinity }}
-          className="absolute inset-0 bg-red-500/20 pointer-events-none rounded-lg"
+          animate={{ opacity: [0, 0.3, 0], boxShadow: ['inset 0 0 0px rgba(220,38,38,0)', 'inset 0 0 30px rgba(220,38,38,0.4)', 'inset 0 0 0px rgba(220,38,38,0)'] }}
+          transition={{ duration: 0.8, repeat: Infinity }}
+          className="absolute inset-0 pointer-events-none"
         />
       )}
     </div>
@@ -295,10 +329,10 @@ export function SlotMachine({ balance }: { balance: number }) {
         {/* Machine outer shell - metallic cabinet */}
         <div className="relative rounded-[2rem] overflow-hidden"
           style={{
-            background: 'linear-gradient(180deg, #2d1466 0%, #1a0a35 30%, #0f0620 100%)',
-            boxShadow: '0 30px 60px -15px rgba(0,0,0,0.8), 0 0 0 2px rgba(251,191,36,0.3), inset 0 1px 0 rgba(251,191,36,0.2)',
-            border: '3px solid transparent',
-            borderImage: 'linear-gradient(180deg, rgba(251,191,36,0.6) 0%, rgba(251,191,36,0.1) 100%) 1',
+            background: 'linear-gradient(180deg, #2d1466 0%, #1a0a35 25%, #0d041f 60%, #0a0318 100%)',
+            boxShadow: '0 40px 80px -20px rgba(0,0,0,0.9), 0 0 0 1px rgba(251,191,36,0.4), 0 0 60px -10px rgba(139,92,246,0.15), inset 0 1px 0 rgba(251,191,36,0.3)',
+            border: '2px solid transparent',
+            borderImage: 'linear-gradient(180deg, rgba(251,191,36,0.7) 0%, rgba(251,191,36,0.15) 60%, rgba(139,92,246,0.2) 100%) 1',
           }}
         >
           {/* Gold trim top bar */}
@@ -340,26 +374,31 @@ export function SlotMachine({ balance }: { balance: number }) {
           <div className="px-4 md:px-6 py-4">
             <div className="relative rounded-2xl overflow-hidden"
               style={{
-                background: 'linear-gradient(180deg, #080318 0%, #0d0522 50%, #080318 100%)',
-                boxShadow: 'inset 0 8px 30px rgba(0,0,0,0.9), inset 0 -8px 30px rgba(0,0,0,0.9), inset 4px 0 15px rgba(0,0,0,0.5), inset -4px 0 15px rgba(0,0,0,0.5), 0 0 0 1px rgba(251,191,36,0.15)',
+                background: 'linear-gradient(180deg, #050210 0%, #0a0420 50%, #050210 100%)',
+                boxShadow: 'inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(251,191,36,0.2), 0 0 30px -5px rgba(139,92,246,0.1)',
               }}
             >
               {/* Scanline effect overlay */}
-              <div className="absolute inset-0 pointer-events-none z-20 opacity-[0.03]"
+              <div className="absolute inset-0 pointer-events-none z-20 opacity-[0.025]"
                 style={{
-                  backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)',
+                  backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(255,255,255,0.08) 1px, rgba(255,255,255,0.08) 2px)',
                 }}
               />
 
-              {/* Glass reflection */}
+              {/* Glass reflection - two highlights */}
               <div className="absolute inset-0 pointer-events-none z-20"
                 style={{
-                  background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.02) 100%)',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 30%, transparent 70%, rgba(255,255,255,0.015) 100%)',
+                }}
+              />
+              <div className="absolute inset-0 pointer-events-none z-20"
+                style={{
+                  background: 'radial-gradient(ellipse at 30% 20%, rgba(139,92,246,0.06) 0%, transparent 50%)',
                 }}
               />
 
               {/* The 3 reels */}
-              <div className="flex items-stretch" style={{ height: '200px' }}>
+              <div className="flex items-stretch" style={{ height: '220px' }}>
                 {reels.map((symbol, i) => (
                   <div key={i} className="flex-1 relative">
                     <ReelStrip
@@ -472,13 +511,13 @@ export function SlotMachine({ balance }: { balance: number }) {
             onClick={handleSpin}
             disabled={isSpinning}
             data-testid="button-spin"
-            className="flex-1 h-14 text-xl font-display uppercase tracking-wider rounded-xl relative overflow-hidden"
+            className="flex-1 h-16 text-xl font-display uppercase tracking-wider rounded-xl relative overflow-hidden transition-all duration-100 active:translate-y-[3px] active:shadow-none"
             style={{
               background: freeSpins > 0
-                ? 'linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)'
-                : 'linear-gradient(180deg, #8b5cf6 0%, #6d28d9 50%, #5b21b6 100%)',
-              boxShadow: '0 4px 0 #4c1d95, 0 6px 20px rgba(109,40,217,0.4)',
-              border: '1px solid rgba(251,191,36,0.3)',
+                ? 'linear-gradient(180deg, #c084fc 0%, #a855f7 30%, #7c3aed 100%)'
+                : 'linear-gradient(180deg, #a78bfa 0%, #8b5cf6 25%, #6d28d9 60%, #5b21b6 100%)',
+              boxShadow: '0 5px 0 #3b0764, 0 8px 25px rgba(109,40,217,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
+              border: '1px solid rgba(251,191,36,0.35)',
             }}
           >
             {isSpinning ? (

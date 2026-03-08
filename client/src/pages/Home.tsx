@@ -412,6 +412,10 @@ export default function Home() {
           </aside>
         </div>
 
+        <div className="hidden lg:block">
+          <AppFooter />
+        </div>
+
         <div className="lg:hidden flex flex-col items-center p-4 space-y-4">
           <motion.div
             initial={{ opacity: 0 }}
@@ -479,6 +483,8 @@ export default function Home() {
           </Card>
         </div>
       </main>
+
+      <AppFooter />
     </div>
   );
 }
@@ -533,5 +539,35 @@ function MiniLeaderboard() {
         </motion.div>
       ))}
     </div>
+  );
+}
+
+function AppFooter() {
+  const { t } = useLang();
+
+  return (
+    <footer className="relative z-10 border-t border-yellow-500/10 bg-[#080315]/80 backdrop-blur-sm mt-8" data-testid="app-footer">
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-6 text-xs text-yellow-100/40">
+            <Link href="/about" className="hover:text-yellow-400 transition-colors" data-testid="link-about">
+              {t.about}
+            </Link>
+            <Link href="/terms" className="hover:text-yellow-400 transition-colors" data-testid="link-terms">
+              {t.terms}
+            </Link>
+            <Link href="/deposit" className="hover:text-yellow-400 transition-colors" data-testid="link-deposit">
+              {t.deposit}
+            </Link>
+            <a href="mailto:support@vnslot888.com" className="hover:text-yellow-400 transition-colors" data-testid="link-support">
+              {t.support}
+            </a>
+          </div>
+          <div className="text-xs text-yellow-100/25">
+            © 2024 Dragon Fortune Entertainment Ltd.
+          </div>
+        </div>
+      </div>
+    </footer>
   );
 }

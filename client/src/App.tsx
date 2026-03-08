@@ -9,6 +9,9 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Auth from "@/pages/Auth";
 import Leaderboard from "@/pages/Leaderboard";
+import Deposit from "@/pages/Deposit";
+import About from "@/pages/About";
+import Terms from "@/pages/Terms";
 
 function Router() {
   return (
@@ -16,6 +19,9 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/auth" component={Auth} />
       <Route path="/leaderboard" component={Leaderboard} />
+      <Route path="/deposit" component={Deposit} />
+      <Route path="/about" component={About} />
+      <Route path="/terms" component={Terms} />
       <Route component={NotFound} />
     </Switch>
   );

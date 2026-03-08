@@ -68,3 +68,29 @@ export const leaderboard = pgTable("leaderboard", {
 });
 
 export type LeaderboardEntry = typeof leaderboard.$inferSelect;
+
+export const deposits = pgTable("deposits", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  amount: integer("amount").notNull(),
+  method: text("method").notNull(),
+  cardCode: text("card_code"),
+  status: text("status").default("completed").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertDepositSchema = createInsertSchema(deposits).omit({ id: true, createdAt: true });
+export type InsertDeposit = z.infer<typeof insertDepositSchema>;
+export type Deposit = typeof deposits.$inferSelect;
+
+export const giftCards = pgTable("gift_cards", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  denomination: integer("denomination").notNull(),
+  isRedeemed: boolean("is_redeemed").default(false).notNull(),
+  redeemedBy: varchar("redeemed_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  redeemedAt: timestamp("redeemed_at"),
+});
+
+export type GiftCard = typeof giftCards.$inferSelect;
