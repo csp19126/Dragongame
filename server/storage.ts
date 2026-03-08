@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { users, gameStates, type InsertUser, type User, type InsertGameState, type GameState } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { users, gameStates, achievements, type InsertUser, type User, type InsertGameState, type GameState, type Achievement } from "@shared/schema";
+import { eq, desc, sql, and } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -11,6 +11,8 @@ export interface IStorage {
   getGameState(userId: string, slotId: string): Promise<GameState | undefined>;
   updateGameState(userId: string, slotId: string, state: Partial<InsertGameState>): Promise<GameState>;
   getLeaderboard(): Promise<User[]>;
+  getAchievements(userId: string): Promise<Achievement[]>;
+  unlockAchievement(userId: string, badgeId: string, badgeName: string, description: string, icon: string): Promise<Achievement | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -65,6 +67,25 @@ export class DatabaseStorage implements IStorage {
       gamesPlayed: sql`${users.gamesPlayed} + 1`
     }).where(eq(users.id, userId)).returning();
     return user;
+  }
+
+  async getAchievements(userId: string): Promise<Achievement[]> {
+    return await db.select().from(achievements).where(eq(achievements.userId, userId));
+  }
+
+  async unlockAchievement(userId: string, badgeId: string, badgeName: string, description: string, icon: string): Promise<Achievement | null> {
+    const [existing] = await db.select().from(achievements).where(
+      and(eq(achievements.userId, userId), eq(achievements.badgeId, badgeId))
+    );
+    if (existing) return null;
+    const [achievement] = await db.insert(achievements).values({
+      userId,
+      badgeId,
+      badgeName,
+      description,
+      icon,
+    }).returning();
+    return achievement;
   }
 }
 

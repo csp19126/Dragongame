@@ -19,6 +19,15 @@ interface Translations {
   loading: string;
   aiPredict: string;
   aiAdviceTitle: string;
+  streak: string;
+  achievement: string;
+  tokens: string;
+  topUp: string;
+  autoSpin: string;
+  statistics: string;
+  totalWins: string;
+  maxWin: string;
+  gamesPlayed: string;
 }
 
 const translations: Record<Language, Translations> = {
@@ -39,6 +48,15 @@ const translations: Record<Language, Translations> = {
     loading: "Summoning Luck...",
     aiPredict: "Seek Oracle",
     aiAdviceTitle: "The Oracle Speaks",
+    streak: "Streak",
+    achievement: "Achievement",
+    tokens: "Tokens",
+    topUp: "Top Up",
+    autoSpin: "Auto Spin",
+    statistics: "Statistics",
+    totalWins: "Total Wins",
+    maxWin: "Max Win",
+    gamesPlayed: "Games Played",
   },
   vi: {
     welcome: "Chào mừng đến VnSlot",
@@ -57,6 +75,15 @@ const translations: Record<Language, Translations> = {
     loading: "Đang Triệu Hồi...",
     aiPredict: "Hỏi Thần Tài",
     aiAdviceTitle: "Lời Sấm Truyền",
+    streak: "Chuỗi Thắng",
+    achievement: "Thành Tựu",
+    tokens: "Xu",
+    topUp: "Nạp Thêm",
+    autoSpin: "Tự Động Quay",
+    statistics: "Thống Kê",
+    totalWins: "Tổng Thắng",
+    maxWin: "Thắng Lớn Nhất",
+    gamesPlayed: "Lượt Chơi",
   },
 };
 
@@ -67,7 +94,7 @@ const LanguageContext = createContext<{
 } | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Language>("vi"); // Default to Vietnamese
+  const [lang, setLang] = useState<Language>("vi");
 
   const toggleLang = () => setLang((prev) => (prev === "en" ? "vi" : "en"));
 

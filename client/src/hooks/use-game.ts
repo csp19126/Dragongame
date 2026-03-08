@@ -2,11 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export interface GameStateResponse {
   balance: number;
-  gameStates: any[]; 
+  gameStates: any[];
+  streak: number;
+  maxStreak: number;
+  totalWins: number;
+  maxWin: number;
+  gamesPlayed: number;
 }
 
 export interface SpinResponse {
-  result: string[]; 
+  result: string[];
   winAmount: number;
   newBalance: number;
   freeSpinsAwarded: number;
@@ -15,11 +20,30 @@ export interface SpinResponse {
   isBonusRound?: boolean;
   isRepeater?: boolean;
   multiplier?: number;
+  streak: number;
+  totalWins: number;
+  maxWin: number;
+  gamesPlayed: number;
+  newAchievements?: any[];
 }
 
 export interface LeaderboardEntry {
+  rank: number;
   username: string;
   balance: number;
+  totalWins: number;
+  maxWin: number;
+  maxStreak: number;
+}
+
+export interface AchievementEntry {
+  id: number;
+  userId: string;
+  badgeId: string;
+  badgeName: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
 }
 
 export function useGameState() {
@@ -55,6 +79,10 @@ export function useSpin() {
         return {
           ...old,
           balance: data.newBalance,
+          streak: data.streak,
+          totalWins: data.totalWins,
+          maxWin: data.maxWin,
+          gamesPlayed: data.gamesPlayed,
         };
       });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
@@ -70,7 +98,19 @@ export function useLeaderboard() {
       if (!res.ok) throw new Error("Failed to fetch leaderboard");
       return res.json();
     },
-    refetchInterval: 30000, 
+    refetchInterval: 30000,
+  });
+}
+
+export function useAchievements(userId: string | undefined) {
+  return useQuery<AchievementEntry[]>({
+    queryKey: ["/api/achievements", userId],
+    queryFn: async () => {
+      const res = await fetch(`/api/achievements/${userId}`);
+      if (!res.ok) throw new Error("Failed to fetch achievements");
+      return res.json();
+    },
+    enabled: !!userId,
   });
 }
 
@@ -82,6 +122,6 @@ export function useAiPredict() {
       if (!res.ok) throw new Error("Failed to fetch advice");
       return res.json();
     },
-    enabled: false, 
+    enabled: false,
   });
 }

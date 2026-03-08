@@ -79,7 +79,15 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      res.json({ balance: user.balance, gameStates: [] });
+      res.json({
+        balance: user.balance,
+        gameStates: [],
+        streak: user.streak ?? 0,
+        maxStreak: user.maxStreak ?? 0,
+        totalWins: user.totalWins ?? 0,
+        maxWin: user.maxWin ?? 0,
+        gamesPlayed: user.gamesPlayed ?? 0,
+      });
     } catch (err) {
       console.error("Error fetching game state:", err);
       res.status(500).json({ message: "Failed to fetch state" });
@@ -200,6 +208,37 @@ export async function registerRoutes(
         consecutiveWins: newConsecutiveWins
       });
 
+      const newlyUnlocked: any[] = [];
+      const checkAndUnlock = async (badgeId: string, badgeName: string, description: string, icon: string) => {
+        const result = await storage.unlockAchievement(user!.id, badgeId, badgeName, description, icon);
+        if (result) newlyUnlocked.push(result);
+      };
+
+      if (winAmount > 0 && newTotalWins === 1) {
+        await checkAndUnlock("first_win", "First Win", "Won your first spin!", "trophy");
+      }
+      if (newConsecutiveWins >= 3) {
+        await checkAndUnlock("hot_streak_3", "Hot Streak x3", "3 consecutive wins!", "flame");
+      }
+      if (newConsecutiveWins >= 5) {
+        await checkAndUnlock("hot_streak_5", "Hot Streak x5", "5 consecutive wins!", "zap");
+      }
+      if (allMatch && result[0] === "🐉") {
+        await checkAndUnlock("dragon_master", "Dragon Master", "Win with 3 dragons!", "dragon");
+      }
+      if (input.betAmount >= 100000) {
+        await checkAndUnlock("high_roller", "High Roller", "Bet 100,000 or more!", "gem");
+      }
+      if (newBalance >= 1000000) {
+        await checkAndUnlock("millionaire", "Millionaire", "Balance reached 1,000,000!", "crown");
+      }
+      if (isJackpot) {
+        await checkAndUnlock("jackpot_hunter", "Jackpot Hunter", "Hit a jackpot!", "star");
+      }
+      if (newTotalWins >= 7) {
+        await checkAndUnlock("lucky_seven", "Lucky Seven", "Won 7 times!", "clover");
+      }
+
       res.json({
         result,
         winAmount,
@@ -209,12 +248,18 @@ export async function registerRoutes(
         isJackpot,
         isBonusRound,
         isRepeater,
-        multiplier: multiplier > 1 ? multiplier : undefined
+        multiplier: multiplier > 1 ? multiplier : undefined,
+        streak: newConsecutiveWins,
+        totalWins: newTotalWins,
+        maxWin: newMaxWin,
+        gamesPlayed: (user.gamesPlayed ?? 0) + 1,
+        newAchievements: newlyUnlocked,
       });
     } catch (err) {
       if (err instanceof z.ZodError) {
         res.status(400).json({ message: "Invalid spin request" });
       } else {
+        console.error("Spin error:", err);
         res.status(500).json({ message: "Spin failed" });
       }
     }
@@ -224,12 +269,30 @@ export async function registerRoutes(
     const leaderboardUsers = await storage.getLeaderboard();
     res.json(leaderboardUsers.map((u, idx) => ({ 
       rank: idx + 1,
-      username: u.username, 
+      username: u.username || 'Dragon Player', 
       balance: u.balance,
       totalWins: u.totalWins ?? 0,
       maxWin: u.maxWin ?? 0,
       maxStreak: u.maxStreak ?? 0
     })));
+  });
+
+  app.get("/api/achievements/:userId", async (req: any, res) => {
+    try {
+      let sessionUserId = (req.session as any)?.userId;
+      if (!sessionUserId && req.user && (req.user as any).claims) {
+        sessionUserId = (req.user as any).claims.sub;
+      }
+      const userId = req.params.userId;
+      if (!sessionUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const achvs = await storage.getAchievements(userId);
+      res.json(achvs);
+    } catch (err) {
+      console.error("Error fetching achievements:", err);
+      res.status(500).json({ message: "Failed to fetch achievements" });
+    }
   });
 
   app.get(api.ai.predict.path, async (req, res) => {

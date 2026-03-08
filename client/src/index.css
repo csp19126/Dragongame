@@ -134,7 +134,7 @@
 }
 
 @keyframes pulse {
-  from { transform: scale(1); }
+  from { transform: scale(1); will-change: transform; }
   to { transform: scale(1.05); }
 }
 
@@ -154,4 +154,225 @@
 .purple-button:active {
   transform: translateY(2px);
   box-shadow: 0 2px 0 #4c1d95;
+}
+
+@keyframes symbolFloat {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  90% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate3d(100px, -100vh, 0) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes coinDrop {
+  0% {
+    transform: translate3d(0, -60px, 0) scale(0.5);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 100vh, 0) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes screenShake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  10% { transform: translate3d(-4px, 2px, 0); }
+  20% { transform: translate3d(4px, -2px, 0); }
+  30% { transform: translate3d(-3px, 3px, 0); }
+  40% { transform: translate3d(3px, -1px, 0); }
+  50% { transform: translate3d(-2px, 2px, 0); }
+  60% { transform: translate3d(2px, -2px, 0); }
+  70% { transform: translate3d(-1px, 1px, 0); }
+  80% { transform: translate3d(1px, -1px, 0); }
+  90% { transform: translate3d(-1px, 0, 0); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(234, 179, 8, 0.4), 0 0 15px rgba(234, 179, 8, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(234, 179, 8, 0.8), 0 0 40px rgba(234, 179, 8, 0.4), 0 0 60px rgba(234, 179, 8, 0.2);
+  }
+}
+
+@keyframes streakFire {
+  0%, 100% {
+    background-position: 0% 50%;
+    filter: brightness(1);
+  }
+  50% {
+    background-position: 100% 50%;
+    filter: brightness(1.3);
+  }
+}
+
+@keyframes reelBlur {
+  0% {
+    filter: blur(0px);
+    transform: translateY(0);
+  }
+  10% {
+    filter: blur(6px);
+  }
+  90% {
+    filter: blur(6px);
+  }
+  100% {
+    filter: blur(0px);
+    transform: translateY(0);
+  }
+}
+
+@keyframes winExplosion {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+@keyframes autoSpinBorder {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}
+
+@keyframes balanceFlash {
+  0% {
+    transform: scale(1);
+    color: inherit;
+  }
+  30% {
+    transform: scale(1.25);
+    color: #fcd34d;
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    color: inherit;
+  }
+}
+
+@keyframes nearMissPulse {
+  0%, 100% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  50% {
+    border-color: rgba(220, 38, 38, 0.8);
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+  }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(180deg); }
+}
+
+.win-explosion {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(234, 179, 8, 0.6) 0%, rgba(220, 38, 38, 0.3) 30%, transparent 70%);
+  animation: winExplosion 0.8s ease-out forwards;
+  will-change: transform, opacity;
+  z-index: 50;
+}
+
+.streak-badge {
+  background: linear-gradient(135deg, #ef4444, #f97316, #eab308, #f97316, #ef4444);
+  background-size: 300% 100%;
+  animation: streakFire 2s ease-in-out infinite;
+  color: #fef3c7;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  will-change: background-position, filter;
+}
+
+.auto-spin-active {
+  position: relative;
+  z-index: 0;
+}
+
+.auto-spin-active::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #fcd34d, #ef4444, #8b5cf6, #fcd34d, #ef4444, #8b5cf6);
+  background-size: 300% 100%;
+  animation: autoSpinBorder 2s linear infinite;
+  z-index: -1;
+  will-change: background-position;
+}
+
+.symbol-float {
+  position: fixed;
+  pointer-events: none;
+  font-size: 1.5rem;
+  opacity: 0;
+  animation: symbolFloat linear infinite;
+  will-change: transform, opacity;
+  z-index: 0;
+}
+
+.reel-spinning {
+  filter: blur(4px);
+  animation: reelBlur 1.5s ease-in-out;
+  will-change: filter, transform;
+}
+
+.balance-change {
+  animation: balanceFlash 0.5s ease-out;
+  will-change: transform, color;
+}
+
+.near-miss-pulse {
+  animation: nearMissPulse 0.6s ease-in-out 3;
+  border: 2px solid transparent;
+}
+
+.screen-shake {
+  animation: screenShake 0.4s ease-in-out;
+  will-change: transform;
+}
+
+.pulse-glow {
+  animation: pulseGlow 1.5s ease-in-out infinite;
+  will-change: box-shadow;
+}
+
+.coin-drop {
+  position: fixed;
+  pointer-events: none;
+  animation: coinDrop 1.2s ease-in forwards;
+  will-change: transform, opacity;
+  z-index: 100;
 }
