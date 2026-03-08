@@ -187,9 +187,18 @@ export async function registerRoutes(
 
       const newBalance = isFreeSpin ? user.balance + winAmount : user.balance - input.betAmount + winAmount;
       const newFreeSpins = (gameState?.freeSpins ?? 0) - (isFreeSpin ? 1 : 0) + freeSpinsAwarded;
+      
+      // Update streak tracking
+      const newConsecutiveWins = winAmount > 0 ? (gameState?.consecutiveWins ?? 0) + 1 : 0;
+      const newTotalWins = (user.totalWins ?? 0) + (winAmount > 0 ? 1 : 0);
+      const newMaxWin = Math.max(user.maxWin ?? 0, winAmount);
 
       await storage.updateBalance(user.id, newBalance);
-      await storage.updateGameState(user.id, input.slotId, { freeSpins: newFreeSpins });
+      await storage.updateStreak(user.id, newConsecutiveWins, user.maxStreak ?? 0, newTotalWins, newMaxWin);
+      await storage.updateGameState(user.id, input.slotId, { 
+        freeSpins: newFreeSpins,
+        consecutiveWins: newConsecutiveWins
+      });
 
       res.json({
         result,
@@ -212,8 +221,15 @@ export async function registerRoutes(
   });
 
   app.get(api.game.leaderboard.path, async (req, res) => {
-    const users = await storage.getLeaderboard();
-    res.json(users.map(u => ({ username: u.username, balance: u.balance })));
+    const leaderboardUsers = await storage.getLeaderboard();
+    res.json(leaderboardUsers.map((u, idx) => ({ 
+      rank: idx + 1,
+      username: u.username, 
+      balance: u.balance,
+      totalWins: u.totalWins ?? 0,
+      maxWin: u.maxWin ?? 0,
+      maxStreak: u.maxStreak ?? 0
+    })));
   });
 
   app.get(api.ai.predict.path, async (req, res) => {

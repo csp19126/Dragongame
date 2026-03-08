@@ -15,11 +15,17 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   balance: integer("balance").default(1000).notNull(),
+  tokens: integer("tokens").default(0).notNull(),
+  totalWins: integer("total_wins").default(0).notNull(),
+  maxWin: integer("max_win").default(0).notNull(),
+  streak: integer("streak").default(0).notNull(),
+  maxStreak: integer("max_streak").default(0).notNull(),
+  gamesPlayed: integer("games_played").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, balance: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, balance: true, tokens: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -29,9 +35,36 @@ export const gameStates = pgTable("game_states", {
   slotId: text("slot_id").notNull(), 
   lastSpinResult: text("last_spin_result"), 
   freeSpins: integer("free_spins").default(0),
+  consecutiveWins: integer("consecutive_wins").default(0),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertGameStateSchema = createInsertSchema(gameStates).omit({ id: true, updatedAt: true });
 export type InsertGameState = z.infer<typeof insertGameStateSchema>;
 export type GameState = typeof gameStates.$inferSelect;
+
+export const achievements = pgTable("achievements", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  badgeId: text("badge_id").notNull(),
+  badgeName: text("badge_name").notNull(),
+  description: text("description").notNull(),
+  icon: text("icon").notNull(),
+  unlockedAt: timestamp("unlocked_at").defaultNow(),
+});
+
+export type Achievement = typeof achievements.$inferSelect;
+
+export const leaderboard = pgTable("leaderboard", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  username: text("username").notNull(),
+  balance: integer("balance").notNull(),
+  totalWins: integer("total_wins").notNull(),
+  maxWin: integer("max_win").notNull(),
+  maxStreak: integer("max_streak").notNull(),
+  rank: integer("rank").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type LeaderboardEntry = typeof leaderboard.$inferSelect;

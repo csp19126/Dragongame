@@ -7,6 +7,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateBalance(userId: string, newBalance: number): Promise<User>;
+  updateStreak(userId: string, streak: number, maxStreak: number, totalWins: number, maxWin: number): Promise<User>;
   getGameState(userId: string, slotId: string): Promise<GameState | undefined>;
   updateGameState(userId: string, slotId: string, state: Partial<InsertGameState>): Promise<GameState>;
   getLeaderboard(): Promise<User[]>;
@@ -53,6 +54,17 @@ export class DatabaseStorage implements IStorage {
 
   async getLeaderboard(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.balance)).limit(10);
+  }
+
+  async updateStreak(userId: string, streak: number, maxStreak: number, totalWins: number, maxWin: number): Promise<User> {
+    const [user] = await db.update(users).set({ 
+      streak,
+      maxStreak: Math.max(maxStreak, streak),
+      totalWins,
+      maxWin,
+      gamesPlayed: sql`${users.gamesPlayed} + 1`
+    }).where(eq(users.id, userId)).returning();
+    return user;
   }
 }
 
