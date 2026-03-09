@@ -151,7 +151,6 @@ export async function registerRoutes(
       let isJackpot = false;
       let freeSpinsAwarded = 0;
       let isBonusRound = false;
-      let multiplier = 1;
       let isRepeater = false;
       let isNearMiss = false;
       let isFakeRepeater = false;
@@ -190,7 +189,6 @@ export async function registerRoutes(
       });
 
       if (winLines.length > 0) {
-        const hasFullRow = winLines.length >= 1;
         if (winLines.length >= 3) {
           winAmount = input.betAmount * 100;
           isJackpot = true;
@@ -306,7 +304,7 @@ export async function registerRoutes(
         isRepeater,
         isFakeRepeater,
         isNearMiss,
-        multiplier: multiplier > 1 ? multiplier : undefined,
+        multiplier: undefined,
         streak: newConsecutiveWins,
         totalWins: newTotalWins,
         maxWin: newMaxWin,
