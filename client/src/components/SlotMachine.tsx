@@ -6,12 +6,41 @@ import { useLang } from "@/lib/lang-context";
 import { useToast } from "@/hooks/use-toast";
 import { soundManager } from "@/lib/sound";
 import confetti from "canvas-confetti";
-import { Coins, Loader2, Brain, Flame, Zap, Crown, RotateCw, Gift, Sparkles, Share2, AlertTriangle } from "lucide-react";
+import { Loader2, Brain, Flame, Zap, Crown, RotateCw, Gift, Sparkles, Share2, AlertTriangle } from "lucide-react";
 
 const SYMBOLS = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎", "🌸", "🏯", "⚔️", "📜"];
-const BET_AMOUNTS = [1000, 5000, 10000, 50000, 100000];
+const BET_AMOUNTS = [1000, 5000, 10000, 50000, 100000, 500000, 1000000];
 
 const getRandomSymbol = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+const makeGrid = (): string[][] => [
+  [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()],
+  [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()],
+  [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()],
+];
+
+const PAYLINE_COORDS: [number, number][][] = [
+  [[0,0],[1,0],[2,0]],
+  [[0,1],[1,1],[2,1]],
+  [[0,2],[1,2],[2,2]],
+  [[0,0],[1,1],[2,2]],
+  [[0,2],[1,1],[2,0]],
+];
+
+const PAYLINE_COLORS = [
+  'rgba(251,191,36,0.6)',
+  'rgba(168,85,247,0.6)',
+  'rgba(239,68,68,0.6)',
+  'rgba(34,211,238,0.6)',
+  'rgba(74,222,128,0.6)',
+];
+
+const PAYLINE_LABELS = ['TOP', 'MID', 'BOT', '↘', '↗'];
+
+function formatBet(amount: number): string {
+  if (amount >= 1000000) return `${amount / 1000000}M`;
+  if (amount >= 1000) return `${amount / 1000}K`;
+  return String(amount);
+}
 
 function AnimatedWinCounter({ value }: { value: number }) {
   const [display, setDisplay] = useState(0);
@@ -42,121 +71,135 @@ function StreakIcon({ streak }: { streak: number }) {
   return null;
 }
 
-function ReelStrip({ symbol, isSpinning, index, nearMiss, isSlowing }: {
+function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
   symbol: string;
   isSpinning: boolean;
-  index: number;
-  nearMiss: boolean;
+  col: number;
+  row: number;
+  isWinning: boolean;
   isSlowing: boolean;
 }) {
-  const [spinSymbols, setSpinSymbols] = useState([getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
+  const [spinSymbol, setSpinSymbol] = useState(getRandomSymbol());
 
   useEffect(() => {
     if (isSpinning) {
-      const speed = isSlowing ? 120 : 35;
-      const interval = setInterval(() => {
-        setSpinSymbols([getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
-      }, speed);
+      const speed = isSlowing ? 100 : 30;
+      const interval = setInterval(() => setSpinSymbol(getRandomSymbol()), speed);
       return () => clearInterval(interval);
     }
   }, [isSpinning, isSlowing]);
 
-  const aboveSymbol = isSpinning ? spinSymbols[0] : getRandomSymbol();
-  const belowSymbol = isSpinning ? spinSymbols[2] : getRandomSymbol();
-  const aboveAbove = isSpinning ? spinSymbols[1] : getRandomSymbol();
-
   return (
     <div
-      data-testid={`reel-${index}`}
-      className={`relative flex-1 overflow-hidden ${nearMiss ? "near-miss-pulse" : ""}`}
-      style={{ minHeight: '200px' }}
+      data-testid={`cell-${col}-${row}`}
+      className="relative flex items-center justify-center"
+      style={{ height: '80px' }}
     >
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0">
+      <AnimatePresence mode="popLayout">
         <motion.div
-          className="text-xl opacity-[0.08] select-none"
-          animate={isSpinning ? { y: [0, 12, 0], opacity: [0.05, 0.12, 0.05] } : {}}
-          transition={{ duration: isSlowing ? 0.2 : 0.08, repeat: isSpinning ? Infinity : 0 }}
-        >
-          {aboveAbove}
-        </motion.div>
-        <motion.div
-          className="text-3xl select-none"
-          style={{ opacity: isSpinning ? 0.35 : 0.15 }}
-          animate={isSpinning ? { y: [0, 16, 0], filter: ['blur(0px)', 'blur(2px)', 'blur(0px)'] } : {}}
-          transition={{ duration: isSlowing ? 0.2 : 0.08, repeat: isSpinning ? Infinity : 0 }}
-        >
-          {aboveSymbol}
-        </motion.div>
-
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={isSpinning ? `spin-${index}-${Math.random()}` : `stop-${symbol}`}
-            initial={{ y: isSpinning ? -30 : -40, opacity: 0, scale: 0.5, rotateX: isSpinning ? 0 : -90 }}
-            animate={{ y: 0, opacity: 1, scale: 1, rotateX: 0 }}
-            exit={{ y: 30, opacity: 0, scale: 0.5 }}
-            transition={{
-              type: "spring",
-              stiffness: isSpinning ? 1200 : (nearMiss ? 60 : 120),
-              damping: isSpinning ? 12 : (nearMiss ? 28 : 20),
-              mass: isSpinning ? 0.15 : (nearMiss ? 1.8 : 1.2),
-              delay: isSpinning ? 0 : index * 0.08
-            }}
-            className="text-6xl md:text-7xl select-none relative z-10 my-1"
-            style={{
-              filter: isSpinning
-                ? (isSlowing ? 'blur(1px) brightness(0.85)' : 'blur(4px) brightness(0.6)')
-                : 'drop-shadow(0 0 16px rgba(251,191,36,0.25))',
-              textShadow: isSpinning
-                ? 'none'
-                : '0 6px 25px rgba(0,0,0,0.6), 0 0 50px rgba(251,191,36,0.2), 0 2px 0 rgba(0,0,0,0.3)',
-              transform: isSpinning ? undefined : 'perspective(600px) rotateX(2deg)',
-            }}
-          >
-            {symbol}
-          </motion.div>
-        </AnimatePresence>
-
-        <motion.div
-          className="text-3xl select-none"
-          style={{ opacity: isSpinning ? 0.35 : 0.15 }}
-          animate={isSpinning ? { y: [0, 16, 0], filter: ['blur(0px)', 'blur(2px)', 'blur(0px)'] } : {}}
-          transition={{ duration: isSlowing ? 0.2 : 0.08, repeat: isSpinning ? Infinity : 0 }}
-        >
-          {belowSymbol}
-        </motion.div>
-      </div>
-
-      <div className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'linear-gradient(to bottom, rgba(8,3,24,0.95) 0%, rgba(8,3,24,0.4) 18%, transparent 30%, transparent 70%, rgba(8,3,24,0.4) 82%, rgba(8,3,24,0.95) 100%)',
-        }}
-      />
-
-      <div className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'linear-gradient(to right, rgba(0,0,0,0.35) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.35) 100%)',
-        }}
-      />
-
-      {nearMiss && !isSpinning && (
-        <motion.div
-          animate={{
-            opacity: [0, 0.5, 0],
-            boxShadow: ['inset 0 0 0px rgba(220,38,38,0)', 'inset 0 0 40px rgba(220,38,38,0.6)', 'inset 0 0 0px rgba(220,38,38,0)'],
+          key={isSpinning ? `spin-${col}-${row}-${Math.random()}` : `stop-${symbol}-${col}-${row}`}
+          initial={{ y: isSpinning ? -20 : -30, opacity: 0, scale: 0.5 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 20, opacity: 0, scale: 0.5 }}
+          transition={{
+            type: "spring",
+            stiffness: isSpinning ? 1200 : 150,
+            damping: isSpinning ? 12 : 18,
+            mass: isSpinning ? 0.1 : 1,
+            delay: isSpinning ? 0 : col * 0.08,
           }}
-          transition={{ duration: 0.5, repeat: 3 }}
-          className="absolute inset-0 pointer-events-none"
-        />
-      )}
+          className={`text-4xl md:text-5xl select-none relative z-10 ${isWinning ? 'win-cell-glow' : ''}`}
+          style={{
+            filter: isSpinning
+              ? (isSlowing ? 'blur(1px) brightness(0.8)' : 'blur(3px) brightness(0.5)')
+              : isWinning
+                ? 'drop-shadow(0 0 20px rgba(251,191,36,0.5))'
+                : 'drop-shadow(0 0 8px rgba(251,191,36,0.15))',
+            textShadow: isSpinning ? 'none'
+              : isWinning
+                ? '0 0 30px rgba(251,191,36,0.6), 0 4px 15px rgba(0,0,0,0.5)'
+                : '0 4px 15px rgba(0,0,0,0.5)',
+            transform: !isSpinning && isWinning ? 'scale(1.1)' : undefined,
+          }}
+        >
+          {isSpinning ? spinSymbol : symbol}
+        </motion.div>
+      </AnimatePresence>
 
-      {isSlowing && isSpinning && (
+      {isWinning && !isSpinning && (
         <motion.div
-          animate={{ opacity: [0, 0.3, 0] }}
-          transition={{ duration: 0.3, repeat: Infinity }}
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(251,191,36,0.15) 0%, transparent 70%)' }}
+          animate={{ opacity: [0, 0.4, 0] }}
+          transition={{ duration: 0.8, repeat: Infinity }}
+          className="absolute inset-0 pointer-events-none rounded-lg"
+          style={{ background: 'radial-gradient(circle, rgba(251,191,36,0.3) 0%, transparent 70%)' }}
         />
       )}
+    </div>
+  );
+}
+
+function WinLineOverlay({ winLines, gridRef }: { winLines: number[]; gridRef: React.RefObject<HTMLDivElement | null> }) {
+  if (winLines.length === 0 || !gridRef.current) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-[25]">
+      {winLines.map((lineIdx) => {
+        const color = PAYLINE_COLORS[lineIdx];
+        const label = PAYLINE_LABELS[lineIdx];
+        const isTopRow = lineIdx === 0;
+        const isMidRow = lineIdx === 1;
+        const isBotRow = lineIdx === 2;
+        const isDiagDown = lineIdx === 3;
+        const isDiagUp = lineIdx === 4;
+
+        let lineStyle: React.CSSProperties = {};
+        if (isTopRow) {
+          lineStyle = { top: '13.3%', left: 0, right: 0, height: '2px', position: 'absolute' };
+        } else if (isMidRow) {
+          lineStyle = { top: '50%', left: 0, right: 0, height: '2px', position: 'absolute', transform: 'translateY(-1px)' };
+        } else if (isBotRow) {
+          lineStyle = { bottom: '13.3%', left: 0, right: 0, height: '2px', position: 'absolute' };
+        }
+
+        if (isTopRow || isMidRow || isBotRow) {
+          return (
+            <motion.div
+              key={lineIdx}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1, opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 0.3, opacity: { duration: 1, repeat: Infinity } }}
+              style={{ ...lineStyle, background: color, boxShadow: `0 0 10px ${color}`, transformOrigin: 'left' }}
+            >
+              <span className="absolute -left-1 -top-3 text-[8px] font-black text-yellow-300 bg-black/60 px-1 rounded">{label}</span>
+            </motion.div>
+          );
+        }
+
+        if (isDiagDown || isDiagUp) {
+          return (
+            <motion.svg
+              key={lineIdx}
+              className="absolute inset-0 w-full h-full"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 1, repeat: Infinity }}
+            >
+              <line
+                x1="16.6%"
+                y1={isDiagDown ? "13.3%" : "86.6%"}
+                x2="83.3%"
+                y2={isDiagDown ? "86.6%" : "13.3%"}
+                stroke={color}
+                strokeWidth="2"
+                strokeLinecap="round"
+                filter={`drop-shadow(0 0 6px ${color})`}
+              />
+              <text x="2%" y={isDiagDown ? "15%" : "90%"} fill="#fcd34d" fontSize="8" fontWeight="900">{label}</text>
+            </motion.svg>
+          );
+        }
+        return null;
+      })}
     </div>
   );
 }
@@ -206,10 +249,7 @@ function FakeRepeaterOverlay({ show, onDone }: { show: boolean; onDone: () => vo
       className="absolute inset-0 z-40 pointer-events-none flex items-center justify-center"
     >
       <motion.div
-        animate={{
-          scale: [1, 1.15, 1, 1.1, 1],
-          rotate: [0, -2, 2, -1, 0],
-        }}
+        animate={{ scale: [1, 1.15, 1, 1.1, 1], rotate: [0, -2, 2, -1, 0] }}
         transition={{ duration: 0.8, repeat: 2 }}
         className="px-10 py-6 rounded-2xl font-display font-black text-3xl md:text-4xl uppercase tracking-wider text-center"
         style={{
@@ -221,9 +261,7 @@ function FakeRepeaterOverlay({ show, onDone }: { show: boolean; onDone: () => vo
       >
         <RotateCw className="w-8 h-8 inline mr-3 animate-spin" />
         REPEATER!
-        <div className="text-base mt-2 text-cyan-100 font-bold tracking-normal">
-          Re-spinning for bonus...
-        </div>
+        <div className="text-base mt-2 text-cyan-100 font-bold tracking-normal">Re-spinning for bonus...</div>
       </motion.div>
     </motion.div>
   );
@@ -231,9 +269,7 @@ function FakeRepeaterOverlay({ show, onDone }: { show: boolean; onDone: () => vo
 
 function ShareWinButton({ winAmount, bet }: { winAmount: number; bet: number }) {
   if (winAmount < bet * 3) return null;
-
   const shareText = `🐉 I just won ${winAmount.toLocaleString()}đ on VnSlot 888 Dragon Fortune! 🎰💰 Can you beat my score?`;
-
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({ title: 'VnSlot 888 Dragon Fortune', text: shareText }).catch(() => {});
@@ -262,12 +298,14 @@ export function SlotMachine({ balance }: { balance: number }) {
   const { toast } = useToast();
   const spinMutation = useSpin();
   const shakeControls = useAnimation();
+  const gridRef = useRef<HTMLDivElement>(null);
 
-  const [reels, setReels] = useState([getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
+  const [grid, setGrid] = useState<string[][]>(makeGrid);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [slowingReel, setSlowingReel] = useState(-1);
+  const [slowingCol, setSlowingCol] = useState(-1);
   const [bet, setBet] = useState(1000);
   const [lastWin, setLastWin] = useState(0);
+  const [winLines, setWinLines] = useState<number[]>([]);
   const [freeSpins, setFreeSpins] = useState(0);
   const [streak, setStreak] = useState(0);
   const [autoSpin, setAutoSpin] = useState(false);
@@ -279,6 +317,8 @@ export function SlotMachine({ balance }: { balance: number }) {
   const autoSpinRef = useRef(false);
   const spinningRef = useRef(false);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const colIntervalsRef = useRef<ReturnType<typeof setInterval>[]>([]);
+  const stopTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => { autoSpinRef.current = autoSpin; }, [autoSpin]);
 
@@ -286,6 +326,14 @@ export function SlotMachine({ balance }: { balance: number }) {
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     setScreenFlash(color);
     flashTimerRef.current = setTimeout(() => setScreenFlash(null), 150);
+  };
+
+  const isWinningCell = (col: number, row: number): boolean => {
+    if (isSpinning || winLines.length === 0) return false;
+    return winLines.some(lineIdx => {
+      const coords = PAYLINE_COORDS[lineIdx];
+      return coords.some(([c, r]) => c === col && r === row);
+    });
   };
 
   const handleSpin = useCallback(async () => {
@@ -299,61 +347,72 @@ export function SlotMachine({ balance }: { balance: number }) {
     spinningRef.current = true;
     setIsSpinning(true);
     setLastWin(0);
+    setWinLines([]);
     setShowParticles(false);
     setShowNearMiss(false);
     setShowFakeRepeater(false);
-    setSlowingReel(-1);
+    setSlowingCol(-1);
     soundManager.spinStart();
     flashScreen('rgba(139,92,246,0.15)');
 
     try {
-      const intervals = reels.map((_, i) => {
+      const clearAllTimers = () => {
+        colIntervalsRef.current.forEach(clearInterval);
+        colIntervalsRef.current = [];
+        stopTimeoutsRef.current.forEach(clearTimeout);
+        stopTimeoutsRef.current = [];
+      };
+
+      colIntervalsRef.current = [0, 1, 2].map((col) => {
         return setInterval(() => {
-          setReels(prev => {
-            const next = [...prev];
-            next[i] = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+          setGrid(prev => {
+            const next = prev.map(c => [...c]);
+            next[col] = [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()];
             return next;
           });
-        }, 30 + (i * 10));
+        }, 30 + (col * 10));
       });
 
-      const result = await spinMutation.mutateAsync({ slotId: "main", betAmount: bet });
-      const isNearMiss = (result as any).isNearMiss;
-      const isFakeRepeater = (result as any).isFakeRepeater;
+      const activeBet = bet;
+      const result = await spinMutation.mutateAsync({ slotId: "main", betAmount: activeBet });
+      const isNearMiss = result.isNearMiss;
+      const isFakeRepeater = result.isFakeRepeater;
 
       const reelStopBase = 250;
       const reelStopGap = isNearMiss ? 350 : 180;
 
-      result.result.forEach((symbol, i) => {
-        const delay = reelStopBase + (i * reelStopGap);
+      [0, 1, 2].forEach((col) => {
+        const delay = reelStopBase + (col * reelStopGap);
 
-        if (isNearMiss && i === result.result.length - 1) {
-          setTimeout(() => setSlowingReel(i), delay - 200);
+        if (isNearMiss && col === 2) {
+          stopTimeoutsRef.current.push(setTimeout(() => setSlowingCol(2), delay - 200));
         }
 
-        setTimeout(() => {
-          clearInterval(intervals[i]);
-          setReels(prev => { const next = [...prev]; next[i] = symbol; return next; });
+        stopTimeoutsRef.current.push(setTimeout(() => {
+          clearInterval(colIntervalsRef.current[col]);
+          setGrid(prev => {
+            const next = prev.map(c => [...c]);
+            next[col] = result.grid[col];
+            return next;
+          });
           soundManager.reelStop();
 
-          if (i === 1 && isNearMiss) {
+          if (col === 1 && isNearMiss) {
             soundManager.nearMiss();
           }
 
-          if (i === result.result.length - 1) {
+          if (col === 2) {
             setIsSpinning(false);
-            setSlowingReel(-1);
+            setSlowingCol(-1);
             spinningRef.current = false;
             setFreeSpins(result.totalFreeSpins);
-            if ((result as any).streak !== undefined) setStreak((result as any).streak);
+            setWinLines(result.winLines);
+            if (result.streak !== undefined) setStreak(result.streak);
 
             if (isNearMiss && result.winAmount === 0) {
               setShowNearMiss(true);
               soundManager.nearMissReveal();
-              shakeControls.start({
-                x: [0, -3, 3, -2, 2, 0],
-                transition: { duration: 0.3 }
-              });
+              shakeControls.start({ x: [0, -3, 3, -2, 2, 0], transition: { duration: 0.3 } });
               setTimeout(() => setShowNearMiss(false), 1500);
             }
 
@@ -368,7 +427,7 @@ export function SlotMachine({ balance }: { balance: number }) {
               setShowParticles(true);
               setLossCount(0);
               setTimeout(() => setShowParticles(false), 1800);
-              if ((result as any).streak >= 3) soundManager.streak();
+              if (result.streak >= 3) soundManager.streak();
 
               if (result.isJackpot || result.winAmount >= bet * 10) {
                 soundManager.win(true);
@@ -386,10 +445,12 @@ export function SlotMachine({ balance }: { balance: number }) {
               }
 
               const messages: { title: string; className: string }[] = [];
-              if (result.isJackpot) messages.push({ title: "🐉 ROYAL JACKPOT! 🐉", className: "bg-gradient-to-r from-red-600 to-red-700 text-white border-red-300 font-black text-2xl shadow-[0_0_50px_rgba(220,38,38,0.6)]" });
+              const lineCount = result.winLines.length;
+              if (result.isJackpot) messages.push({ title: `🐉 ROYAL JACKPOT! ${lineCount} LINES! 🐉`, className: "bg-gradient-to-r from-red-600 to-red-700 text-white border-red-300 font-black text-2xl shadow-[0_0_50px_rgba(220,38,38,0.6)]" });
               if (result.isRepeater && !isFakeRepeater) messages.push({ title: "⚡ REPEATER! SPIN AGAIN! ⚡", className: "bg-gradient-to-r from-cyan-500 to-blue-600 text-white border-cyan-300 font-black text-xl" });
               if (result.isBonusRound) { soundManager.bonus(); messages.push({ title: "🎰 BONUS ROUND ACTIVATED!", className: "bg-gradient-to-r from-purple-600 to-pink-600 text-white border-pink-300 font-black text-xl" }); }
               if (result.multiplier && result.multiplier > 1) messages.push({ title: `💥 ${result.multiplier}x MULTIPLIER!`, className: "bg-gradient-to-r from-yellow-400 to-orange-500 text-purple-900 border-yellow-300 font-black text-lg" });
+              if (lineCount > 0 && result.winLines.some(l => l >= 3)) messages.push({ title: `↗ DIAGONAL WIN! ↘`, className: "bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-300 font-black text-lg" });
               if (!result.isJackpot && !result.isRepeater && !result.isBonusRound && result.winAmount > 0) messages.push({ title: `🔥 WIN: +${result.winAmount.toLocaleString()}đ`, className: "bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold text-lg" });
               messages.forEach((msg, idx) => { setTimeout(() => { toast({ title: msg.title, className: msg.className }); }, idx * 400); });
             } else {
@@ -403,16 +464,20 @@ export function SlotMachine({ balance }: { balance: number }) {
             }
             if (autoSpinRef.current) setTimeout(() => { handleSpin(); }, 350);
           }
-        }, delay);
+        }, delay));
       });
     } catch (error) {
+      colIntervalsRef.current.forEach(clearInterval);
+      colIntervalsRef.current = [];
+      stopTimeoutsRef.current.forEach(clearTimeout);
+      stopTimeoutsRef.current = [];
       setIsSpinning(false);
-      setSlowingReel(-1);
+      setSlowingCol(-1);
       spinningRef.current = false;
       setAutoSpin(false);
       toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
     }
-  }, [balance, bet, freeSpins, reels, spinMutation, toast, shakeControls]);
+  }, [balance, bet, freeSpins, spinMutation, toast, shakeControls]);
 
   const handleAiAdvice = async () => {
     try {
@@ -435,11 +500,6 @@ export function SlotMachine({ balance }: { balance: number }) {
     const next = !autoSpin;
     setAutoSpin(next);
     if (next && !spinningRef.current) handleSpin();
-  };
-
-  const isNearMiss = (i: number) => {
-    if (isSpinning || lastWin > 0) return false;
-    return (reels[0] === reels[1] && i < 2) || (reels[1] === reels[2] && i > 0) || (reels[0] === reels[2] && (i === 0 || i === 2));
   };
 
   return (
@@ -482,6 +542,9 @@ export function SlotMachine({ balance }: { balance: number }) {
               <div className="text-5xl md:text-6xl font-display font-black">
                 <AnimatedWinCounter value={lastWin} />đ
               </div>
+              {winLines.length > 1 && (
+                <div className="text-lg mt-1 font-bold">{winLines.length} LINES!</div>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -559,6 +622,14 @@ export function SlotMachine({ balance }: { balance: number }) {
               />
             </div>
 
+            <div className="flex items-center justify-center gap-3 mt-1">
+              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">5 PAYLINES</span>
+              <span className="text-[9px] text-yellow-500/30">•</span>
+              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">3×3 GRID</span>
+              <span className="text-[9px] text-yellow-500/30">•</span>
+              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">DIAGONALS</span>
+            </div>
+
             {freeSpins > 0 && (
               <motion.div
                 animate={{ scale: [1, 1.08, 1], opacity: [0.8, 1, 0.8] }}
@@ -573,7 +644,7 @@ export function SlotMachine({ balance }: { balance: number }) {
           </div>
 
           <div className="px-4 md:px-6 py-4">
-            <div className="relative rounded-2xl overflow-hidden"
+            <div ref={gridRef} className="relative rounded-2xl overflow-hidden"
               style={{
                 background: 'linear-gradient(180deg, #050210 0%, #0a0420 50%, #050210 100%)',
                 boxShadow: 'inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(251,191,36,0.2), 0 0 30px -5px rgba(139,92,246,0.1)',
@@ -590,26 +661,28 @@ export function SlotMachine({ balance }: { balance: number }) {
                   background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 30%, transparent 70%, rgba(255,255,255,0.015) 100%)',
                 }}
               />
-              <div className="absolute inset-0 pointer-events-none z-20"
-                style={{
-                  background: 'radial-gradient(ellipse at 30% 20%, rgba(139,92,246,0.06) 0%, transparent 50%)',
-                }}
-              />
 
-              <div className="flex items-stretch" style={{ height: '220px' }}>
-                {reels.map((symbol, i) => (
-                  <div key={i} className="flex-1 relative">
-                    <ReelStrip
-                      symbol={symbol}
-                      isSpinning={isSpinning}
-                      index={i}
-                      nearMiss={isNearMiss(i)}
-                      isSlowing={slowingReel === i}
-                    />
-                    {i < reels.length - 1 && (
-                      <div className="absolute top-[10%] right-0 bottom-[10%] w-[1px]"
+              <WinLineOverlay winLines={winLines} gridRef={gridRef} />
+
+              <div className="grid grid-cols-3 gap-0" style={{ minHeight: '260px' }}>
+                {[0, 1, 2].map((col) => (
+                  <div key={col} className="flex flex-col relative">
+                    {[0, 1, 2].map((row) => (
+                      <GridCell
+                        key={`${col}-${row}`}
+                        symbol={grid[col]?.[row] ?? getRandomSymbol()}
+                        isSpinning={isSpinning}
+                        col={col}
+                        row={row}
+                        isWinning={isWinningCell(col, row)}
+                        isSlowing={slowingCol === col}
+                      />
+                    ))}
+
+                    {col < 2 && (
+                      <div className="absolute top-[5%] right-0 bottom-[5%] w-[1px] z-10"
                         style={{
-                          background: 'linear-gradient(to bottom, transparent, rgba(251,191,36,0.2) 30%, rgba(251,191,36,0.2) 70%, transparent)',
+                          background: 'linear-gradient(to bottom, transparent, rgba(251,191,36,0.2) 20%, rgba(251,191,36,0.2) 80%, transparent)',
                         }}
                       />
                     )}
@@ -617,25 +690,16 @@ export function SlotMachine({ balance }: { balance: number }) {
                 ))}
               </div>
 
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 z-10 pointer-events-none flex items-center">
-                <motion.div
-                  animate={isSpinning ? { scale: [1, 1.3, 1], boxShadow: ['0 0 10px rgba(251,191,36,0.8)', '0 0 20px rgba(251,191,36,1)', '0 0 10px rgba(251,191,36,0.8)'] } : {}}
-                  transition={{ duration: 0.5, repeat: Infinity }}
-                  className="w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_10px_rgba(251,191,36,0.8)] -ml-1.5"
-                />
-                <div className="flex-1 h-[2px]"
-                  style={{
-                    background: isSpinning
-                      ? 'linear-gradient(to right, rgba(251,191,36,0.8), rgba(251,191,36,0.3) 20%, rgba(251,191,36,0.3) 80%, rgba(251,191,36,0.8))'
-                      : 'linear-gradient(to right, rgba(251,191,36,0.6), rgba(251,191,36,0.15) 20%, rgba(251,191,36,0.15) 80%, rgba(251,191,36,0.6))',
-                  }}
-                />
-                <motion.div
-                  animate={isSpinning ? { scale: [1, 1.3, 1] } : {}}
-                  transition={{ duration: 0.5, repeat: Infinity }}
-                  className="w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_10px_rgba(251,191,36,0.8)] -mr-1.5"
-                />
-              </div>
+              <div className="absolute inset-0 pointer-events-none z-10"
+                style={{
+                  background: 'linear-gradient(to bottom, rgba(8,3,24,0.6) 0%, transparent 15%, transparent 85%, rgba(8,3,24,0.6) 100%)',
+                }}
+              />
+              <div className="absolute inset-0 pointer-events-none z-10"
+                style={{
+                  background: 'linear-gradient(to right, rgba(0,0,0,0.3) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.3) 100%)',
+                }}
+              />
             </div>
           </div>
 
@@ -656,6 +720,18 @@ export function SlotMachine({ balance }: { balance: number }) {
                   <AnimatedWinCounter value={lastWin} />
                 </motion.div>
               </div>
+
+              {winLines.length > 0 && (
+                <div className="flex gap-1">
+                  {winLines.map(li => (
+                    <span key={li} className="text-[9px] font-black px-1.5 py-0.5 rounded"
+                      style={{ background: PAYLINE_COLORS[li], color: '#fff' }}
+                    >
+                      {PAYLINE_LABELS[li]}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {streak > 0 && (
                 <motion.div
@@ -706,19 +782,20 @@ export function SlotMachine({ balance }: { balance: number }) {
               {bet.toLocaleString()}đ
             </motion.span>
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1">
             {BET_AMOUNTS.map((amount) => (
               <button
                 key={amount}
-                onClick={() => setBet(amount)}
+                onClick={() => !isSpinning && setBet(amount)}
+                disabled={isSpinning}
                 data-testid={`button-bet-${amount}`}
-                className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all duration-150 ${
+                className={`flex-1 py-2 rounded-xl font-bold text-[11px] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${
                   bet === amount
                     ? "bg-gradient-to-b from-yellow-400 to-yellow-600 text-purple-950 shadow-[0_0_20px_rgba(251,191,36,0.4),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.05]"
                     : "bg-white/[0.04] text-yellow-100/50 hover:bg-white/[0.08] hover:text-yellow-100/80 border border-white/[0.06]"
                 }`}
               >
-                {amount >= 1000 ? `${amount / 1000}K` : amount}
+                {formatBet(amount)}
               </button>
             ))}
           </div>

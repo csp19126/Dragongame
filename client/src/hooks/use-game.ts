@@ -11,7 +11,8 @@ export interface GameStateResponse {
 }
 
 export interface SpinResponse {
-  result: string[];
+  grid: string[][];
+  winLines: number[];
   winAmount: number;
   newBalance: number;
   freeSpinsAwarded: number;
@@ -19,6 +20,8 @@ export interface SpinResponse {
   isJackpot: boolean;
   isBonusRound?: boolean;
   isRepeater?: boolean;
+  isFakeRepeater?: boolean;
+  isNearMiss?: boolean;
   multiplier?: number;
   streak: number;
   totalWins: number;

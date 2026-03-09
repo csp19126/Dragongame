@@ -128,7 +128,24 @@ export async function registerRoutes(
 
       const symbols = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎", "🌸", "🏯", "⚔️", "📜"];
       const pick = () => symbols[Math.floor(Math.random() * symbols.length)];
-      const pickDifferent = (s: string) => { let n = pick(); while (n === s) n = pick(); return n; };
+      const pickAdj = (s: string) => symbols[(symbols.indexOf(s) + 1) % symbols.length];
+      const pickDiff = (s: string) => { let n = pick(); while (n === s) n = pick(); return n; };
+
+      const grid: string[][] = [
+        [pick(), pick(), pick()],
+        [pick(), pick(), pick()],
+        [pick(), pick(), pick()],
+      ];
+
+      const PAYLINES: [number, number][][] = [
+        [[0,0],[1,0],[2,0]],
+        [[0,1],[1,1],[2,1]],
+        [[0,2],[1,2],[2,2]],
+        [[0,0],[1,1],[2,2]],
+        [[0,2],[1,1],[2,0]],
+      ];
+
+      const getLine = (line: [number, number][]) => line.map(([c,r]) => grid[c][r]);
 
       let winAmount = 0;
       let isJackpot = false;
@@ -138,77 +155,93 @@ export async function registerRoutes(
       let isRepeater = false;
       let isNearMiss = false;
       let isFakeRepeater = false;
+      const winLines: number[] = [];
 
       const roll = Math.random();
-      let result: string[];
 
-      if (roll < 0.005) {
+      if (roll < 0.003) {
         const s = pick();
-        result = [s, s, s];
-      } else if (roll < 0.12) {
+        const lineIdx = Math.floor(Math.random() * 5);
+        PAYLINES[lineIdx].forEach(([c,r]) => { grid[c][r] = s; });
+      } else if (roll < 0.10) {
         const s = pick();
-        const pos = Math.floor(Math.random() * 3);
-        result = [s, s, s];
-        result[pos === 0 ? 2 : pos === 1 ? 0 : 1] = pickDifferent(s);
-        if (pos === 2) {
-          result = [s, s, pickDifferent(s)];
-        } else if (pos === 0) {
-          result = [pickDifferent(s), s, s];
-        } else {
-          result = [s, pickDifferent(s), s];
-        }
-        winAmount = Math.floor(input.betAmount * (2 + Math.random() * 3));
-        if (result.includes("🐉")) multiplier = 2;
-        if (result.includes("💎")) multiplier = 1.5;
-        winAmount = Math.floor(winAmount * multiplier);
-      } else if (roll < 0.55) {
+        const lineIdx = Math.floor(Math.random() * 5);
+        const coords = PAYLINES[lineIdx];
+        coords.forEach(([c,r]) => { grid[c][r] = s; });
+        const missPos = Math.floor(Math.random() * 3);
+        const [mc,mr] = coords[missPos];
+        grid[mc][mr] = pickDiff(s);
+      } else if (roll < 0.50) {
         const s = pick();
-        const nearPos = Math.floor(Math.random() * 3);
-        result = [s, s, s];
-        if (nearPos === 2) {
-          const adj = symbols[(symbols.indexOf(s) + 1) % symbols.length];
-          result[2] = adj;
-        } else if (nearPos === 0) {
-          const adj = symbols[(symbols.indexOf(s) + 1) % symbols.length];
-          result[0] = adj;
-        } else {
-          const adj = symbols[(symbols.indexOf(s) + 1) % symbols.length];
-          result[1] = adj;
-        }
+        const lineIdx = Math.floor(Math.random() * 5);
+        const coords = PAYLINES[lineIdx];
+        coords.forEach(([c,r]) => { grid[c][r] = s; });
+        const missPos = Math.floor(Math.random() * 3);
+        const [mc,mr] = coords[missPos];
+        grid[mc][mr] = pickAdj(s);
         isNearMiss = true;
+      }
+
+      PAYLINES.forEach((line, idx) => {
+        const vals = getLine(line);
+        if (vals[0] === vals[1] && vals[1] === vals[2]) {
+          winLines.push(idx);
+        }
+      });
+
+      if (winLines.length > 0) {
+        const hasFullRow = winLines.length >= 1;
+        if (winLines.length >= 3) {
+          winAmount = input.betAmount * 100;
+          isJackpot = true;
+          freeSpinsAwarded = 20;
+        } else if (winLines.length === 2) {
+          winAmount = input.betAmount * 25;
+          freeSpinsAwarded = 10;
+          isJackpot = true;
+        } else {
+          const lineVals = getLine(PAYLINES[winLines[0]]);
+          const s = lineVals[0];
+          let base = input.betAmount * 5;
+          if (s === "🐉") base = input.betAmount * 8;
+          else if (s === "💎") base = input.betAmount * 7;
+          else if (s === "🧧") base = input.betAmount * 6;
+          winAmount = base;
+
+          const isDiagonal = winLines[0] >= 3;
+          if (isDiagonal) {
+            winAmount = Math.floor(winAmount * 1.5);
+          }
+        }
+
+        if (Math.random() < 0.25) { isBonusRound = true; winAmount = Math.floor(winAmount * 1.5); }
+        if (Math.random() < 0.12) { isRepeater = true; winAmount = Math.floor(winAmount * 2); }
       } else {
-        result = [pick(), pick(), pick()];
-        while (result[0] === result[1] && result[1] === result[2]) {
-          result[2] = pick();
-        }
-        while (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]) {
-          result[Math.floor(Math.random() * 3)] = pick();
+        const twoMatchLines: number[] = [];
+        PAYLINES.forEach((line, idx) => {
+          const vals = getLine(line);
+          if (vals[0] === vals[1] || vals[1] === vals[2] || vals[0] === vals[2]) {
+            twoMatchLines.push(idx);
+          }
+        });
+        if (twoMatchLines.length > 0 && Math.random() < 0.15) {
+          winAmount = Math.floor(input.betAmount * (1.5 + Math.random() * 2));
+          winLines.push(twoMatchLines[0]);
         }
       }
 
-      const allMatch = result[0] === result[1] && result[1] === result[2];
-      const twoMatch = !allMatch && (result[0] === result[1] || result[1] === result[2] || result[0] === result[2]);
-
-      if (allMatch) {
-        winAmount = input.betAmount * 50;
-        isJackpot = true;
-        freeSpinsAwarded = 15;
-        if (Math.random() < 0.3) { isBonusRound = true; winAmount *= 2; }
-        if (Math.random() < 0.15) { isRepeater = true; winAmount *= 2; }
-      }
-
-      if (isNearMiss && Math.random() < 0.12) {
+      if (isNearMiss && winAmount === 0 && Math.random() < 0.12) {
         isFakeRepeater = true;
         isRepeater = true;
       }
 
-      if (winAmount > 0 && !allMatch && Math.random() < 0.08) {
-        freeSpinsAwarded = Math.random() < 0.5 ? 3 : 5;
+      if (winAmount > 0 && Math.random() < 0.08) {
+        freeSpinsAwarded += Math.random() < 0.5 ? 3 : 5;
       }
 
       if (winAmount > 0 && Math.random() < 0.03) {
-        const wildMultipliers = [2, 3, 5];
-        winAmount *= wildMultipliers[Math.floor(Math.random() * wildMultipliers.length)];
+        const wildMults = [2, 3, 5];
+        winAmount *= wildMults[Math.floor(Math.random() * wildMults.length)];
       }
 
       const newBalance = isFreeSpin ? user.balance + winAmount : user.balance - input.betAmount + winAmount;
@@ -241,7 +274,11 @@ export async function registerRoutes(
       if (newConsecutiveWins >= 5) {
         await checkAndUnlock("hot_streak_5", "Hot Streak x5", "5 consecutive wins!", "zap");
       }
-      if (allMatch && result[0] === "🐉") {
+      const hasDragonLine = winLines.some(li => {
+        const vals = getLine(PAYLINES[li]);
+        return vals[0] === "🐉" && vals[1] === "🐉" && vals[2] === "🐉";
+      });
+      if (hasDragonLine) {
         await checkAndUnlock("dragon_master", "Dragon Master", "Win with 3 dragons!", "dragon");
       }
       if (input.betAmount >= 100000) {
@@ -258,7 +295,8 @@ export async function registerRoutes(
       }
 
       res.json({
-        result,
+        grid,
+        winLines,
         winAmount,
         newBalance,
         freeSpinsAwarded,

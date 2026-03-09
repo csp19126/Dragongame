@@ -377,3 +377,18 @@
 .near-miss-shake {
   animation: nearMissShake 0.3s ease-in-out;
 }
+
+@keyframes winCellGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 12px rgba(251,191,36,0.3));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 25px rgba(251,191,36,0.6));
+    transform: scale(1.08);
+  }
+}
+
+.win-cell-glow {
+  animation: winCellGlow 0.8s ease-in-out infinite;
+}

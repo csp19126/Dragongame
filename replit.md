@@ -25,7 +25,7 @@ Target market: Vietnamese betting game players (Bắn Cá, Máy Xèng style)
 - **Path aliases**: `@/` → `client/src/`, `@shared/` → `shared/`
 
 ### Key Components
-- **SlotMachine** (`client/src/components/SlotMachine.tsx`): Core game with 3 reels, ~0.9s spin cycles, auto-spin, near-miss system with dramatic 3rd reel slowdown, fake repeater overlays, screen flash/shake effects, particle effects, share button, loss-streak encouragement, streak display, enhanced sound integration. Premium cabinet design with ambient edge glow, glass/scanline effects.
+- **SlotMachine** (`client/src/components/SlotMachine.tsx`): Core game with 3×3 grid (3 columns × 3 rows), 5 paylines (3 horizontal + 2 diagonal), ~0.9s spin cycles, auto-spin, near-miss system with dramatic 3rd column slowdown, fake repeater overlays, screen flash/shake effects, particle effects, share button, loss-streak encouragement, streak display, payline highlighting with SVG overlays, enhanced sound integration. Premium cabinet design with ambient edge glow, glass/scanline effects.
 - **AchievementBadge** (`client/src/components/AchievementBadge.tsx`): Badge display with Lucide icon mapping and pulse animations
 - **StreakDisplay** (`client/src/components/StreakDisplay.tsx`): Win streak counter with tier labels (On Fire, Unstoppable, Dragon Mode)
 - **Leaderboard** (`client/src/components/Leaderboard.tsx`): Ranked player list with Crown icons
@@ -66,19 +66,30 @@ Target market: Vietnamese betting game players (Bắn Cá, Máy Xèng style)
 
 ### Game Mechanics
 - **Symbols**: 🐉🧧🏮💎🪙🎎🌸🏯⚔️📜 (10 total)
-- **Bet Amounts**: 1000, 5000, 10000, 50000, 100000 (Vietnamese Đồng style)
+- **Bet Amounts**: 1K, 5K, 10K, 50K, 100K, 500K, 1M (Vietnamese Đồng style)
+- **Grid**: 3×3 (3 columns × 3 rows), backend returns `grid: string[][]` (grid[col][row]) and `winLines: number[]`
+- **Paylines** (5 total):
+  - Line 0: Top horizontal row
+  - Line 1: Middle horizontal row
+  - Line 2: Bottom horizontal row
+  - Line 3: Diagonal top-left → bottom-right
+  - Line 4: Diagonal bottom-left → top-right
 - **Win System** (Designed for addiction/retention):
-  - 3 match (Jackpot): 50x bet + 15 free spins — 0.5% chance
-  - 2 match (real win): 2-5x bet with Dragon 2x / Gem 1.5x multipliers — ~11.5% chance
-  - Near-miss (forced 2-match-but-miss): ~43% of spins show 2 matching + adjacent symbol on 3rd reel, creating "almost won" feel
-  - Fake repeaters: ~12% of near-misses trigger a "REPEATER!" announcement with animation but the re-spin produces a loss
-  - Remaining ~45% are clean losses (all different symbols)
+  - 3+ line match: 100x bet + 20 free spins — 0.3% chance
+  - 2 line match: 25x bet + 10 free spins — jackpot tier
+  - 1 line match: 5-8x bet (Dragon 8x, Diamond 7x, Envelope 6x, others 5x); diagonal lines pay 1.5x bonus
+  - 2-of-3 partial wins: 15% chance for 1.5-3.5x bet
+  - Near-miss (forced 2-match-but-miss): ~40% of spins show adjacent symbol breaking a payline
+  - Fake repeaters: ~12% of near-misses trigger a "REPEATER!" overlay but no actual win
+  - Bonus round: 25% chance on wins (1.5x multiplier)
+  - Repeater: 12% chance on wins (2x multiplier)
   - Wild multiplier: 3% chance for 2x/3x/5x on any win
-  - Free spins on 2-match wins: 8% chance for 3-5 free spins
-- **Spin Speed**: ~900ms total cycle (250ms base + 180ms per reel gap), vs previous 1700ms. Near-miss spins use 350ms gap with dramatic 3rd reel slowdown
+  - Free spins on wins: 8% chance for 3-5 extra free spins
+- **Spin Speed**: ~900ms total cycle (250ms base + 180ms per column gap), near-miss spins use 350ms gap with dramatic 3rd column slowdown
+- **Payline Highlighting**: Colored line overlays (gold/purple/red/cyan/green) with SVG for diagonals, animated opacity pulsing
 - **Encouragement System**: After 5+ consecutive losses, shows motivating messages ("Almost there!", "Dragon stirs... BIG WIN incoming!")
 - **Share Feature**: Win amounts ≥3x bet show a "Share Win" button (Web Share API / clipboard fallback)
-- **Near-miss Effects**: "SO CLOSE!" overlay, screen shake, descending tension sound, red glow pulse on matched reels
+- **Near-miss Effects**: "SO CLOSE!" overlay, screen shake, descending tension sound
 - **Fake Repeater Effects**: "REPEATER! Re-spinning for bonus..." overlay with cyan glow and spinning icon, disappears after 2.5s
 - **Screen Flash**: Purple flash on spin start, gold flash on big win, cyan flash on fake repeater
 - **Achievements**: 8 badges (first_win, hot_streak_3/5, dragon_master, high_roller, millionaire, jackpot_hunter, lucky_seven)

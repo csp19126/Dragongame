@@ -68,7 +68,8 @@ export const api = {
       input: z.object({ slotId: z.string(), betAmount: z.number() }),
       responses: {
         200: z.object({
-          result: z.array(z.string()),
+          grid: z.array(z.array(z.string())),
+          winLines: z.array(z.number()),
           winAmount: z.number(),
           newBalance: z.number(),
           freeSpinsAwarded: z.number(),
