@@ -11,6 +11,19 @@ import { Loader2, Brain, Flame, Zap, Crown, RotateCw, Gift, Sparkles, Share2, Al
 const SYMBOLS = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎", "🌸", "🏯", "⚔️", "📜"];
 const BET_AMOUNTS = [1000, 5000, 10000, 50000, 100000, 500000, 1000000];
 
+const SYMBOL_GLOW: Record<string, { color: string; shadow: string; bg: string }> = {
+  "🐉": { color: "#fbbf24", shadow: "0 0 25px #fbbf24, 0 0 50px #f59e0b", bg: "rgba(251,191,36,0.15)" },
+  "🧧": { color: "#ef4444", shadow: "0 0 25px #ef4444, 0 0 50px #dc2626", bg: "rgba(239,68,68,0.15)" },
+  "🏮": { color: "#f97316", shadow: "0 0 25px #f97316, 0 0 50px #ea580c", bg: "rgba(249,115,22,0.15)" },
+  "💎": { color: "#38bdf8", shadow: "0 0 25px #38bdf8, 0 0 50px #0ea5e9", bg: "rgba(56,189,248,0.15)" },
+  "🪙": { color: "#facc15", shadow: "0 0 25px #facc15, 0 0 50px #eab308", bg: "rgba(250,204,21,0.15)" },
+  "🎎": { color: "#c084fc", shadow: "0 0 25px #c084fc, 0 0 50px #a855f7", bg: "rgba(192,132,252,0.15)" },
+  "🌸": { color: "#f472b6", shadow: "0 0 25px #f472b6, 0 0 50px #ec4899", bg: "rgba(244,114,182,0.15)" },
+  "🏯": { color: "#a78bfa", shadow: "0 0 25px #a78bfa, 0 0 50px #8b5cf6", bg: "rgba(167,139,250,0.15)" },
+  "⚔️": { color: "#94a3b8", shadow: "0 0 25px #94a3b8, 0 0 50px #64748b", bg: "rgba(148,163,184,0.15)" },
+  "📜": { color: "#fcd34d", shadow: "0 0 25px #fcd34d, 0 0 50px #fbbf24", bg: "rgba(252,211,77,0.15)" },
+};
+
 const getRandomSymbol = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
 const makeGrid = (): string[][] => [
   [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()],
@@ -80,6 +93,7 @@ function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
   isSlowing: boolean;
 }) {
   const [spinSymbol, setSpinSymbol] = useState(getRandomSymbol());
+  const glow = SYMBOL_GLOW[isSpinning ? spinSymbol : symbol] || SYMBOL_GLOW["📜"];
 
   useEffect(() => {
     if (isSpinning) {
@@ -89,48 +103,117 @@ function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
     }
   }, [isSpinning, isSlowing]);
 
+  const displaySymbol = isSpinning ? spinSymbol : symbol;
+
   return (
     <div
       data-testid={`cell-${col}-${row}`}
-      className="relative flex items-center justify-center aspect-square"
+      className="relative flex items-center justify-center aspect-square overflow-hidden"
     >
+      {!isSpinning && (
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          animate={isWinning
+            ? { opacity: [0.2, 0.5, 0.2], scale: [1, 1.2, 1] }
+            : { opacity: [0.05, 0.12, 0.05] }
+          }
+          transition={{ duration: isWinning ? 0.8 : 3, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            background: `radial-gradient(circle at center, ${glow.bg} 0%, transparent 70%)`,
+          }}
+        />
+      )}
+
       <AnimatePresence mode="popLayout">
         <motion.div
           key={isSpinning ? `spin-${col}-${row}-${Math.random()}` : `stop-${symbol}-${col}-${row}`}
-          initial={{ y: isSpinning ? -20 : -30, opacity: 0, scale: 0.5 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
-          exit={{ y: 20, opacity: 0, scale: 0.5 }}
+          initial={isSpinning
+            ? { y: -30, opacity: 0, scale: 0.3, rotateX: 90 }
+            : { y: -40, opacity: 0, scale: 0.2, rotateX: -180 }
+          }
+          animate={isSpinning
+            ? { y: 0, opacity: 0.6, scale: 0.9, rotateX: 0 }
+            : isWinning
+              ? {
+                  y: 0, opacity: 1, scale: [0.2, 1.3, 1.05],
+                  rotateX: 0,
+                  rotate: [0, -5, 5, -3, 0],
+                }
+              : { y: 0, opacity: 1, scale: [0.2, 1.15, 1], rotateX: 0 }
+          }
+          exit={{ y: 30, opacity: 0, scale: 0.3, rotateX: -90 }}
           transition={{
             type: "spring",
-            stiffness: isSpinning ? 1200 : 150,
-            damping: isSpinning ? 12 : 18,
-            mass: isSpinning ? 0.1 : 1,
-            delay: isSpinning ? 0 : col * 0.08,
+            stiffness: isSpinning ? 1200 : 120,
+            damping: isSpinning ? 12 : 12,
+            mass: isSpinning ? 0.1 : 0.8,
+            delay: isSpinning ? 0 : col * 0.1 + row * 0.03,
           }}
-          className={`text-3xl sm:text-4xl md:text-5xl select-none relative z-10 ${isWinning ? 'win-cell-glow' : ''}`}
+          className={`select-none relative z-10 symbol-cell ${isWinning ? 'symbol-winning' : ''}`}
           style={{
+            fontSize: 'clamp(2.2rem, 8vw, 4rem)',
+            lineHeight: 1,
             filter: isSpinning
-              ? (isSlowing ? 'blur(1px) brightness(0.8)' : 'blur(3px) brightness(0.5)')
+              ? (isSlowing ? 'blur(1px) brightness(0.7)' : 'blur(4px) brightness(0.4)')
               : isWinning
-                ? 'drop-shadow(0 0 20px var(--slot-win-glow))'
-                : 'drop-shadow(0 0 8px var(--slot-win-text-shadow))',
+                ? `drop-shadow(${glow.shadow}) brightness(1.2)`
+                : `drop-shadow(0 0 12px ${glow.color}44) drop-shadow(0 4px 8px rgba(0,0,0,0.6))`,
             textShadow: isSpinning ? 'none'
               : isWinning
-                ? '0 0 30px var(--slot-win-glow-strong), 0 4px 15px rgba(0,0,0,0.5)'
-                : '0 4px 15px rgba(0,0,0,0.5)',
-            transform: !isSpinning && isWinning ? 'scale(1.1)' : undefined,
+                ? `${glow.shadow}, 0 4px 15px rgba(0,0,0,0.5)`
+                : `0 0 15px ${glow.color}33, 0 4px 12px rgba(0,0,0,0.5)`,
           }}
         >
-          {isSpinning ? spinSymbol : symbol}
+          {displaySymbol}
         </motion.div>
       </AnimatePresence>
 
       {isWinning && !isSpinning && (
+        <>
+          <motion.div
+            animate={{ opacity: [0, 0.6, 0], scale: [0.8, 1.5, 0.8] }}
+            transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 pointer-events-none rounded-xl z-0"
+            style={{ background: `radial-gradient(circle, ${glow.color}40 0%, transparent 60%)` }}
+          />
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-[-20%] pointer-events-none z-0"
+            style={{
+              background: `conic-gradient(from 0deg, transparent 0%, ${glow.color}15 10%, transparent 20%, ${glow.color}10 30%, transparent 40%, ${glow.color}15 50%, transparent 60%, ${glow.color}10 70%, transparent 80%, ${glow.color}15 90%, transparent 100%)`,
+            }}
+          />
+          {[...Array(4)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-1 h-1 rounded-full pointer-events-none z-20"
+              style={{ backgroundColor: glow.color }}
+              animate={{
+                x: [0, (Math.random() - 0.5) * 60],
+                y: [0, -30 - Math.random() * 30],
+                opacity: [0.8, 0],
+                scale: [1, 0.3],
+              }}
+              transition={{
+                duration: 0.8 + Math.random() * 0.6,
+                repeat: Infinity,
+                delay: i * 0.25,
+                ease: "easeOut",
+              }}
+            />
+          ))}
+        </>
+      )}
+
+      {!isSpinning && !isWinning && (
         <motion.div
-          animate={{ opacity: [0, 0.4, 0] }}
-          transition={{ duration: 0.8, repeat: Infinity }}
-          className="absolute inset-0 pointer-events-none rounded-lg"
-          style={{ background: 'radial-gradient(circle, rgba(var(--slot-gold),0.3) 0%, transparent 70%)' }}
+          className="absolute inset-0 pointer-events-none z-0 rounded-xl"
+          animate={{ opacity: [0, 0.08, 0] }}
+          transition={{ duration: 2 + Math.random() * 2, repeat: Infinity, delay: col * 0.3 + row * 0.2 }}
+          style={{
+            background: `radial-gradient(circle at 50% 30%, ${glow.color}20 0%, transparent 60%)`,
+          }}
         />
       )}
     </div>

@@ -421,3 +421,18 @@
 .win-cell-glow {
   animation: winCellGlow 0.8s ease-in-out infinite;
 }
+
+.symbol-cell {
+  transform-style: preserve-3d;
+  perspective: 600px;
+  will-change: transform, filter;
+}
+
+.symbol-winning {
+  animation: symbolPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes symbolPulse {
+  0%, 100% { transform: scale(1.05); }
+  50% { transform: scale(1.2); }
+}
