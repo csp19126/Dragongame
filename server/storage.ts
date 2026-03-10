@@ -147,6 +147,26 @@ export class DatabaseStorage implements IStorage {
     const [card] = await db.insert(giftCards).values({ code, denomination }).returning();
     return card;
   }
+
+  async seedGiftCards(): Promise<void> {
+    const defaultCards = [
+      { code: "DRAGON-50K-2024", denomination: 50000 },
+      { code: "FORTUNE-100K-888", denomination: 100000 },
+      { code: "LUCKY-500K-VIP", denomination: 500000 },
+      { code: "PHOENIX-1M-GOLD", denomination: 1000000 },
+      { code: "EMPEROR-5M-PLAT", denomination: 5000000 },
+      { code: "DRAGON-10M-ULTRA", denomination: 10000000 },
+      { code: "WELCOME-50K-NEW", denomination: 50000 },
+      { code: "VIP-100K-2024", denomination: 100000 },
+      { code: "SUSU-10M-VIP", denomination: 10000000 },
+    ];
+    for (const card of defaultCards) {
+      const existing = await db.select().from(giftCards).where(eq(giftCards.code, card.code));
+      if (existing.length === 0) {
+        await db.insert(giftCards).values(card);
+      }
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();
