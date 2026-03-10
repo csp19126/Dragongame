@@ -40,6 +40,19 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/admin/create-gift-card", async (req, res) => {
+    try {
+      const { code, denomination, adminKey } = req.body;
+      if (adminKey !== "dragon888admin") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      await storage.createGiftCard(code, denomination);
+      res.json({ success: true, code, denomination });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to create gift card" });
+    }
+  });
+
   app.post(api.auth.register.path, async (req, res) => {
     try {
       const input = api.auth.register.input.parse(req.body);
