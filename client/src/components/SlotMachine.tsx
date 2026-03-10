@@ -749,8 +749,8 @@ export function SlotMachine({ balance }: { balance: number }) {
                 <span className="text-[10px] uppercase tracking-[0.2em] text-yellow-500/60 font-bold">{t.balance}</span>
                 <motion.span
                   key={balance}
-                  initial={{ color: `rgb(var(--slot-gold-mid))` }}
-                  animate={{ color: `rgba(var(--slot-gold-mid),0.8)` }}
+                  initial={{ color: "#eab308" }}
+                  animate={{ color: "#d97706" }}
                   className="font-mono text-lg font-bold"
                 >
                   {balance.toLocaleString()}
