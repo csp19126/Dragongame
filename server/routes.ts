@@ -3,6 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth/index";
 import { registerAudioRoutes } from "./replit_integrations/audio";
 import { registerImageRoutes } from "./replit_integrations/image";
@@ -22,7 +23,8 @@ export async function registerRoutes(
   app.post("/api/admin/gift-balance", async (req, res) => {
     try {
       const { userId, amount, adminKey } = req.body;
-      if (adminKey !== "dragon888admin") {
+      const validKey = process.env.ADMIN_KEY || "dragon888admin";
+      if (adminKey !== validKey) {
         return res.status(403).json({ message: "Forbidden" });
       }
       let user = await storage.getUser(userId);
@@ -43,7 +45,8 @@ export async function registerRoutes(
   app.post("/api/admin/create-gift-card", async (req, res) => {
     try {
       const { code, denomination, adminKey } = req.body;
-      if (adminKey !== "dragon888admin") {
+      const validKey = process.env.ADMIN_KEY || "dragon888admin";
+      if (adminKey !== validKey) {
         return res.status(403).json({ message: "Forbidden" });
       }
       await storage.createGiftCard(code, denomination);
@@ -60,9 +63,11 @@ export async function registerRoutes(
       if (existing) {
         return res.status(400).json({ message: "Username exists" });
       }
-      const user = await storage.createUser({ ...input, email: `${input.username}@example.com` });
+      const hashedPassword = await bcrypt.hash(input.password, 10);
+      const user = await storage.createUser({ ...input, password: hashedPassword, email: `${input.username}@example.com` });
       (req.session as any).userId = user.id;
-      res.status(201).json(user);
+      const { password: _, ...safeUser } = user;
+      res.status(201).json(safeUser);
     } catch (err) {
       if (err instanceof z.ZodError) {
         res.status(400).json({
@@ -79,11 +84,25 @@ export async function registerRoutes(
     try {
       const input = api.auth.login.input.parse(req.body);
       const user = await storage.getUserByUsername(input.username);
-      if (!user || user.password !== input.password) {
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      let passwordMatch = false;
+      if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+        passwordMatch = await bcrypt.compare(input.password, user.password);
+      } else {
+        passwordMatch = user.password === input.password;
+        if (passwordMatch) {
+          const hashed = await bcrypt.hash(input.password, 10);
+          await storage.updatePassword(user.id, hashed);
+        }
+      }
+      if (!passwordMatch) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
       (req.session as any).userId = user.id;
-      res.status(200).json(user);
+      const { password: _, ...safeUser } = user;
+      res.status(200).json(safeUser);
     } catch (err) {
       res.status(400).json({ message: "Invalid input" });
     }
@@ -156,8 +175,12 @@ export async function registerRoutes(
 
       const isFreeSpin = (gameState?.freeSpins ?? 0) > 0;
       
-      if (!isFreeSpin && user.balance < input.betAmount) {
-        return res.status(400).json({ message: "Insufficient balance" });
+      if (!isFreeSpin) {
+        const deducted = await storage.deductBalanceAtomic(user.id, input.betAmount);
+        if (!deducted) {
+          return res.status(400).json({ message: "Insufficient balance" });
+        }
+        user = deducted;
       }
 
       const symbols = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎", "🌸", "🏯", "⚔️", "📜"];
@@ -276,7 +299,6 @@ export async function registerRoutes(
         winAmount *= wildMults[Math.floor(Math.random() * wildMults.length)];
       }
 
-      const newBalance = isFreeSpin ? user.balance + winAmount : user.balance - input.betAmount + winAmount;
       const newFreeSpins = (gameState?.freeSpins ?? 0) - (isFreeSpin ? 1 : 0) + freeSpinsAwarded;
       
       // Update streak tracking
@@ -284,7 +306,11 @@ export async function registerRoutes(
       const newTotalWins = (user.totalWins ?? 0) + (winAmount > 0 ? 1 : 0);
       const newMaxWin = Math.max(user.maxWin ?? 0, winAmount);
 
-      await storage.updateBalance(user.id, newBalance);
+      if (winAmount > 0) {
+        user = await storage.creditBalanceAtomic(user.id, winAmount);
+      }
+      const newBalance = user.balance;
+
       await storage.updateStreak(user.id, newConsecutiveWins, user.maxStreak ?? 0, newTotalWins, newMaxWin);
       await storage.updateGameState(user.id, input.slotId, { 
         freeSpins: newFreeSpins,
@@ -436,6 +462,149 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Deposit history error:", err);
       res.status(500).json({ message: "Failed to fetch deposit history" });
+    }
+  });
+
+  app.post("/api/withdrawals/request", async (req: any, res) => {
+    try {
+      let userId = (req.session as any)?.userId;
+      if (!userId && req.user && (req.user as any).claims) {
+        userId = (req.user as any).claims.sub;
+      }
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const withdrawalSchema = z.object({
+        amount: z.number().min(10000, "Minimum withdrawal is 10,000đ"),
+        note: z.string().optional(),
+      });
+      const parsed = withdrawalSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+
+      let user = await storage.getUser(userId);
+      if (!user) user = await storage.getUserByUsername(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      const deducted = await storage.deductBalanceAtomic(user.id, parsed.data.amount);
+      if (!deducted) {
+        return res.status(400).json({ message: "Insufficient balance" });
+      }
+
+      const newBalance = deducted.balance;
+      const withdrawal = await storage.createWithdrawal(user.id, parsed.data.amount, parsed.data.note);
+
+      res.json({
+        withdrawal,
+        newBalance,
+        message: `Withdrawal request for ${parsed.data.amount.toLocaleString()}đ submitted. An agent will contact you.`,
+      });
+    } catch (err) {
+      console.error("Withdrawal request error:", err);
+      res.status(500).json({ message: "Failed to submit withdrawal request" });
+    }
+  });
+
+  app.get("/api/withdrawals/history", async (req: any, res) => {
+    try {
+      let userId = (req.session as any)?.userId;
+      if (!userId && req.user && (req.user as any).claims) {
+        userId = (req.user as any).claims.sub;
+      }
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      let user = await storage.getUser(userId);
+      if (!user) user = await storage.getUserByUsername(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      const history = await storage.getWithdrawals(user.id);
+      res.json(history);
+    } catch (err) {
+      console.error("Withdrawal history error:", err);
+      res.status(500).json({ message: "Failed to fetch withdrawal history" });
+    }
+  });
+
+  app.get("/api/user/profile", async (req: any, res) => {
+    try {
+      let userId = (req.session as any)?.userId;
+      if (!userId && req.user && (req.user as any).claims) {
+        userId = (req.user as any).claims.sub;
+      }
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      let user = await storage.getUser(userId);
+      if (!user) user = await storage.getUserByUsername(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      res.json({
+        id: user.id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        balance: user.balance,
+        totalWins: user.totalWins,
+        maxWin: user.maxWin,
+        streak: user.streak,
+        maxStreak: user.maxStreak,
+        gamesPlayed: user.gamesPlayed,
+        createdAt: user.createdAt,
+      });
+    } catch (err) {
+      console.error("Profile fetch error:", err);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  app.patch("/api/user/profile", async (req: any, res) => {
+    try {
+      let userId = (req.session as any)?.userId;
+      if (!userId && req.user && (req.user as any).claims) {
+        userId = (req.user as any).claims.sub;
+      }
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const profileSchema = z.object({
+        username: z.string().min(3).max(30).optional(),
+        firstName: z.string().max(50).optional(),
+        lastName: z.string().max(50).optional(),
+      });
+
+      const parsed = profileSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+
+      let user = await storage.getUser(userId);
+      if (!user) user = await storage.getUserByUsername(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      if (parsed.data.username && parsed.data.username !== user.username) {
+        const existing = await storage.getUserByUsername(parsed.data.username);
+        if (existing) {
+          return res.status(400).json({ message: "Username already taken" });
+        }
+      }
+
+      const updated = await storage.updateProfile(user.id, parsed.data);
+      res.json({
+        id: updated.id,
+        username: updated.username,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        email: updated.email,
+        balance: updated.balance,
+        totalWins: updated.totalWins,
+        maxWin: updated.maxWin,
+        streak: updated.streak,
+        maxStreak: updated.maxStreak,
+        gamesPlayed: updated.gamesPlayed,
+        createdAt: updated.createdAt,
+      });
+    } catch (err) {
+      console.error("Profile update error:", err);
+      res.status(500).json({ message: "Failed to update profile" });
     }
   });
 

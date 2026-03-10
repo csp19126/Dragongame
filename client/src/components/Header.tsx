@@ -94,16 +94,6 @@ export function Header() {
                 <Coins className="w-4 h-4 text-yellow-500" />
               </motion.div>
 
-              <motion.div 
-                whileHover={{ scale: 1.02 }}
-                className="hidden lg:flex items-center gap-2 bg-emerald-950/30 px-4 py-1.5 rounded-md border border-emerald-500/20 shadow-inner"
-                data-testid="display-tokens"
-              >
-                <span className="text-[10px] font-black text-emerald-500/60 uppercase tracking-[0.2em]">{t.tokens}</span>
-                <span className="font-mono font-black text-emerald-400 text-lg tracking-tight" data-testid="text-tokens-value">0</span>
-                <Coins className="w-4 h-4 text-emerald-400" />
-              </motion.div>
-
               <Link href="/deposit">
                 <Button
                   variant="outline"
@@ -182,6 +172,12 @@ export function Header() {
                           </Button>
                         </Link>
                       </div>
+                      <DropdownMenuItem asChild className="rounded-md p-3 cursor-pointer transition-colors">
+                        <Link href="/profile" data-testid="link-profile">
+                          <User className="w-5 h-5 mr-3" />
+                          <span className="font-bold">{t.profile}</span>
+                        </Link>
+                      </DropdownMenuItem>
                       <DropdownMenuItem 
                         onClick={() => logout.mutate()} 
                         className="text-destructive focus:text-destructive focus:bg-destructive/10 rounded-md p-3 cursor-pointer transition-colors"

@@ -47,6 +47,45 @@
   --popover-foreground: 270 20% 90%;
   --popover-border: 270 30% 20%;
 
+  /* Slot Machine Theme Colors */
+  --slot-gold: 251, 191, 36;
+  --slot-gold-light: 254, 243, 199;
+  --slot-gold-mid: 252, 211, 77;
+  --slot-gold-dark: 217, 119, 6;
+  --slot-purple: 139, 92, 246;
+  --slot-purple-deep: 109, 40, 217;
+  --slot-purple-darkest: #3b0764;
+  --slot-red: 220, 38, 38;
+  --slot-cyan: 6, 182, 212;
+  --slot-blue: 59, 130, 246;
+  --slot-orange: 251, 146, 60;
+
+  --slot-frame-top: #2d1466;
+  --slot-frame-mid: #1a0a35;
+  --slot-frame-dark: #0d041f;
+  --slot-frame-bottom: #0a0318;
+
+  --slot-grid-dark: #050210;
+  --slot-grid-mid: #0a0420;
+
+  --slot-payline-gold: rgba(var(--slot-gold), 0.6);
+  --slot-payline-purple: rgba(168, 85, 247, 0.6);
+  --slot-payline-red: rgba(239, 68, 68, 0.6);
+  --slot-payline-cyan: rgba(34, 211, 238, 0.6);
+  --slot-payline-green: rgba(74, 222, 128, 0.6);
+
+  --slot-win-glow: rgba(var(--slot-gold), 0.5);
+  --slot-win-glow-strong: rgba(var(--slot-gold), 0.6);
+  --slot-win-text-shadow: rgba(var(--slot-gold), 0.15);
+
+  --slot-spin-top: #a78bfa;
+  --slot-spin-mid: #8b5cf6;
+  --slot-spin-low: #6d28d9;
+  --slot-spin-bottom: #5b21b6;
+  --slot-spin-free-top: #c084fc;
+  --slot-spin-free-mid: #a855f7;
+  --slot-spin-free-bottom: #7c3aed;
+
   /* Fonts */
   --font-display: 'Lobster', cursive;
   --font-sans: 'Nunito', sans-serif;
@@ -96,23 +135,18 @@
 }
 
 /* Slot Machine Premium Aesthetics */
-@keyframes shine {
-  0% { background-position: -100% -100%; }
-  100% { background-position: 100% 100%; }
-}
-
 @keyframes pulse {
   from { transform: scale(1); will-change: transform; }
   to { transform: scale(1.05); }
 }
 
 .win-text-glow {
-  text-shadow: 0 0 15px rgba(234, 179, 8, 1), 0 0 30px rgba(234, 179, 8, 0.7);
+  text-shadow: 0 0 15px rgba(var(--slot-gold), 1), 0 0 30px rgba(var(--slot-gold), 0.7);
   animation: pulse 1s infinite alternate;
 }
 
 .gold-gradient-text {
-  background: linear-gradient(to bottom, #fef3c7, #fcd34d, #d97706);
+  background: linear-gradient(to bottom, rgb(var(--slot-gold-light)), rgb(var(--slot-gold-mid)), rgb(var(--slot-gold-dark)));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 4px 4px rgba(0,0,0,0.2));
@@ -164,10 +198,10 @@
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 5px rgba(234, 179, 8, 0.4), 0 0 15px rgba(234, 179, 8, 0.2);
+    box-shadow: 0 0 5px rgba(var(--slot-gold), 0.4), 0 0 15px rgba(var(--slot-gold), 0.2);
   }
   50% {
-    box-shadow: 0 0 15px rgba(234, 179, 8, 0.8), 0 0 40px rgba(234, 179, 8, 0.4), 0 0 60px rgba(234, 179, 8, 0.2);
+    box-shadow: 0 0 15px rgba(var(--slot-gold), 0.8), 0 0 40px rgba(var(--slot-gold), 0.4), 0 0 60px rgba(var(--slot-gold), 0.2);
   }
 }
 
@@ -246,21 +280,16 @@
     box-shadow: none;
   }
   50% {
-    border-color: rgba(220, 38, 38, 0.8);
-    box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+    border-color: rgba(var(--slot-red), 0.8);
+    box-shadow: 0 0 15px rgba(var(--slot-red), 0.5);
   }
-}
-
-@keyframes sparkle {
-  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1) rotate(180deg); }
 }
 
 .win-explosion {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle, rgba(234, 179, 8, 0.6) 0%, rgba(220, 38, 38, 0.3) 30%, transparent 70%);
+  background: radial-gradient(circle, rgba(var(--slot-gold), 0.6) 0%, rgba(var(--slot-red), 0.3) 30%, transparent 70%);
   animation: winExplosion 0.8s ease-out forwards;
   will-change: transform, opacity;
   z-index: 50;
@@ -341,10 +370,10 @@
 
 @keyframes edgeGlow {
   0%, 100% {
-    box-shadow: inset 0 0 30px rgba(139,92,246,0.05), inset 0 0 60px rgba(251,191,36,0.02);
+    box-shadow: inset 0 0 30px rgba(var(--slot-purple),0.05), inset 0 0 60px rgba(var(--slot-gold),0.02);
   }
   50% {
-    box-shadow: inset 0 0 50px rgba(139,92,246,0.1), inset 0 0 80px rgba(251,191,36,0.05);
+    box-shadow: inset 0 0 50px rgba(var(--slot-purple),0.1), inset 0 0 80px rgba(var(--slot-gold),0.05);
   }
 }
 
@@ -355,10 +384,10 @@
 
 @keyframes spinButtonPulse {
   0%, 100% {
-    box-shadow: 0 5px 0 #3b0764, 0 8px 25px rgba(109,40,217,0.5), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 30px rgba(139,92,246,0.2);
+    box-shadow: 0 5px 0 var(--slot-purple-darkest), 0 8px 25px rgba(var(--slot-purple-deep),0.5), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 30px rgba(var(--slot-purple),0.2);
   }
   50% {
-    box-shadow: 0 5px 0 #3b0764, 0 8px 25px rgba(109,40,217,0.5), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 50px rgba(139,92,246,0.4);
+    box-shadow: 0 5px 0 var(--slot-purple-darkest), 0 8px 25px rgba(var(--slot-purple-deep),0.5), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 50px rgba(var(--slot-purple),0.4);
   }
 }
 
@@ -380,11 +409,11 @@
 
 @keyframes winCellGlow {
   0%, 100% {
-    filter: drop-shadow(0 0 12px rgba(251,191,36,0.3));
+    filter: drop-shadow(0 0 12px rgba(var(--slot-gold),0.3));
     transform: scale(1);
   }
   50% {
-    filter: drop-shadow(0 0 25px rgba(251,191,36,0.6));
+    filter: drop-shadow(0 0 25px rgba(var(--slot-gold),0.6));
     transform: scale(1.08);
   }
 }

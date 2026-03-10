@@ -64,6 +64,7 @@ const FAKE_WINS = [
 ];
 
 function LiveWinsTicker() {
+  const { t } = useLang();
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -76,12 +77,12 @@ function LiveWinsTicker() {
   return (
     <div
       data-testid="live-wins-ticker"
-      className="w-full max-w-2xl mx-auto bg-gradient-to-r from-red-900/40 via-orange-900/40 to-red-900/40 border border-yellow-500/30 rounded-md px-4 py-2 overflow-hidden"
+      className="w-full max-w-2xl mx-auto bg-gradient-to-r from-red-900/40 via-orange-900/40 to-red-900/40 border border-yellow-500/30 rounded-md px-3 sm:px-4 py-2 overflow-hidden"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <div className="flex items-center gap-1 shrink-0">
           <Zap className="w-4 h-4 text-yellow-400" />
-          <span className="text-xs font-black uppercase tracking-wider text-yellow-400">LIVE</span>
+          <span className="text-xs font-black uppercase tracking-wider text-yellow-400">{t.live}</span>
         </div>
         <AnimatePresence mode="wait">
           <motion.div
@@ -93,7 +94,7 @@ function LiveWinsTicker() {
             className="flex items-center gap-2 text-sm"
           >
             <span className="text-yellow-100 font-bold">{FAKE_WINS[currentIndex].user}</span>
-            <span className="text-yellow-100/60">won</span>
+            <span className="text-yellow-100/60">{t.won}</span>
             <span className="text-yellow-400 font-black">
               {FAKE_WINS[currentIndex].amount.toLocaleString()}đ
             </span>
@@ -213,7 +214,7 @@ export default function Home() {
 
         <Header />
 
-        <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10">
+        <main className="flex-1 flex flex-col items-center justify-center px-3 py-4 sm:p-4 md:p-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -233,12 +234,12 @@ export default function Home() {
             >
               <h1
                 data-testid="text-landing-title"
-                className="text-8xl md:text-9xl font-display font-black bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-500 bg-clip-text text-transparent leading-tight"
+                className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-display font-black bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-500 bg-clip-text text-transparent leading-tight"
               >
                 VnSlot
               </h1>
-              <p className="text-2xl md:text-4xl text-yellow-500/80 font-bold tracking-[0.3em] uppercase mt-4">
-                888 Dragon Fortune
+              <p className="text-lg sm:text-2xl md:text-4xl text-yellow-500/80 font-bold tracking-[0.2em] sm:tracking-[0.3em] uppercase mt-3 sm:mt-4">
+                {t.subtitle}
               </p>
             </motion.div>
 
@@ -246,22 +247,21 @@ export default function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3, duration: 0.8 }}
-              className="text-xl md:text-2xl text-yellow-100/70 max-w-2xl mx-auto leading-relaxed font-light"
+              className="text-base sm:text-xl md:text-2xl text-yellow-100/70 max-w-2xl mx-auto leading-relaxed font-light px-2"
             >
-              Experience the legendary power of the{" "}
-              <span className="text-yellow-400 font-bold">Dragon</span>. Win massive rewards, unlock
-              bonus rounds, and claim your fortune in the ultimate Oriental slot experience.
+              {t.description}{" "}
+              <span className="text-yellow-400 font-bold">{t.descriptionDragon}</span>{t.descriptionEnd}
             </motion.p>
 
             <SlotPreview />
 
             <LiveWinsTicker />
 
-            <div className="grid grid-cols-3 gap-4 md:gap-8 mt-12 mb-8">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-8 mt-8 sm:mt-12 mb-6 sm:mb-8">
               {[
-                { label: "MAX WIN", value: "1M+", Icon: Trophy },
-                { label: "FREE SPINS", value: "\u221E", Icon: Zap },
-                { label: "BONUS ROUNDS", value: "5+", Icon: Gift },
+                { label: t.maxWinStat, value: "1M+", Icon: Trophy },
+                { label: t.freeSpins, value: "\u221E", Icon: Zap },
+                { label: t.bonusRounds, value: "5+", Icon: Gift },
               ].map((stat, i) => (
                 <motion.div
                   key={i}
@@ -269,13 +269,13 @@ export default function Home() {
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.5 + i * 0.1 }}
                   data-testid={`stat-card-${i}`}
-                  className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-yellow-500/30 rounded-md p-4 md:p-6 backdrop-blur-xl"
+                  className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-yellow-500/30 rounded-md p-3 sm:p-4 md:p-6 backdrop-blur-xl"
                 >
-                  <stat.Icon className="w-8 h-8 md:w-10 md:h-10 text-yellow-500 mx-auto mb-2" />
-                  <div className="text-yellow-500/70 text-xs uppercase tracking-widest font-black">
+                  <stat.Icon className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 text-yellow-500 mx-auto mb-1 sm:mb-2" />
+                  <div className="text-yellow-500/70 text-[10px] sm:text-xs uppercase tracking-widest font-black">
                     {stat.label}
                   </div>
-                  <div className="text-yellow-400 text-2xl md:text-3xl font-display font-black mt-1">
+                  <div className="text-yellow-400 text-xl sm:text-2xl md:text-3xl font-display font-black mt-1">
                     {stat.value}
                   </div>
                 </motion.div>
@@ -291,10 +291,10 @@ export default function Home() {
                 <Button
                   data-testid="button-begin-quest"
                   size="lg"
-                  className="text-2xl px-20 py-12 rounded-md font-display font-black uppercase tracking-[0.2em] bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white border-4 border-yellow-300 shadow-[0_0_50px_rgba(234,179,8,0.6)] pulse-glow"
+                  className="text-lg sm:text-2xl px-10 sm:px-20 py-8 sm:py-12 rounded-md font-display font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white border-4 border-yellow-300 shadow-[0_0_50px_rgba(234,179,8,0.6)] pulse-glow"
                 >
                   <Gem className="w-6 h-6 mr-2" />
-                  Begin Your Quest
+                  {t.beginQuest}
                   <Gem className="w-6 h-6 ml-2" />
                 </Button>
               </Link>
@@ -307,9 +307,9 @@ export default function Home() {
               className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 pt-8 border-t border-yellow-500/20"
             >
               {[
-                { title: "REPEATER WINS", desc: "Chain matching symbols for exponential rewards" },
-                { title: "WILD MULTIPLIERS", desc: "Unlock 2x, 5x, 10x bonus multipliers" },
-                { title: "DRAGON JACKPOT", desc: "Hit the legendary jackpot for ultimate glory" },
+                { title: t.repeaterWins, desc: t.repeaterWinsDesc },
+                { title: t.wildMultipliers, desc: t.wildMultipliersDesc },
+                { title: t.dragonJackpot, desc: t.dragonJackpotDesc },
               ].map((feature, i) => (
                 <div key={i} className="text-center" data-testid={`feature-card-${i}`}>
                   <h3 className="text-lg md:text-xl font-black text-yellow-400 uppercase tracking-widest mb-2">
@@ -342,7 +342,7 @@ export default function Home() {
             <Card className="bg-purple-950/60 border-yellow-500/20 p-4">
               <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-4 flex items-center gap-2">
                 <Star className="w-4 h-4" />
-                Achievements
+                {t.achievements}
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 {mergedAchievements.map((badge) => (
@@ -373,7 +373,7 @@ export default function Home() {
                 <Card className="bg-purple-950/60 border-yellow-500/20 p-4 text-center">
                   <Gamepad2 className="w-5 h-5 text-yellow-500/70 mx-auto mb-1" />
                   <div className="text-xs text-yellow-100/50 uppercase font-bold tracking-wider">
-                    Games Played
+                    {t.gamesPlayed}
                   </div>
                   <div
                     data-testid="text-games-played"
@@ -385,7 +385,7 @@ export default function Home() {
                 <Card className="bg-purple-950/60 border-yellow-500/20 p-4 text-center">
                   <TrendingUp className="w-5 h-5 text-yellow-500/70 mx-auto mb-1" />
                   <div className="text-xs text-yellow-100/50 uppercase font-bold tracking-wider">
-                    Total Wins
+                    {t.totalWins}
                   </div>
                   <div
                     data-testid="text-total-wins"
@@ -397,7 +397,7 @@ export default function Home() {
                 <Card className="bg-purple-950/60 border-yellow-500/20 p-4 text-center">
                   <Trophy className="w-5 h-5 text-yellow-500/70 mx-auto mb-1" />
                   <div className="text-xs text-yellow-100/50 uppercase font-bold tracking-wider">
-                    Max Win
+                    {t.maxWin}
                   </div>
                   <div
                     data-testid="text-max-win"
@@ -418,7 +418,7 @@ export default function Home() {
             <Card className="bg-purple-950/60 border-yellow-500/20 p-4">
               <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-3 flex items-center gap-2">
                 <Trophy className="w-4 h-4" />
-                Top Players
+                {t.topPlayers}
               </h3>
               <MiniLeaderboard />
             </Card>
@@ -429,7 +429,7 @@ export default function Home() {
           <AppFooter />
         </div>
 
-        <div className="lg:hidden flex flex-col items-center p-4 space-y-4">
+        <div className="lg:hidden flex flex-col items-center px-2 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -450,21 +450,21 @@ export default function Home() {
           >
             <Card className="bg-purple-950/60 border-yellow-500/20 p-3 text-center">
               <Gamepad2 className="w-4 h-4 text-yellow-500/70 mx-auto mb-1" />
-              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">Games</div>
+              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">{t.games}</div>
               <div data-testid="text-games-played-mobile" className="text-lg font-black text-yellow-400">
                 {gamesPlayed.toLocaleString()}
               </div>
             </Card>
             <Card className="bg-purple-950/60 border-yellow-500/20 p-3 text-center">
               <TrendingUp className="w-4 h-4 text-yellow-500/70 mx-auto mb-1" />
-              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">Wins</div>
+              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">{t.wins}</div>
               <div data-testid="text-total-wins-mobile" className="text-lg font-black text-yellow-400">
                 {totalWins.toLocaleString()}
               </div>
             </Card>
             <Card className="bg-purple-950/60 border-yellow-500/20 p-3 text-center">
               <Trophy className="w-4 h-4 text-yellow-500/70 mx-auto mb-1" />
-              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">Max Win</div>
+              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">{t.maxWin}</div>
               <div data-testid="text-max-win-mobile" className="text-lg font-black text-yellow-400">
                 {maxWin.toLocaleString()}d
               </div>
@@ -478,7 +478,7 @@ export default function Home() {
           <Card className="bg-purple-950/60 border-yellow-500/20 p-4 w-full max-w-lg" data-testid="achievements-mobile">
             <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-4 flex items-center gap-2">
               <Star className="w-4 h-4" />
-              Achievements
+              {t.achievements}
             </h3>
             <div className="grid grid-cols-3 gap-3">
               {mergedAchievements.map((badge) => (
@@ -490,7 +490,7 @@ export default function Home() {
           <Card className="bg-purple-950/60 border-yellow-500/20 p-4 w-full max-w-lg" data-testid="leaderboard-mobile">
             <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-3 flex items-center gap-2">
               <Trophy className="w-4 h-4" />
-              Top Players
+              {t.topPlayers}
             </h3>
             <MiniLeaderboard />
           </Card>
@@ -503,6 +503,7 @@ export default function Home() {
 }
 
 function MiniLeaderboard() {
+  const { t } = useLang();
   const { data: entries = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/game/leaderboard"],
     queryFn: async () => {
@@ -523,11 +524,11 @@ function MiniLeaderboard() {
   };
 
   if (isLoading) {
-    return <div className="text-center text-yellow-100/40 text-sm py-4">Loading...</div>;
+    return <div className="text-center text-yellow-100/40 text-sm py-4">{t.loading}</div>;
   }
 
   if (top5.length === 0) {
-    return <div className="text-center text-yellow-100/40 text-sm py-4">No players yet</div>;
+    return <div className="text-center text-yellow-100/40 text-sm py-4">{t.noPlayersYet}</div>;
   }
 
   return (
@@ -577,7 +578,7 @@ function AppFooter() {
             </a>
           </div>
           <div className="text-xs text-yellow-100/25">
-            © 2024 Dragon Fortune Entertainment Ltd.
+            {t.copyright}
           </div>
         </div>
       </div>

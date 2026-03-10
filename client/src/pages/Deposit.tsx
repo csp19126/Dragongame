@@ -12,7 +12,8 @@ import { motion } from "framer-motion";
 import {
   Gift, CreditCard, Shield, Clock, CheckCircle2,
   Sparkles, Crown, Zap, ArrowRight, Lock, BadgeCheck, Gem,
-  Loader2, Star
+  Loader2, Star, ArrowDownToLine, MessageSquare, AlertCircle,
+  Hourglass
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -25,12 +26,17 @@ const DEPOSIT_TIERS = [
   { amount: 10000000, label: "10M", bonus: 25, color: "from-yellow-400 to-yellow-600", vip: true },
 ];
 
+const WITHDRAWAL_PRESETS = [50000, 100000, 500000, 1000000, 5000000];
+
 export default function Deposit() {
   const { user, isLoading: authLoading } = useAuth();
   const { t, lang } = useLang();
   const { toast } = useToast();
   const [cardCode, setCardCode] = useState("");
   const [selectedTier, setSelectedTier] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawNote, setWithdrawNote] = useState("");
 
   const { data: history = [], isLoading: historyLoading } = useQuery<any[]>({
     queryKey: ["/api/deposits/history"],
@@ -66,6 +72,57 @@ export default function Deposit() {
       });
     },
   });
+
+  const { data: withdrawHistory = [], isLoading: withdrawHistoryLoading } = useQuery<any[]>({
+    queryKey: ["/api/withdrawals/history"],
+    queryFn: async () => {
+      const res = await fetch("/api/withdrawals/history");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: async ({ amount, note }: { amount: number; note?: string }) => {
+      const res = await apiRequest("POST", "/api/withdrawals/request", { amount, note });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: lang === "vi" ? "Yêu Cầu Rút Tiền Đã Gửi!" : "Withdrawal Request Submitted!",
+        description: lang === "vi"
+          ? `Yêu cầu rút ${data.withdrawal.amount.toLocaleString()}đ đã được gửi. Đại lý sẽ liên hệ bạn.`
+          : `Request for ${data.withdrawal.amount.toLocaleString()}đ submitted. An agent will contact you.`,
+        className: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-300 font-black text-lg shadow-[0_0_30px_rgba(59,130,246,0.4)]",
+      });
+      setWithdrawAmount("");
+      setWithdrawNote("");
+      queryClient.invalidateQueries({ queryKey: ["/api/withdrawals/history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/game/state"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: lang === "vi" ? "Lỗi" : "Error",
+        description: error.message || (lang === "vi" ? "Không thể gửi yêu cầu rút tiền" : "Failed to submit withdrawal request"),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleWithdraw = () => {
+    const amount = parseInt(withdrawAmount);
+    if (isNaN(amount) || amount < 10000) {
+      toast({
+        title: lang === "vi" ? "Lỗi" : "Error",
+        description: lang === "vi" ? "Số tiền rút tối thiểu là 10,000đ" : "Minimum withdrawal is 10,000đ",
+        variant: "destructive",
+      });
+      return;
+    }
+    withdrawMutation.mutate({ amount, note: withdrawNote || undefined });
+  };
 
   if (authLoading) {
     return (
@@ -111,12 +168,266 @@ export default function Deposit() {
             className="text-center space-y-2"
           >
             <h1 className="text-4xl md:text-5xl font-display gold-gradient-text" data-testid="text-deposit-title">
-              {lang === "vi" ? "Nạp Tiền" : "Deposit Funds"}
+              {activeTab === "deposit"
+                ? (lang === "vi" ? "Nạp Tiền" : "Deposit Funds")
+                : (lang === "vi" ? "Rút Tiền" : "Withdraw Funds")}
             </h1>
             <p className="text-yellow-100/60 text-lg">
-              {lang === "vi" ? "Nạp nhanh - An toàn - Bảo mật tuyệt đối" : "Fast deposit - Secure - Fully encrypted"}
+              {activeTab === "deposit"
+                ? (lang === "vi" ? "Nạp nhanh - An toàn - Bảo mật tuyệt đối" : "Fast deposit - Secure - Fully encrypted")
+                : (lang === "vi" ? "Rút tiền nhanh chóng qua đại lý" : "Quick withdrawals via agent")}
             </p>
           </motion.div>
+
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <Button
+              onClick={() => setActiveTab("deposit")}
+              data-testid="tab-deposit"
+              variant={activeTab === "deposit" ? "default" : "ghost"}
+              className={activeTab === "deposit"
+                ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-purple-950 font-bold"
+                : "text-yellow-100/60 font-bold"}
+            >
+              <CreditCard className="w-4 h-4 mr-2" />
+              {lang === "vi" ? "Nạp Tiền" : "Deposit"}
+            </Button>
+            <Button
+              onClick={() => setActiveTab("withdraw")}
+              data-testid="tab-withdraw"
+              variant={activeTab === "withdraw" ? "default" : "ghost"}
+              className={activeTab === "withdraw"
+                ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-bold"
+                : "text-yellow-100/60 font-bold"}
+            >
+              <ArrowDownToLine className="w-4 h-4 mr-2" />
+              {lang === "vi" ? "Rút Tiền" : "Withdraw"}
+            </Button>
+          </div>
+
+          {activeTab === "withdraw" ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <Card className="bg-purple-950/60 border-yellow-500/20 p-6 space-y-6" data-testid="card-withdraw-form">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                      <ArrowDownToLine className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display text-yellow-400">
+                        {lang === "vi" ? "Yêu Cầu Rút Tiền" : "Withdrawal Request"}
+                      </h2>
+                      <p className="text-xs text-yellow-100/50">
+                        {lang === "vi" ? "Đại lý sẽ liên hệ để xử lý" : "An agent will contact you to process"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-blue-400 shrink-0" />
+                    <p className="text-sm text-yellow-100/70">
+                      {lang === "vi"
+                        ? `Số dư hiện tại: ${(user?.balance ?? 0).toLocaleString()}đ. Rút tối thiểu 10,000đ.`
+                        : `Current balance: ${(user?.balance ?? 0).toLocaleString()}đ. Minimum withdrawal 10,000đ.`}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-sm font-bold text-yellow-100/70">
+                      {lang === "vi" ? "Số tiền rút" : "Withdrawal amount"}
+                    </label>
+                    <Input
+                      type="number"
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value)}
+                      placeholder={lang === "vi" ? "Nhập số tiền (VD: 100000)" : "Enter amount (e.g. 100000)"}
+                      className="bg-purple-900/40 border-yellow-500/20 text-yellow-100 placeholder:text-yellow-100/30 h-14 text-lg font-mono"
+                      data-testid="input-withdraw-amount"
+                    />
+
+                    <div className="flex flex-wrap gap-2">
+                      {WITHDRAWAL_PRESETS.map((preset) => (
+                        <Button
+                          key={preset}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setWithdrawAmount(preset.toString())}
+                          data-testid={`button-preset-${preset}`}
+                          className={`text-xs font-bold border border-yellow-500/20 ${
+                            withdrawAmount === preset.toString()
+                              ? "bg-yellow-500/20 text-yellow-300"
+                              : "text-yellow-100/50"
+                          }`}
+                        >
+                          {preset >= 1000000 ? `${preset / 1000000}M` : `${preset / 1000}K`}đ
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-sm font-bold text-yellow-100/70">
+                      {lang === "vi" ? "Ghi chú (tùy chọn)" : "Note (optional)"}
+                    </label>
+                    <Input
+                      value={withdrawNote}
+                      onChange={(e) => setWithdrawNote(e.target.value)}
+                      placeholder={lang === "vi" ? "Zalo, Telegram hoặc thông tin liên lạc" : "Zalo, Telegram or contact info"}
+                      className="bg-purple-900/40 border-yellow-500/20 text-yellow-100 placeholder:text-yellow-100/30"
+                      data-testid="input-withdraw-note"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={handleWithdraw}
+                    disabled={!withdrawAmount || withdrawMutation.isPending}
+                    className="w-full h-12 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-black text-lg uppercase tracking-wider rounded-xl"
+                    data-testid="button-submit-withdraw"
+                  >
+                    {withdrawMutation.isPending ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5" />
+                        {lang === "vi" ? "GỬI YÊU CẦU RÚT TIỀN" : "SUBMIT WITHDRAWAL REQUEST"}
+                        <ArrowRight className="w-5 h-5" />
+                      </span>
+                    )}
+                  </Button>
+
+                  <div className="border-t border-yellow-500/10 pt-4">
+                    <p className="text-xs text-yellow-100/40 flex items-center gap-1">
+                      <Shield className="w-3 h-3" />
+                      {lang === "vi"
+                        ? "Yêu cầu rút tiền sẽ được đại lý xử lý trong vòng 24 giờ."
+                        : "Withdrawal requests are processed by an agent within 24 hours."}
+                    </p>
+                  </div>
+                </Card>
+
+                <Card className="bg-purple-950/60 border-yellow-500/20 p-6 mt-6" data-testid="card-withdraw-how-to">
+                  <h3 className="text-lg font-display text-yellow-400 mb-4 flex items-center gap-2">
+                    <Star className="w-4 h-4" />
+                    {lang === "vi" ? "Quy Trình Rút Tiền" : "Withdrawal Process"}
+                  </h3>
+                  <div className="space-y-3">
+                    {[
+                      { step: 1, text: lang === "vi" ? "Nhập số tiền bạn muốn rút" : "Enter the amount you want to withdraw" },
+                      { step: 2, text: lang === "vi" ? "Gửi yêu cầu rút tiền (số dư sẽ bị trừ ngay)" : "Submit withdrawal request (balance deducted immediately)" },
+                      { step: 3, text: lang === "vi" ? "Đại lý sẽ liên hệ bạn qua Zalo/Telegram" : "An agent will contact you via Zalo/Telegram" },
+                      { step: 4, text: lang === "vi" ? "Nhận tiền qua phương thức bạn chọn" : "Receive funds via your preferred method" },
+                    ].map((item) => (
+                      <div key={item.step} className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-xs font-black text-blue-400 shrink-0">
+                          {item.step}
+                        </div>
+                        <p className="text-sm text-yellow-100/70">{item.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Card className="bg-purple-950/60 border-yellow-500/20 p-6" data-testid="card-withdraw-history">
+                  <h3 className="text-lg font-display text-yellow-400 mb-4 flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    {lang === "vi" ? "Lịch Sử Rút Tiền" : "Withdrawal History"}
+                  </h3>
+                  {withdrawHistoryLoading ? (
+                    <div className="text-center py-4">
+                      <Loader2 className="w-6 h-6 animate-spin text-yellow-500 mx-auto" />
+                    </div>
+                  ) : withdrawHistory.length === 0 ? (
+                    <div className="text-center py-6 text-yellow-100/40 text-sm">
+                      {lang === "vi" ? "Chưa có yêu cầu rút tiền" : "No withdrawal requests yet"}
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {withdrawHistory.map((w: any) => (
+                        <div
+                          key={w.id}
+                          className="flex items-center justify-between p-3 rounded-lg bg-purple-900/30 border border-yellow-500/5"
+                          data-testid={`withdrawal-entry-${w.id}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                              w.status === "completed" ? "bg-green-500/20" :
+                              w.status === "rejected" ? "bg-red-500/20" :
+                              "bg-yellow-500/20"
+                            }`}>
+                              {w.status === "completed" ? (
+                                <CheckCircle2 className="w-4 h-4 text-green-400" />
+                              ) : w.status === "rejected" ? (
+                                <AlertCircle className="w-4 h-4 text-red-400" />
+                              ) : (
+                                <Hourglass className="w-4 h-4 text-yellow-400" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-yellow-100">
+                                {lang === "vi" ? "Yêu Cầu Rút Tiền" : "Withdrawal Request"}
+                              </div>
+                              <div className="text-xs text-yellow-100/40">
+                                {new Date(w.createdAt).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-US", {
+                                  day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                                })}
+                              </div>
+                              {w.note && (
+                                <div className="text-xs text-yellow-100/30 mt-0.5">{w.note}</div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-black text-red-400">-{w.amount.toLocaleString()}đ</div>
+                            <div className={`text-xs ${
+                              w.status === "completed" ? "text-green-400" :
+                              w.status === "rejected" ? "text-red-400" :
+                              "text-yellow-400"
+                            }`}>
+                              {w.status === "pending"
+                                ? (lang === "vi" ? "Đang xử lý" : "Pending")
+                                : w.status === "completed"
+                                ? (lang === "vi" ? "Hoàn thành" : "Completed")
+                                : (lang === "vi" ? "Từ chối" : "Rejected")}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+
+                <Card className="bg-purple-950/60 border-yellow-500/20 p-6 mt-6" data-testid="card-withdraw-contact">
+                  <h3 className="text-lg font-display text-yellow-400 mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    {lang === "vi" ? "Liên Hệ Đại Lý" : "Contact Agent"}
+                  </h3>
+                  <p className="text-sm text-yellow-100/60 mb-4">
+                    {lang === "vi"
+                      ? "Để rút tiền nhanh hơn, liên hệ trực tiếp đại lý:"
+                      : "For faster withdrawals, contact agents directly:"}
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-yellow-400 font-bold text-sm">
+                      <span>Zalo: 0888-888-888</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-yellow-400 font-bold text-sm">
+                      <span>Telegram: @VnSlot888</span>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
+          ) : (
+            <>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             {[
@@ -334,6 +645,8 @@ export default function Deposit() {
               </Card>
             </motion.div>
           </div>
+          </>
+          )}
         </div>
       </main>
     </div>

@@ -1,0 +1,29 @@
+High Priority — Things players will notice:
+
+PWA support — Right now there's no way to "install" it on a phone. Adding a manifest and service worker would let Android users add it to their home screen and play full-screen like a real app. This is probably the single biggest thing for your target market.
+
+Mobile responsiveness — The 3x3 grid cells are fixed at 80px tall, and bet buttons could get cramped on small phones. Needs a pass to make sure it looks great on typical Android screens (360-400px wide).
+
+Missing sound feedback — There's no sound when you tap bet buttons or toggle auto-spin. Small audio cues make the app feel much more polished and "real casino."
+
+Hardcoded English in some spots — The stats section on the home page ("Games Played", "Total Wins", "Max Win") is hardcoded English even though the translation system has Vietnamese keys ready. Some toast messages and footer labels have the same issue.
+
+Medium Priority — Polish and trust:
+
+Password security — Passwords are stored in plain text. Should be hashed with bcrypt. This matters if you're taking real deposits.
+
+Withdrawal system — Players can deposit via gift cards but there's no way to cash out winnings. Even if it's just a "contact agent to withdraw" flow, there should be a visible path.
+
+Profile page — The database has fields for name, profile image, etc., but there's no UI to edit them. Players want to customize their identity.
+
+Unused CSS animations — There are shine and sparkle keyframe animations defined but never used. Could either use them to add more visual flair, or clean them out.
+
+Tokens feature — The header shows a "Tokens: 0" counter but tokens are never earned or spent. Either build it out (daily login rewards, bonus wheel) or remove it to avoid confusion.
+
+Lower Priority — Technical debt:
+
+Spin transaction safety — Balance updates aren't atomic. Two rapid spin requests could both pass the balance check. Low risk with one user, but matters at scale.
+
+Inline colors — The SlotMachine uses tons of hardcoded hex colors in inline styles instead of the CSS variables defined in index.css. Makes it hard to change the theme later.
+
+Multiple game slots — The backend already supports a slotId parameter, so the infrastructure is there for multiple games (like a second machine with different themes/odds). Would add variety and retention.

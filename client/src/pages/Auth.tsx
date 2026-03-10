@@ -12,7 +12,7 @@ import { SiReplit } from "react-icons/si";
 
 export default function Auth() {
   const { login, register, user } = useAuth();
-  const { language } = useLang();
+  const { lang } = useLang();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -112,7 +112,7 @@ export default function Auth() {
                 className="w-full h-14 text-lg font-bold bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white border-2 border-orange-400 rounded-2xl shadow-[0_0_20px_rgba(234,88,12,0.4)] transition-all group uppercase tracking-widest"
               >
                 <SiReplit className="mr-3 h-6 w-6 group-hover:scale-110 transition-transform" />
-                {language === "en" ? "Sign in with Replit" : "Đăng nhập với Replit"}
+                {lang === "en" ? "Sign in with Replit" : "Đăng nhập với Replit"}
               </Button>
             </motion.div>
 
@@ -123,7 +123,7 @@ export default function Auth() {
               </div>
               <div className="relative flex justify-center text-xs uppercase">
                 <span className="bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] px-3 text-yellow-500/50 font-black tracking-[0.15em]">
-                  {language === "en" ? "OR GUEST ACCESS" : "HOẶC KHÁCH"}
+                  {lang === "en" ? "OR GUEST ACCESS" : "HOẶC KHÁCH"}
                 </span>
               </div>
             </div>

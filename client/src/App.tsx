@@ -12,6 +12,7 @@ import Leaderboard from "@/pages/Leaderboard";
 import Deposit from "@/pages/Deposit";
 import About from "@/pages/About";
 import Terms from "@/pages/Terms";
+import Profile from "@/pages/Profile";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/deposit" component={Deposit} />
       <Route path="/about" component={About} />
       <Route path="/terms" component={Terms} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,12 +1,16 @@
 import { db } from "./db";
-import { users, gameStates, achievements, deposits, giftCards, type InsertUser, type User, type InsertGameState, type GameState, type Achievement, type Deposit, type GiftCard } from "@shared/schema";
+import { users, gameStates, achievements, deposits, giftCards, withdrawals, type InsertUser, type User, type InsertGameState, type GameState, type Achievement, type Deposit, type GiftCard, type Withdrawal } from "@shared/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateProfile(userId: string, data: { username?: string; firstName?: string; lastName?: string }): Promise<User>;
+  updatePassword(userId: string, hashedPassword: string): Promise<void>;
   updateBalance(userId: string, newBalance: number): Promise<User>;
+  deductBalanceAtomic(userId: string, amount: number): Promise<User | null>;
+  creditBalanceAtomic(userId: string, amount: number): Promise<User>;
   updateStreak(userId: string, streak: number, maxStreak: number, totalWins: number, maxWin: number): Promise<User>;
   getGameState(userId: string, slotId: string): Promise<GameState | undefined>;
   updateGameState(userId: string, slotId: string, state: Partial<InsertGameState>): Promise<GameState>;
@@ -19,6 +23,8 @@ export interface IStorage {
   redeemGiftCard(code: string, userId: string): Promise<GiftCard>;
   redeemGiftCardAtomic(code: string, userId: string): Promise<{ amount: number; newBalance: number } | null>;
   createGiftCard(code: string, denomination: number): Promise<GiftCard>;
+  createWithdrawal(userId: string, amount: number, note?: string): Promise<Withdrawal>;
+  getWithdrawals(userId: string): Promise<Withdrawal[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -37,8 +43,37 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async updatePassword(userId: string, hashedPassword: string): Promise<void> {
+    await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
+  }
+
+  async updateProfile(userId: string, data: { username?: string; firstName?: string; lastName?: string }): Promise<User> {
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (data.username !== undefined) updateData.username = data.username;
+    if (data.firstName !== undefined) updateData.firstName = data.firstName;
+    if (data.lastName !== undefined) updateData.lastName = data.lastName;
+    const [user] = await db.update(users).set(updateData).where(eq(users.id, userId)).returning();
+    return user;
+  }
+
   async updateBalance(userId: string, newBalance: number): Promise<User> {
     const [user] = await db.update(users).set({ balance: newBalance }).where(eq(users.id, userId)).returning();
+    return user;
+  }
+
+  async deductBalanceAtomic(userId: string, amount: number): Promise<User | null> {
+    const [user] = await db.update(users).set({
+      balance: sql`${users.balance} - ${amount}`,
+    }).where(
+      and(eq(users.id, userId), sql`${users.balance} >= ${amount}`)
+    ).returning();
+    return user || null;
+  }
+
+  async creditBalanceAtomic(userId: string, amount: number): Promise<User> {
+    const [user] = await db.update(users).set({
+      balance: sql`${users.balance} + ${amount}`,
+    }).where(eq(users.id, userId)).returning();
     return user;
   }
 
@@ -146,6 +181,20 @@ export class DatabaseStorage implements IStorage {
   async createGiftCard(code: string, denomination: number): Promise<GiftCard> {
     const [card] = await db.insert(giftCards).values({ code, denomination }).returning();
     return card;
+  }
+
+  async createWithdrawal(userId: string, amount: number, note?: string): Promise<Withdrawal> {
+    const [withdrawal] = await db.insert(withdrawals).values({
+      userId,
+      amount,
+      status: "pending",
+      note: note || null,
+    }).returning();
+    return withdrawal;
+  }
+
+  async getWithdrawals(userId: string): Promise<Withdrawal[]> {
+    return await db.select().from(withdrawals).where(eq(withdrawals.userId, userId)).orderBy(desc(withdrawals.createdAt));
   }
 
   async seedGiftCards(): Promise<void> {

@@ -27,11 +27,11 @@ const PAYLINE_COORDS: [number, number][][] = [
 ];
 
 const PAYLINE_COLORS = [
-  'rgba(251,191,36,0.6)',
-  'rgba(168,85,247,0.6)',
-  'rgba(239,68,68,0.6)',
-  'rgba(34,211,238,0.6)',
-  'rgba(74,222,128,0.6)',
+  'var(--slot-payline-gold)',
+  'var(--slot-payline-purple)',
+  'var(--slot-payline-red)',
+  'var(--slot-payline-cyan)',
+  'var(--slot-payline-green)',
 ];
 
 const PAYLINE_LABELS = ['TOP', 'MID', 'BOT', '↘', '↗'];
@@ -92,8 +92,7 @@ function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
   return (
     <div
       data-testid={`cell-${col}-${row}`}
-      className="relative flex items-center justify-center"
-      style={{ height: '80px' }}
+      className="relative flex items-center justify-center aspect-square"
     >
       <AnimatePresence mode="popLayout">
         <motion.div
@@ -108,16 +107,16 @@ function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
             mass: isSpinning ? 0.1 : 1,
             delay: isSpinning ? 0 : col * 0.08,
           }}
-          className={`text-4xl md:text-5xl select-none relative z-10 ${isWinning ? 'win-cell-glow' : ''}`}
+          className={`text-3xl sm:text-4xl md:text-5xl select-none relative z-10 ${isWinning ? 'win-cell-glow' : ''}`}
           style={{
             filter: isSpinning
               ? (isSlowing ? 'blur(1px) brightness(0.8)' : 'blur(3px) brightness(0.5)')
               : isWinning
-                ? 'drop-shadow(0 0 20px rgba(251,191,36,0.5))'
-                : 'drop-shadow(0 0 8px rgba(251,191,36,0.15))',
+                ? 'drop-shadow(0 0 20px var(--slot-win-glow))'
+                : 'drop-shadow(0 0 8px var(--slot-win-text-shadow))',
             textShadow: isSpinning ? 'none'
               : isWinning
-                ? '0 0 30px rgba(251,191,36,0.6), 0 4px 15px rgba(0,0,0,0.5)'
+                ? '0 0 30px var(--slot-win-glow-strong), 0 4px 15px rgba(0,0,0,0.5)'
                 : '0 4px 15px rgba(0,0,0,0.5)',
             transform: !isSpinning && isWinning ? 'scale(1.1)' : undefined,
           }}
@@ -131,7 +130,7 @@ function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
           animate={{ opacity: [0, 0.4, 0] }}
           transition={{ duration: 0.8, repeat: Infinity }}
           className="absolute inset-0 pointer-events-none rounded-lg"
-          style={{ background: 'radial-gradient(circle, rgba(251,191,36,0.3) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, rgba(var(--slot-gold),0.3) 0%, transparent 70%)' }}
         />
       )}
     </div>
@@ -204,7 +203,7 @@ function WinLineOverlay({ winLines, gridRef }: { winLines: number[]; gridRef: Re
   );
 }
 
-function NearMissOverlay({ show }: { show: boolean }) {
+function NearMissOverlay({ show, soCloseText }: { show: boolean; soCloseText: string }) {
   if (!show) return null;
   return (
     <motion.div
@@ -217,22 +216,22 @@ function NearMissOverlay({ show }: { show: boolean }) {
         initial={{ scale: 0.3, rotate: -10 }}
         animate={{ scale: [0.3, 1.3, 1], rotate: [-10, 5, 0] }}
         transition={{ duration: 0.5 }}
-        className="px-8 py-4 rounded-2xl font-display font-black text-2xl md:text-3xl uppercase tracking-wider"
+        className="px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-display font-black text-xl sm:text-2xl md:text-3xl uppercase tracking-wider"
         style={{
-          background: 'linear-gradient(135deg, rgba(220,38,38,0.9), rgba(251,146,60,0.9))',
+          background: 'linear-gradient(135deg, rgba(var(--slot-red),0.9), rgba(var(--slot-orange),0.9))',
           textShadow: '0 2px 10px rgba(0,0,0,0.5)',
-          boxShadow: '0 0 60px rgba(220,38,38,0.5), 0 0 120px rgba(251,146,60,0.3)',
-          color: '#fef3c7',
+          boxShadow: '0 0 60px rgba(var(--slot-red),0.5), 0 0 120px rgba(var(--slot-orange),0.3)',
+          color: `rgb(var(--slot-gold-light))`,
         }}
       >
         <AlertTriangle className="w-6 h-6 inline mr-2" />
-        SO CLOSE!
+        {soCloseText}
       </motion.div>
     </motion.div>
   );
 }
 
-function FakeRepeaterOverlay({ show, onDone }: { show: boolean; onDone: () => void }) {
+function FakeRepeaterOverlay({ show, onDone, repeaterText, reSpinningText }: { show: boolean; onDone: () => void; repeaterText: string; reSpinningText: string }) {
   useEffect(() => {
     if (show) {
       const t = setTimeout(onDone, 2500);
@@ -251,23 +250,23 @@ function FakeRepeaterOverlay({ show, onDone }: { show: boolean; onDone: () => vo
       <motion.div
         animate={{ scale: [1, 1.15, 1, 1.1, 1], rotate: [0, -2, 2, -1, 0] }}
         transition={{ duration: 0.8, repeat: 2 }}
-        className="px-10 py-6 rounded-2xl font-display font-black text-3xl md:text-4xl uppercase tracking-wider text-center"
+        className="px-6 sm:px-10 py-4 sm:py-6 rounded-2xl font-display font-black text-2xl sm:text-3xl md:text-4xl uppercase tracking-wider text-center mx-4"
         style={{
-          background: 'linear-gradient(135deg, rgba(6,182,212,0.95), rgba(59,130,246,0.95))',
+          background: 'linear-gradient(135deg, rgba(var(--slot-cyan),0.95), rgba(var(--slot-blue),0.95))',
           textShadow: '0 2px 15px rgba(0,0,0,0.5)',
-          boxShadow: '0 0 80px rgba(6,182,212,0.6), 0 0 160px rgba(59,130,246,0.3)',
+          boxShadow: '0 0 80px rgba(var(--slot-cyan),0.6), 0 0 160px rgba(var(--slot-blue),0.3)',
           color: '#fff',
         }}
       >
         <RotateCw className="w-8 h-8 inline mr-3 animate-spin" />
-        REPEATER!
-        <div className="text-base mt-2 text-cyan-100 font-bold tracking-normal">Re-spinning for bonus...</div>
+        {repeaterText}
+        <div className="text-base mt-2 text-cyan-100 font-bold tracking-normal">{reSpinningText}</div>
       </motion.div>
     </motion.div>
   );
 }
 
-function ShareWinButton({ winAmount, bet }: { winAmount: number; bet: number }) {
+function ShareWinButton({ winAmount, bet, shareWinText }: { winAmount: number; bet: number; shareWinText: string }) {
   if (winAmount < bet * 3) return null;
   const shareText = `🐉 I just won ${winAmount.toLocaleString()}đ on VnSlot 888 Dragon Fortune! 🎰💰 Can you beat my score?`;
   const handleShare = () => {
@@ -288,7 +287,7 @@ function ShareWinButton({ winAmount, bet }: { winAmount: number; bet: number }) 
       className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-green-500 to-emerald-600 text-white border border-green-300/50 shadow-lg hover:scale-105 transition-transform"
     >
       <Share2 className="w-3.5 h-3.5" />
-      Share Win
+      {shareWinText}
     </motion.button>
   );
 }
@@ -339,7 +338,7 @@ export function SlotMachine({ balance }: { balance: number }) {
   const handleSpin = useCallback(async () => {
     if (spinningRef.current) return;
     if (balance < bet && freeSpins === 0) {
-      toast({ title: "Insufficient Balance", description: "Please top up to continue playing!", variant: "destructive" });
+      toast({ title: t.insufficientBalance, description: t.insufficientBalanceDesc, variant: "destructive" });
       setAutoSpin(false);
       return;
     }
@@ -353,7 +352,7 @@ export function SlotMachine({ balance }: { balance: number }) {
     setShowFakeRepeater(false);
     setSlowingCol(-1);
     soundManager.spinStart();
-    flashScreen('rgba(139,92,246,0.15)');
+    flashScreen('rgba(var(--slot-purple),0.15)');
 
     try {
       const clearAllTimers = () => {
@@ -419,7 +418,7 @@ export function SlotMachine({ balance }: { balance: number }) {
             if (isFakeRepeater && result.winAmount === 0) {
               setShowFakeRepeater(true);
               soundManager.bonus();
-              flashScreen('rgba(6,182,212,0.2)');
+              flashScreen('rgba(var(--slot-cyan),0.2)');
             }
 
             if (result.winAmount > 0) {
@@ -431,7 +430,7 @@ export function SlotMachine({ balance }: { balance: number }) {
 
               if (result.isJackpot || result.winAmount >= bet * 10) {
                 soundManager.win(true);
-                flashScreen('rgba(234,179,8,0.3)');
+                flashScreen('rgba(var(--slot-gold),0.3)');
                 shakeControls.start({
                   x: [0, -10, 10, -8, 8, -4, 4, 0],
                   y: [0, -5, 5, -4, 4, -2, 2, 0],
@@ -475,7 +474,7 @@ export function SlotMachine({ balance }: { balance: number }) {
       setSlowingCol(-1);
       spinningRef.current = false;
       setAutoSpin(false);
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: t.error, description: (error as Error).message, variant: "destructive" });
     }
   }, [balance, bet, freeSpins, spinMutation, toast, shakeControls]);
 
@@ -499,11 +498,12 @@ export function SlotMachine({ balance }: { balance: number }) {
   const toggleAutoSpin = () => {
     const next = !autoSpin;
     setAutoSpin(next);
+    soundManager.autoSpinToggle();
     if (next && !spinningRef.current) handleSpin();
   };
 
   return (
-    <motion.div animate={shakeControls} className="flex flex-col items-center gap-5 w-full max-w-xl mx-auto relative">
+    <motion.div animate={shakeControls} className="flex flex-col items-center gap-3 sm:gap-5 w-full max-w-xl mx-auto relative">
       {screenFlash && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -516,10 +516,10 @@ export function SlotMachine({ balance }: { balance: number }) {
 
       {showParticles && <div className="absolute inset-0 pointer-events-none z-40 win-explosion" />}
 
-      <NearMissOverlay show={showNearMiss} />
+      <NearMissOverlay show={showNearMiss} soCloseText={t.soClose} />
 
       <AnimatePresence>
-        <FakeRepeaterOverlay show={showFakeRepeater} onDone={() => setShowFakeRepeater(false)} />
+        <FakeRepeaterOverlay show={showFakeRepeater} onDone={() => setShowFakeRepeater(false)} repeaterText={t.repeater} reSpinningText={t.reSpinning} />
       </AnimatePresence>
 
       <AnimatePresence>
@@ -534,23 +534,23 @@ export function SlotMachine({ balance }: { balance: number }) {
             <motion.div
               animate={{ rotate: [0, -3, 3, 0], scale: [1, 1.1, 1] }}
               transition={{ duration: 0.5, repeat: Infinity }}
-              className="bg-gradient-to-br from-yellow-400 via-yellow-500 to-orange-500 text-purple-950 px-16 py-10 rounded-[2rem] text-center shadow-[0_0_100px_rgba(234,179,8,0.8),0_0_150px_rgba(234,179,8,0.4)] border-4 border-yellow-200"
+              className="bg-gradient-to-br from-yellow-400 via-yellow-500 to-orange-500 text-purple-950 px-8 sm:px-16 py-6 sm:py-10 rounded-[2rem] text-center shadow-[0_0_100px_rgba(234,179,8,0.8),0_0_150px_rgba(234,179,8,0.4)] border-4 border-yellow-200 mx-4"
             >
-              <div className="text-3xl font-black uppercase mb-2 flex items-center justify-center gap-2">
-                <Sparkles className="w-7 h-7" /> BIG WIN <Sparkles className="w-7 h-7" />
+              <div className="text-2xl sm:text-3xl font-black uppercase mb-2 flex items-center justify-center gap-2">
+                <Sparkles className="w-6 h-6 sm:w-7 sm:h-7" /> {t.bigWin} <Sparkles className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
-              <div className="text-5xl md:text-6xl font-display font-black">
+              <div className="text-3xl sm:text-5xl md:text-6xl font-display font-black">
                 <AnimatedWinCounter value={lastWin} />đ
               </div>
               {winLines.length > 1 && (
-                <div className="text-lg mt-1 font-bold">{winLines.length} LINES!</div>
+                <div className="text-lg mt-1 font-bold">{winLines.length} {t.lines}</div>
               )}
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <ShareWinButton winAmount={lastWin} bet={bet} />
+      <ShareWinButton winAmount={lastWin} bet={bet} shareWinText={t.shareWin} />
 
       {streak >= 3 && (
         <motion.div
@@ -573,7 +573,7 @@ export function SlotMachine({ balance }: { balance: number }) {
           className="text-xs text-yellow-400/80 font-bold tracking-wider uppercase"
           data-testid="text-encouragement"
         >
-          {lossCount >= 10 ? "🐉 The Dragon stirs... BIG WIN incoming!" : "💫 Almost there! Keep spinning!"}
+          {lossCount >= 10 ? t.encouragement1 : t.encouragement2}
         </motion.div>
       )}
 
@@ -585,18 +585,18 @@ export function SlotMachine({ balance }: { balance: number }) {
       >
         <div className="relative rounded-[2rem] overflow-hidden"
           style={{
-            background: 'linear-gradient(180deg, #2d1466 0%, #1a0a35 25%, #0d041f 60%, #0a0318 100%)',
-            boxShadow: '0 40px 80px -20px rgba(0,0,0,0.9), 0 0 0 1px rgba(251,191,36,0.4), 0 0 60px -10px rgba(139,92,246,0.15), inset 0 1px 0 rgba(251,191,36,0.3)',
+            background: `linear-gradient(180deg, var(--slot-frame-top) 0%, var(--slot-frame-mid) 25%, var(--slot-frame-dark) 60%, var(--slot-frame-bottom) 100%)`,
+            boxShadow: `0 40px 80px -20px rgba(0,0,0,0.9), 0 0 0 1px rgba(var(--slot-gold),0.4), 0 0 60px -10px rgba(var(--slot-purple),0.15), inset 0 1px 0 rgba(var(--slot-gold),0.3)`,
             border: '2px solid transparent',
-            borderImage: 'linear-gradient(180deg, rgba(251,191,36,0.7) 0%, rgba(251,191,36,0.15) 60%, rgba(139,92,246,0.2) 100%) 1',
+            borderImage: `linear-gradient(180deg, rgba(var(--slot-gold),0.7) 0%, rgba(var(--slot-gold),0.15) 60%, rgba(var(--slot-purple),0.2) 100%) 1`,
           }}
         >
           <div className="absolute inset-0 pointer-events-none z-0 edge-glow-ambient" />
 
           <div className="relative z-10 text-center py-3"
             style={{
-              background: 'linear-gradient(180deg, rgba(251,191,36,0.15) 0%, transparent 100%)',
-              borderBottom: '1px solid rgba(251,191,36,0.2)',
+              background: `linear-gradient(180deg, rgba(var(--slot-gold),0.15) 0%, transparent 100%)`,
+              borderBottom: `1px solid rgba(var(--slot-gold),0.2)`,
             }}
           >
             <div className="inline-flex items-center gap-2">
@@ -607,7 +607,7 @@ export function SlotMachine({ balance }: { balance: number }) {
               />
               <span className="font-display text-xl tracking-[0.3em] uppercase"
                 style={{
-                  background: 'linear-gradient(to bottom, #fef3c7, #fcd34d, #d97706)',
+                  background: `linear-gradient(to bottom, rgb(var(--slot-gold-light)), rgb(var(--slot-gold-mid)), rgb(var(--slot-gold-dark)))`,
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
@@ -623,11 +623,11 @@ export function SlotMachine({ balance }: { balance: number }) {
             </div>
 
             <div className="flex items-center justify-center gap-3 mt-1">
-              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">5 PAYLINES</span>
+              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">{t.paylines}</span>
               <span className="text-[9px] text-yellow-500/30">•</span>
-              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">3×3 GRID</span>
+              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">{t.grid3x3}</span>
               <span className="text-[9px] text-yellow-500/30">•</span>
-              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">DIAGONALS</span>
+              <span className="text-[9px] uppercase tracking-[0.15em] text-yellow-500/40 font-bold">{t.diagonals}</span>
             </div>
 
             {freeSpins > 0 && (
@@ -638,16 +638,16 @@ export function SlotMachine({ balance }: { balance: number }) {
                 data-testid="display-free-spins"
               >
                 <Gift className="w-3 h-3" />
-                <span>{freeSpins} FREE</span>
+                <span>{freeSpins} {t.free}</span>
               </motion.div>
             )}
           </div>
 
-          <div className="px-4 md:px-6 py-4">
+          <div className="px-2 sm:px-4 md:px-6 py-3 sm:py-4">
             <div ref={gridRef} className="relative rounded-2xl overflow-hidden"
               style={{
-                background: 'linear-gradient(180deg, #050210 0%, #0a0420 50%, #050210 100%)',
-                boxShadow: 'inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(251,191,36,0.2), 0 0 30px -5px rgba(139,92,246,0.1)',
+                background: `linear-gradient(180deg, var(--slot-grid-dark) 0%, var(--slot-grid-mid) 50%, var(--slot-grid-dark) 100%)`,
+                boxShadow: `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(var(--slot-gold),0.2), 0 0 30px -5px rgba(var(--slot-purple),0.1)`,
               }}
             >
               <div className="absolute inset-0 pointer-events-none z-20 opacity-[0.025]"
@@ -664,7 +664,7 @@ export function SlotMachine({ balance }: { balance: number }) {
 
               <WinLineOverlay winLines={winLines} gridRef={gridRef} />
 
-              <div className="grid grid-cols-3 gap-0" style={{ minHeight: '260px' }}>
+              <div className="grid grid-cols-3 gap-0">
                 {[0, 1, 2].map((col) => (
                   <div key={col} className="flex flex-col relative">
                     {[0, 1, 2].map((row) => (
@@ -682,7 +682,7 @@ export function SlotMachine({ balance }: { balance: number }) {
                     {col < 2 && (
                       <div className="absolute top-[5%] right-0 bottom-[5%] w-[1px] z-10"
                         style={{
-                          background: 'linear-gradient(to bottom, transparent, rgba(251,191,36,0.2) 20%, rgba(251,191,36,0.2) 80%, transparent)',
+                          background: `linear-gradient(to bottom, transparent, rgba(var(--slot-gold),0.2) 20%, rgba(var(--slot-gold),0.2) 80%, transparent)`,
                         }}
                       />
                     )}
@@ -692,7 +692,7 @@ export function SlotMachine({ balance }: { balance: number }) {
 
               <div className="absolute inset-0 pointer-events-none z-10"
                 style={{
-                  background: 'linear-gradient(to bottom, rgba(8,3,24,0.6) 0%, transparent 15%, transparent 85%, rgba(8,3,24,0.6) 100%)',
+                  background: `linear-gradient(to bottom, rgba(8,3,24,0.6) 0%, transparent 15%, transparent 85%, rgba(8,3,24,0.6) 100%)`,
                 }}
               />
               <div className="absolute inset-0 pointer-events-none z-10"
@@ -703,9 +703,9 @@ export function SlotMachine({ balance }: { balance: number }) {
             </div>
           </div>
 
-          <div className="px-5 md:px-7 pb-5 pt-1">
+          <div className="px-3 sm:px-5 md:px-7 pb-4 sm:pb-5 pt-1">
             <div className="flex items-center justify-between gap-3"
-              style={{ borderTop: '1px solid rgba(251,191,36,0.1)', paddingTop: '12px' }}
+              style={{ borderTop: `1px solid rgba(var(--slot-gold),0.1)`, paddingTop: '12px' }}
             >
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-yellow-500/60 font-bold">{t.win}</span>
@@ -713,9 +713,9 @@ export function SlotMachine({ balance }: { balance: number }) {
                   key={lastWin}
                   initial={lastWin > 0 ? { scale: 1.4 } : {}}
                   animate={{ scale: 1 }}
-                  className="font-mono text-2xl md:text-3xl font-black text-yellow-400"
+                  className="font-mono text-xl sm:text-2xl md:text-3xl font-black text-yellow-400"
                   data-testid="display-last-win"
-                  style={{ textShadow: lastWin > 0 ? '0 0 25px rgba(251,191,36,0.6)' : 'none' }}
+                  style={{ textShadow: lastWin > 0 ? '0 0 25px var(--slot-win-glow-strong)' : 'none' }}
                 >
                   <AnimatedWinCounter value={lastWin} />
                 </motion.div>
@@ -749,8 +749,8 @@ export function SlotMachine({ balance }: { balance: number }) {
                 <span className="text-[10px] uppercase tracking-[0.2em] text-yellow-500/60 font-bold">{t.balance}</span>
                 <motion.span
                   key={balance}
-                  initial={{ color: '#fcd34d' }}
-                  animate={{ color: 'rgba(253,224,71,0.8)' }}
+                  initial={{ color: `rgb(var(--slot-gold-mid))` }}
+                  animate={{ color: `rgba(var(--slot-gold-mid),0.8)` }}
                   className="font-mono text-lg font-bold"
                 >
                   {balance.toLocaleString()}
@@ -761,11 +761,11 @@ export function SlotMachine({ balance }: { balance: number }) {
         </div>
       </motion.div>
 
-      <div className="w-full rounded-2xl p-5 space-y-4"
+      <div className="w-full rounded-2xl p-3 sm:p-5 space-y-3 sm:space-y-4"
         style={{
           background: 'linear-gradient(180deg, rgba(45,20,102,0.4) 0%, rgba(15,6,32,0.6) 100%)',
           backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(251,191,36,0.1)',
+          border: `1px solid rgba(var(--slot-gold),0.1)`,
           boxShadow: '0 20px 40px -15px rgba(0,0,0,0.5)',
         }}
       >
@@ -782,14 +782,14 @@ export function SlotMachine({ balance }: { balance: number }) {
               {bet.toLocaleString()}đ
             </motion.span>
           </div>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {BET_AMOUNTS.map((amount) => (
               <button
                 key={amount}
-                onClick={() => !isSpinning && setBet(amount)}
+                onClick={() => { if (!isSpinning) { setBet(amount); soundManager.betChange(); } }}
                 disabled={isSpinning}
                 data-testid={`button-bet-${amount}`}
-                className={`flex-1 py-2 rounded-xl font-bold text-[11px] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${
+                className={`min-w-[38px] flex-1 py-1.5 sm:py-2 rounded-xl font-bold text-[10px] sm:text-[11px] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${
                   bet === amount
                     ? "bg-gradient-to-b from-yellow-400 to-yellow-600 text-purple-950 shadow-[0_0_20px_rgba(251,191,36,0.4),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.05]"
                     : "bg-white/[0.04] text-yellow-100/50 hover:bg-white/[0.08] hover:text-yellow-100/80 border border-white/[0.06]"
@@ -806,15 +806,15 @@ export function SlotMachine({ balance }: { balance: number }) {
             onClick={handleSpin}
             disabled={isSpinning}
             data-testid="button-spin"
-            className={`flex-1 h-16 text-xl font-display uppercase tracking-wider rounded-xl relative overflow-hidden transition-all duration-100 active:translate-y-[3px] active:shadow-none ${isSpinning ? 'spin-button-active' : ''}`}
+            className={`flex-1 h-14 sm:h-16 text-lg sm:text-xl font-display uppercase tracking-wider rounded-xl relative overflow-hidden transition-all duration-100 active:translate-y-[3px] active:shadow-none ${isSpinning ? 'spin-button-active' : ''}`}
             style={{
               background: freeSpins > 0
-                ? 'linear-gradient(180deg, #c084fc 0%, #a855f7 30%, #7c3aed 100%)'
-                : 'linear-gradient(180deg, #a78bfa 0%, #8b5cf6 25%, #6d28d9 60%, #5b21b6 100%)',
+                ? `linear-gradient(180deg, var(--slot-spin-free-top) 0%, var(--slot-spin-free-mid) 30%, var(--slot-spin-free-bottom) 100%)`
+                : `linear-gradient(180deg, var(--slot-spin-top) 0%, var(--slot-spin-mid) 25%, var(--slot-spin-low) 60%, var(--slot-spin-bottom) 100%)`,
               boxShadow: isSpinning
-                ? '0 2px 0 #3b0764, 0 4px 15px rgba(109,40,217,0.3)'
-                : '0 5px 0 #3b0764, 0 8px 25px rgba(109,40,217,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
-              border: '1px solid rgba(251,191,36,0.35)',
+                ? `0 2px 0 var(--slot-purple-darkest), 0 4px 15px rgba(var(--slot-purple-deep),0.3)`
+                : `0 5px 0 var(--slot-purple-darkest), 0 8px 25px rgba(var(--slot-purple-deep),0.5), inset 0 1px 0 rgba(255,255,255,0.2)`,
+              border: `1px solid rgba(var(--slot-gold),0.35)`,
             }}
           >
             {isSpinning ? (
@@ -826,7 +826,7 @@ export function SlotMachine({ balance }: { balance: number }) {
               </motion.div>
             ) : freeSpins > 0 ? (
               <span className="flex items-center gap-2 text-yellow-300">
-                <Gift className="w-5 h-5" /> Free ({freeSpins})
+                <Gift className="w-5 h-5" /> {t.freeButton} ({freeSpins})
               </span>
             ) : (
               <span className="text-yellow-200 flex items-center gap-2">
@@ -838,7 +838,7 @@ export function SlotMachine({ balance }: { balance: number }) {
           <Button
             onClick={toggleAutoSpin}
             data-testid="button-auto-spin"
-            className={`h-14 w-14 rounded-xl transition-all duration-200 ${
+            className={`h-14 w-12 sm:w-14 rounded-xl transition-all duration-200 ${
               autoSpin
                 ? "bg-green-600 text-white border-green-400 shadow-[0_0_20px_rgba(34,197,94,0.5)]"
                 : "bg-white/[0.04] text-yellow-400/70 hover:bg-white/[0.08] border border-white/[0.06]"
@@ -850,7 +850,7 @@ export function SlotMachine({ balance }: { balance: number }) {
           <Button
             onClick={handleAiAdvice}
             data-testid="button-ai-advice"
-            className="h-14 w-14 rounded-xl bg-white/[0.04] text-yellow-400/70 hover:bg-white/[0.08] border border-white/[0.06] group transition-all duration-200"
+            className="h-14 w-12 sm:w-14 rounded-xl bg-white/[0.04] text-yellow-400/70 hover:bg-white/[0.08] border border-white/[0.06] group transition-all duration-200"
             title={t.aiPredict}
           >
             <Brain className="w-5 h-5 group-hover:scale-110 transition-transform" />

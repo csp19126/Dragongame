@@ -130,6 +130,20 @@ class SoundManager {
       }, i * 80);
     }
   }
+
+  betChange() {
+    this.playTone(800, 0.04, 'sine', 0.08);
+    setTimeout(() => this.playTone(1000, 0.03, 'sine', 0.06), 25);
+  }
+
+  autoSpinToggle() {
+    this.playTone(600, 0.06, 'triangle', 0.1);
+    setTimeout(() => this.playTone(900, 0.06, 'triangle', 0.08), 40);
+  }
+
+  buttonClick() {
+    this.playTone(700, 0.03, 'square', 0.06);
+  }
 }
 
 export const soundManager = new SoundManager();

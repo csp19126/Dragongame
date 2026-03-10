@@ -33,6 +33,53 @@ interface Translations {
   terms: string;
   privacy: string;
   support: string;
+  beginQuest: string;
+  subtitle: string;
+  description: string;
+  descriptionDragon: string;
+  descriptionEnd: string;
+  maxWinStat: string;
+  freeSpins: string;
+  bonusRounds: string;
+  repeaterWins: string;
+  repeaterWinsDesc: string;
+  wildMultipliers: string;
+  wildMultipliersDesc: string;
+  dragonJackpot: string;
+  dragonJackpotDesc: string;
+  achievements: string;
+  topPlayers: string;
+  won: string;
+  noPlayersYet: string;
+  games: string;
+  wins: string;
+  withdraw: string;
+  profile: string;
+  contactAgent: string;
+  insufficientBalance: string;
+  insufficientBalanceDesc: string;
+  soClose: string;
+  repeater: string;
+  reSpinning: string;
+  shareWin: string;
+  bigWin: string;
+  lines: string;
+  free: string;
+  freeButton: string;
+  paylines: string;
+  grid3x3: string;
+  diagonals: string;
+  error: string;
+  encouragement1: string;
+  encouragement2: string;
+  copyright: string;
+  live: string;
+  firstName: string;
+  lastName: string;
+  saveChanges: string;
+  memberSince: string;
+  editProfile: string;
+  profileUpdated: string;
 }
 
 const translations: Record<Language, Translations> = {
@@ -67,6 +114,53 @@ const translations: Record<Language, Translations> = {
     terms: "Terms of Service",
     privacy: "Privacy Policy",
     support: "Support",
+    beginQuest: "Begin Your Quest",
+    subtitle: "888 Dragon Fortune",
+    description: "Experience the legendary power of the",
+    descriptionDragon: "Dragon",
+    descriptionEnd: ". Win massive rewards, unlock bonus rounds, and claim your fortune in the ultimate Oriental slot experience.",
+    maxWinStat: "MAX WIN",
+    freeSpins: "FREE SPINS",
+    bonusRounds: "BONUS ROUNDS",
+    repeaterWins: "REPEATER WINS",
+    repeaterWinsDesc: "Chain matching symbols for exponential rewards",
+    wildMultipliers: "WILD MULTIPLIERS",
+    wildMultipliersDesc: "Unlock 2x, 5x, 10x bonus multipliers",
+    dragonJackpot: "DRAGON JACKPOT",
+    dragonJackpotDesc: "Hit the legendary jackpot for ultimate glory",
+    achievements: "Achievements",
+    topPlayers: "Top Players",
+    won: "won",
+    noPlayersYet: "No players yet",
+    games: "Games",
+    wins: "Wins",
+    withdraw: "Withdraw",
+    profile: "Profile",
+    contactAgent: "Contact agent to withdraw",
+    insufficientBalance: "Insufficient Balance",
+    insufficientBalanceDesc: "Please top up to continue playing!",
+    soClose: "SO CLOSE!",
+    repeater: "REPEATER!",
+    reSpinning: "Re-spinning for bonus...",
+    shareWin: "Share Win",
+    bigWin: "BIG WIN",
+    lines: "LINES!",
+    free: "FREE",
+    freeButton: "Free",
+    paylines: "5 PAYLINES",
+    grid3x3: "3×3 GRID",
+    diagonals: "DIAGONALS",
+    error: "Error",
+    encouragement1: "The Dragon stirs... BIG WIN incoming!",
+    encouragement2: "Almost there! Keep spinning!",
+    copyright: "© 2024 Dragon Fortune Entertainment Ltd.",
+    live: "LIVE",
+    firstName: "First Name",
+    lastName: "Last Name",
+    saveChanges: "Save Changes",
+    memberSince: "Member Since",
+    editProfile: "Edit Profile",
+    profileUpdated: "Profile updated successfully",
   },
   vi: {
     welcome: "Chào mừng đến VnSlot",
@@ -99,6 +193,53 @@ const translations: Record<Language, Translations> = {
     terms: "Điều Khoản",
     privacy: "Bảo Mật",
     support: "Hỗ Trợ",
+    beginQuest: "Bắt Đầu Hành Trình",
+    subtitle: "888 Long Phát Tài",
+    description: "Trải nghiệm sức mạnh huyền thoại của",
+    descriptionDragon: "Rồng",
+    descriptionEnd: ". Giành phần thưởng lớn, mở khóa vòng thưởng, và chinh phục vận may trong trò chơi slot Phương Đông đỉnh cao.",
+    maxWinStat: "THẮNG TỐI ĐA",
+    freeSpins: "LƯỢT QUAY MIỄN PHÍ",
+    bonusRounds: "VÒNG THƯỞNG",
+    repeaterWins: "THẮNG LIÊN TIẾP",
+    repeaterWinsDesc: "Kết chuỗi biểu tượng để nhận thưởng cấp số nhân",
+    wildMultipliers: "NHÂN BỘI HOANG DÃ",
+    wildMultipliersDesc: "Mở khóa nhân bội 2x, 5x, 10x",
+    dragonJackpot: "HŨ RỒNG",
+    dragonJackpotDesc: "Trúng hũ huyền thoại để đạt vinh quang tối thượng",
+    achievements: "Thành Tựu",
+    topPlayers: "Người Chơi Hàng Đầu",
+    won: "thắng",
+    noPlayersYet: "Chưa có người chơi",
+    games: "Ván",
+    wins: "Thắng",
+    withdraw: "Rút Tiền",
+    profile: "Hồ Sơ",
+    contactAgent: "Liên hệ đại lý để rút tiền",
+    insufficientBalance: "Không Đủ Số Dư",
+    insufficientBalanceDesc: "Vui lòng nạp thêm để tiếp tục chơi!",
+    soClose: "SẮP TRÚNG!",
+    repeater: "QUAY LẠI!",
+    reSpinning: "Đang quay thưởng...",
+    shareWin: "Chia Sẻ",
+    bigWin: "THẮNG LỚN",
+    lines: "HÀNG!",
+    free: "MIỄN PHÍ",
+    freeButton: "Miễn Phí",
+    paylines: "5 HÀNG THƯỞNG",
+    grid3x3: "LƯỚI 3×3",
+    diagonals: "ĐƯỜNG CHÉO",
+    error: "Lỗi",
+    encouragement1: "Rồng thức giấc... THẮNG LỚN sắp đến!",
+    encouragement2: "Sắp trúng rồi! Tiếp tục quay!",
+    copyright: "© 2024 Dragon Fortune Entertainment Ltd.",
+    live: "TRỰC TIẾP",
+    firstName: "Tên",
+    lastName: "Họ",
+    saveChanges: "Lưu Thay Đổi",
+    memberSince: "Thành Viên Từ",
+    editProfile: "Chỉnh Sửa Hồ Sơ",
+    profileUpdated: "Cập nhật hồ sơ thành công",
   },
 };
 
