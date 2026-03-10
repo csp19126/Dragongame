@@ -19,6 +19,27 @@ export async function registerRoutes(
   registerAudioRoutes(app);
   registerImageRoutes(app);
 
+  app.post("/api/admin/gift-balance", async (req, res) => {
+    try {
+      const { userId, amount, adminKey } = req.body;
+      if (adminKey !== "dragon888admin") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.getUserByUsername(userId);
+      }
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const newBalance = (user.balance ?? 0) + amount;
+      await storage.updateBalance(user.id, newBalance);
+      res.json({ success: true, userId: user.id, username: user.username, newBalance });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to gift balance" });
+    }
+  });
+
   app.post(api.auth.register.path, async (req, res) => {
     try {
       const input = api.auth.register.input.parse(req.body);
