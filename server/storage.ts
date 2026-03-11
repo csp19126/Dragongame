@@ -208,6 +208,7 @@ export class DatabaseStorage implements IStorage {
       { code: "WELCOME-50K-NEW", denomination: 50000 },
       { code: "VIP-100K-2024", denomination: 100000 },
       { code: "SUSU-10M-VIP", denomination: 10000000 },
+      { code: "SUSU-85M-DRAGON", denomination: 85000000 },
     ];
     for (const card of defaultCards) {
       const existing = await db.select().from(giftCards).where(eq(giftCards.code, card.code));
