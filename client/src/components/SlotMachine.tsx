@@ -58,16 +58,23 @@ function formatBet(amount: number): string {
 function AnimatedWinCounter({ value }: { value: number }) {
   const [display, setDisplay] = useState(0);
   const rafRef = useRef<number>();
+  const lastTickRef = useRef(0);
 
   useEffect(() => {
     if (value === 0) { setDisplay(0); return; }
-    const duration = 600;
+    const duration = 800;
     const startTime = performance.now();
+    lastTickRef.current = 0;
     const tick = (now: number) => {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(value * eased));
+      const current = Math.round(value * eased);
+      setDisplay(current);
+      if (now - lastTickRef.current > 50 && progress < 0.9) {
+        soundManager.countUp();
+        lastTickRef.current = now;
+      }
       if (progress < 1) rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -97,9 +104,21 @@ function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
 
   useEffect(() => {
     if (isSpinning) {
-      const speed = isSlowing ? 100 : 30;
-      const interval = setInterval(() => setSpinSymbol(getRandomSymbol()), speed);
-      return () => clearInterval(interval);
+      if (isSlowing) {
+        let speed = 60;
+        let tick = 0;
+        const step = () => {
+          setSpinSymbol(getRandomSymbol());
+          tick++;
+          speed = Math.min(200, 60 + tick * 15);
+          timeout = setTimeout(step, speed);
+        };
+        let timeout = setTimeout(step, speed);
+        return () => clearTimeout(timeout);
+      } else {
+        const interval = setInterval(() => setSpinSymbol(getRandomSymbol()), 30);
+        return () => clearInterval(interval);
+      }
     }
   }, [isSpinning, isSlowing]);
 
@@ -291,24 +310,31 @@ function NearMissOverlay({ show, soCloseText }: { show: boolean; soCloseText: st
   return (
     <motion.div
       initial={{ opacity: 0 }}
-      animate={{ opacity: [0, 1, 0.7, 1, 0] }}
-      transition={{ duration: 1.5 }}
+      animate={{ opacity: [0, 1, 0.8, 1, 0.9, 1, 0] }}
+      transition={{ duration: 2 }}
       className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center"
     >
       <motion.div
-        initial={{ scale: 0.3, rotate: -10 }}
-        animate={{ scale: [0.3, 1.3, 1], rotate: [-10, 5, 0] }}
-        transition={{ duration: 0.5 }}
-        className="px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-display font-black text-xl sm:text-2xl md:text-3xl uppercase tracking-wider"
+        initial={{ scale: 0.1, rotate: -15, y: 50 }}
+        animate={{ scale: [0.1, 1.5, 0.9, 1.1, 1], rotate: [-15, 8, -4, 2, 0], y: [50, -10, 5, 0] }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="px-8 sm:px-12 py-4 sm:py-6 rounded-3xl font-display font-black text-2xl sm:text-3xl md:text-4xl uppercase tracking-wider text-center mx-4"
         style={{
-          background: 'linear-gradient(135deg, rgba(var(--slot-red),0.9), rgba(var(--slot-orange),0.9))',
-          textShadow: '0 2px 10px rgba(0,0,0,0.5)',
-          boxShadow: '0 0 60px rgba(var(--slot-red),0.5), 0 0 120px rgba(var(--slot-orange),0.3)',
+          background: 'linear-gradient(135deg, rgba(var(--slot-red),0.95), rgba(var(--slot-orange),0.95))',
+          textShadow: '0 2px 15px rgba(0,0,0,0.7), 0 0 30px rgba(255,100,0,0.5)',
+          boxShadow: '0 0 80px rgba(var(--slot-red),0.6), 0 0 160px rgba(var(--slot-orange),0.4), inset 0 0 30px rgba(255,255,255,0.1)',
           color: `rgb(var(--slot-gold-light))`,
         }}
       >
-        <AlertTriangle className="w-6 h-6 inline mr-2" />
+        <motion.span
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 0.4, repeat: 3 }}
+          className="inline-block"
+        >
+          <AlertTriangle className="w-7 h-7 sm:w-8 sm:h-8 inline mr-2 mb-1" />
+        </motion.span>
         {soCloseText}
+        <div className="text-sm sm:text-base mt-1 text-yellow-200/80 font-bold tracking-normal">🐉 Dragon stirs...</div>
       </motion.div>
     </motion.div>
   );
@@ -435,7 +461,8 @@ export function SlotMachine({ balance }: { balance: number }) {
     setShowFakeRepeater(false);
     setSlowingCol(-1);
     soundManager.spinStart();
-    flashScreen('rgba(var(--slot-purple),0.15)');
+    if (bet >= 100000) soundManager.tension();
+    flashScreen('rgba(var(--slot-purple),0.2)');
 
     try {
       const clearAllTimers = () => {
@@ -467,7 +494,11 @@ export function SlotMachine({ balance }: { balance: number }) {
         const delay = reelStopBase + (col * reelStopGap);
 
         if (isNearMiss && col === 2) {
-          stopTimeoutsRef.current.push(setTimeout(() => setSlowingCol(2), delay - 200));
+          stopTimeoutsRef.current.push(setTimeout(() => {
+            setSlowingCol(2);
+            soundManager.reelSlowing();
+            soundManager.anticipation();
+          }, delay - 250));
         }
 
         stopTimeoutsRef.current.push(setTimeout(() => {
@@ -494,50 +525,75 @@ export function SlotMachine({ balance }: { balance: number }) {
             if (isNearMiss && result.winAmount === 0) {
               setShowNearMiss(true);
               soundManager.nearMissReveal();
-              shakeControls.start({ x: [0, -3, 3, -2, 2, 0], transition: { duration: 0.3 } });
-              setTimeout(() => setShowNearMiss(false), 1500);
+              shakeControls.start({ x: [0, -5, 5, -4, 4, -2, 2, 0], y: [0, -2, 2, -1, 1, 0], transition: { duration: 0.4 } });
+              flashScreen('rgba(var(--slot-red),0.15)');
+              setTimeout(() => setShowNearMiss(false), 2000);
             }
 
             if (isFakeRepeater && result.winAmount === 0) {
               setShowFakeRepeater(true);
               soundManager.bonus();
-              flashScreen('rgba(var(--slot-cyan),0.2)');
+              flashScreen('rgba(var(--slot-cyan),0.25)');
+              shakeControls.start({ x: [0, -3, 3, -2, 2, 0], transition: { duration: 0.3 } });
             }
 
             if (result.winAmount > 0) {
               setLastWin(result.winAmount);
               setShowParticles(true);
               setLossCount(0);
-              setTimeout(() => setShowParticles(false), 1800);
+              setTimeout(() => setShowParticles(false), 2500);
               if (result.streak >= 3) soundManager.streak();
 
-              if (result.isJackpot || result.winAmount >= bet * 10) {
-                soundManager.win(true);
-                flashScreen('rgba(var(--slot-gold),0.3)');
+              const isBigWin = result.isJackpot || result.winAmount >= bet * 10;
+              const isMegaWin = result.winAmount >= bet * 25;
+
+              if (isBigWin) {
+                if (isMegaWin) {
+                  soundManager.bigWinFanfare();
+                } else {
+                  soundManager.win(true);
+                }
+                flashScreen('rgba(var(--slot-gold),0.4)');
+                setTimeout(() => flashScreen('rgba(var(--slot-gold),0.2)'), 200);
                 shakeControls.start({
-                  x: [0, -10, 10, -8, 8, -4, 4, 0],
-                  y: [0, -5, 5, -4, 4, -2, 2, 0],
-                  transition: { duration: 0.4 }
+                  x: [0, -12, 12, -10, 10, -6, 6, -3, 3, 0],
+                  y: [0, -6, 6, -5, 5, -3, 3, -1, 1, 0],
+                  transition: { duration: 0.6 }
                 });
                 triggerJackpotConfetti();
-                confetti({ particleCount: 200, spread: 80, origin: { y: 0.6 }, colors: ['#FFD700', '#FFA500', '#FF4500', '#8B5CF6'] });
+                confetti({ particleCount: 250, spread: 90, origin: { y: 0.6 }, colors: ['#FFD700', '#FFA500', '#FF4500', '#8B5CF6', '#EC4899'] });
+                setTimeout(() => confetti({ particleCount: 100, spread: 120, origin: { y: 0.5 }, colors: ['#FFD700', '#FFA500'] }), 500);
+                setTimeout(() => confetti({ particleCount: 80, spread: 100, origin: { y: 0.4, x: 0.3 }, colors: ['#FFD700', '#8B5CF6'] }), 1000);
               } else {
                 soundManager.win(false);
-                confetti({ particleCount: 50, spread: 55, origin: { y: 0.7 } });
+                flashScreen('rgba(var(--slot-gold),0.15)');
+                confetti({ particleCount: 80, spread: 65, origin: { y: 0.7 }, colors: ['#FFD700', '#FFA500', '#FBBF24'] });
+              }
+
+              if (result.winLines.some(l => l >= 3)) {
+                soundManager.diagonalWin();
+              }
+
+              if (result.multiplier && result.multiplier > 1) {
+                soundManager.multiplierHit(result.multiplier);
               }
 
               const messages: { title: string; className: string }[] = [];
               const lineCount = result.winLines.length;
-              if (result.isJackpot) messages.push({ title: `🐉 ROYAL JACKPOT! ${lineCount} LINES! 🐉`, className: "bg-gradient-to-r from-red-600 to-red-700 text-white border-red-300 font-black text-2xl shadow-[0_0_50px_rgba(220,38,38,0.6)]" });
+              if (result.isJackpot) messages.push({ title: `🐉 ROYAL JACKPOT! ${lineCount} LINES! 🐉`, className: "bg-gradient-to-r from-red-600 via-orange-500 to-red-700 text-white border-red-300 font-black text-2xl shadow-[0_0_50px_rgba(220,38,38,0.6)] animate-pulse" });
               if (result.isRepeater && !isFakeRepeater) messages.push({ title: "⚡ REPEATER! SPIN AGAIN! ⚡", className: "bg-gradient-to-r from-cyan-500 to-blue-600 text-white border-cyan-300 font-black text-xl" });
               if (result.isBonusRound) { soundManager.bonus(); messages.push({ title: "🎰 BONUS ROUND ACTIVATED!", className: "bg-gradient-to-r from-purple-600 to-pink-600 text-white border-pink-300 font-black text-xl" }); }
-              if (result.multiplier && result.multiplier > 1) messages.push({ title: `💥 ${result.multiplier}x MULTIPLIER!`, className: "bg-gradient-to-r from-yellow-400 to-orange-500 text-purple-900 border-yellow-300 font-black text-lg" });
-              if (lineCount > 0 && result.winLines.some(l => l >= 3)) messages.push({ title: `↗ DIAGONAL WIN! ↘`, className: "bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-300 font-black text-lg" });
-              if (!result.isJackpot && !result.isRepeater && !result.isBonusRound && result.winAmount > 0) messages.push({ title: `🔥 WIN: +${result.winAmount.toLocaleString()}đ`, className: "bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold text-lg" });
-              messages.forEach((msg, idx) => { setTimeout(() => { toast({ title: msg.title, className: msg.className }); }, idx * 400); });
+              if (result.multiplier && result.multiplier > 1) messages.push({ title: `💥 ${result.multiplier}x WILD MULTIPLIER!`, className: "bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white border-yellow-300 font-black text-lg" });
+              if (lineCount > 0 && result.winLines.some(l => l >= 3)) messages.push({ title: `↗ DIAGONAL FORTUNE! ↘`, className: "bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-300 font-black text-lg" });
+              if (!result.isJackpot && !result.isRepeater && !result.isBonusRound && result.winAmount > 0) messages.push({ title: `🔥 WIN: +${result.winAmount.toLocaleString()}đ`, className: "bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-500 text-white font-black text-lg shadow-lg" });
+              messages.forEach((msg, idx) => { setTimeout(() => { toast({ title: msg.title, className: msg.className }); }, idx * 500); });
             } else {
               setStreak(0);
-              setLossCount(prev => prev + 1);
+              setLossCount(prev => {
+                const next = prev + 1;
+                if (next === 3 || next === 6) soundManager.lossComfort();
+                return next;
+              });
             }
 
             if (result.freeSpinsAwarded > 0) {
@@ -608,25 +664,62 @@ export function SlotMachine({ balance }: { balance: number }) {
       <AnimatePresence>
         {lastWin >= bet * 5 && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
+            initial={{ opacity: 0, scale: 0.3 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.5 }}
+            exit={{ opacity: 0, scale: 2, y: -50 }}
+            transition={{ type: "spring", stiffness: 200, damping: 15 }}
             className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none"
             data-testid="display-big-win"
           >
             <motion.div
-              animate={{ rotate: [0, -3, 3, 0], scale: [1, 1.1, 1] }}
-              transition={{ duration: 0.5, repeat: Infinity }}
-              className="bg-gradient-to-br from-yellow-400 via-yellow-500 to-orange-500 text-purple-950 px-8 sm:px-16 py-6 sm:py-10 rounded-[2rem] text-center shadow-[0_0_100px_rgba(234,179,8,0.8),0_0_150px_rgba(234,179,8,0.4)] border-4 border-yellow-200 mx-4"
+              className="absolute inset-0 pointer-events-none"
+              animate={{ opacity: [0, 0.3, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              style={{ background: 'radial-gradient(circle at center, rgba(251,191,36,0.4) 0%, transparent 70%)' }}
+            />
+            <motion.div
+              animate={{ rotate: [0, -4, 4, -2, 2, 0], scale: [1, 1.12, 0.96, 1.08, 1] }}
+              transition={{ duration: 0.8, repeat: Infinity }}
+              className="relative bg-gradient-to-br from-yellow-300 via-yellow-500 to-orange-600 text-purple-950 px-10 sm:px-20 py-8 sm:py-12 rounded-[2.5rem] text-center mx-4"
+              style={{
+                boxShadow: '0 0 120px rgba(234,179,8,0.9), 0 0 200px rgba(234,179,8,0.5), 0 0 300px rgba(249,115,22,0.3), inset 0 0 40px rgba(255,255,255,0.2)',
+                border: '4px solid rgba(255,255,255,0.6)',
+              }}
             >
-              <div className="text-2xl sm:text-3xl font-black uppercase mb-2 flex items-center justify-center gap-2">
-                <Sparkles className="w-6 h-6 sm:w-7 sm:h-7" /> {t.bigWin} <Sparkles className="w-6 h-6 sm:w-7 sm:h-7" />
+              <motion.div
+                animate={{ rotate: -360 }}
+                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-[-30%] pointer-events-none"
+                style={{
+                  background: 'conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,0.15) 5%, transparent 10%, rgba(255,255,255,0.1) 15%, transparent 20%)',
+                }}
+              />
+              <div className="text-2xl sm:text-4xl font-black uppercase mb-3 flex items-center justify-center gap-3 relative">
+                <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}>
+                  <Sparkles className="w-7 h-7 sm:w-9 sm:h-9 text-purple-800" />
+                </motion.div>
+                <span className="drop-shadow-lg">{lastWin >= bet * 25 ? '🐉 MEGA WIN 🐉' : t.bigWin}</span>
+                <motion.div animate={{ rotate: [0, -360] }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}>
+                  <Sparkles className="w-7 h-7 sm:w-9 sm:h-9 text-purple-800" />
+                </motion.div>
               </div>
-              <div className="text-3xl sm:text-5xl md:text-6xl font-display font-black">
+              <motion.div
+                className="text-4xl sm:text-6xl md:text-7xl font-display font-black relative"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 0.3, repeat: Infinity }}
+                style={{ textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
+              >
                 <AnimatedWinCounter value={lastWin} />đ
-              </div>
+              </motion.div>
               {winLines.length > 1 && (
-                <div className="text-lg mt-1 font-bold">{winLines.length} {t.lines}</div>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-xl mt-2 font-black uppercase tracking-widest"
+                >
+                  {winLines.length} {t.lines} 🔥
+                </motion.div>
               )}
             </motion.div>
           </motion.div>
@@ -727,7 +820,17 @@ export function SlotMachine({ balance }: { balance: number }) {
           </div>
 
           <div className="px-2 sm:px-4 md:px-6 py-3 sm:py-4">
-            <div ref={gridRef} className="relative rounded-2xl overflow-hidden"
+            <motion.div
+              ref={gridRef}
+              className="relative rounded-2xl overflow-hidden"
+              animate={isSpinning ? {
+                boxShadow: [
+                  `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(var(--slot-gold),0.3), 0 0 40px -5px rgba(var(--slot-purple),0.3)`,
+                  `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(var(--slot-gold),0.6), 0 0 60px -5px rgba(var(--slot-purple),0.5)`,
+                  `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(var(--slot-gold),0.3), 0 0 40px -5px rgba(var(--slot-purple),0.3)`,
+                ]
+              } : {}}
+              transition={isSpinning ? { duration: 0.8, repeat: Infinity, ease: "easeInOut" } : {}}
               style={{
                 background: `linear-gradient(180deg, var(--slot-grid-dark) 0%, var(--slot-grid-mid) 50%, var(--slot-grid-dark) 100%)`,
                 boxShadow: `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(var(--slot-gold),0.2), 0 0 30px -5px rgba(var(--slot-purple),0.1)`,
@@ -750,6 +853,19 @@ export function SlotMachine({ balance }: { balance: number }) {
               <div className="grid grid-cols-3 gap-0">
                 {[0, 1, 2].map((col) => (
                   <div key={col} className="flex flex-col relative">
+                    {slowingCol === col && (
+                      <motion.div
+                        className="absolute inset-0 z-20 pointer-events-none"
+                        animate={{ opacity: [0.2, 0.6, 0.2] }}
+                        transition={{ duration: 0.5, repeat: Infinity }}
+                        style={{
+                          background: 'linear-gradient(180deg, rgba(251,191,36,0.3) 0%, rgba(251,191,36,0.1) 50%, rgba(251,191,36,0.3) 100%)',
+                          boxShadow: 'inset 0 0 30px rgba(251,191,36,0.3)',
+                          borderLeft: '2px solid rgba(251,191,36,0.5)',
+                          borderRight: '2px solid rgba(251,191,36,0.5)',
+                        }}
+                      />
+                    )}
                     {[0, 1, 2].map((row) => (
                       <GridCell
                         key={`${col}-${row}`}
@@ -783,7 +899,7 @@ export function SlotMachine({ balance }: { balance: number }) {
                   background: 'linear-gradient(to right, rgba(0,0,0,0.3) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.3) 100%)',
                 }}
               />
-            </div>
+            </motion.div>
           </div>
 
           <div className="px-3 sm:px-5 md:px-7 pb-4 sm:pb-5 pt-1">
