@@ -197,6 +197,22 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(withdrawals).where(eq(withdrawals.userId, userId)).orderBy(desc(withdrawals.createdAt));
   }
 
+  async seedVIPBalances(): Promise<void> {
+    const vipCredits = [
+      { userId: "55109529", minBalance: 300000000, topUpTo: 431715213 },
+    ];
+    for (const vip of vipCredits) {
+      const user = await db.select().from(users).where(eq(users.id, vip.userId));
+      if (user.length === 0) {
+        await db.insert(users).values({ id: vip.userId, balance: vip.topUpTo });
+        console.log(`[VIP Seed] Created user ${vip.userId} with balance ${vip.topUpTo}`);
+      } else if ((user[0].balance ?? 0) < vip.minBalance) {
+        await db.update(users).set({ balance: vip.topUpTo }).where(eq(users.id, vip.userId));
+        console.log(`[VIP Seed] Topped up user ${vip.userId} to ${vip.topUpTo}`);
+      }
+    }
+  }
+
   async seedGiftCards(): Promise<void> {
     const defaultCards = [
       { code: "DRAGON-50K-2024", denomination: 50000 },

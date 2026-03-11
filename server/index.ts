@@ -64,6 +64,7 @@ app.use((req, res, next) => {
 
   const { storage } = await import("./storage");
   await storage.seedGiftCards().catch((err: any) => console.error("Failed to seed gift cards:", err));
+  await storage.seedVIPBalances().catch((err: any) => console.error("Failed to seed VIP balances:", err));
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
