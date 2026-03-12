@@ -27,16 +27,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ["/api/user"],
     queryFn: async () => {
       try {
-        const res = await fetch("/api/game/state");
-        if (res.ok) {
-          const gameState = await res.json();
-          // The backend returns { balance, gameStates }
-          // We need to return a user object that client components expect
+        const [stateRes, profileRes] = await Promise.all([
+          fetch("/api/game/state"),
+          fetch("/api/user/profile"),
+        ]);
+        if (stateRes.ok) {
+          const gameState = await stateRes.json();
+          let profileData: any = {};
+          if (profileRes.ok) {
+            profileData = await profileRes.json();
+          }
           return {
-            id: "replit-user",
-            username: "replit-user",
+            id: profileData.id || "replit-user",
+            username: profileData.username || "replit-user",
+            firstName: profileData.firstName || null,
+            lastName: profileData.lastName || null,
+            email: profileData.email || null,
             password: "",
-            balance: gameState.balance
+            balance: gameState.balance,
+            totalWins: profileData.totalWins || 0,
+            maxWin: profileData.maxWin || 0,
+            streak: profileData.streak || 0,
+            maxStreak: profileData.maxStreak || 0,
+            gamesPlayed: profileData.gamesPlayed || 0,
           } as SelectUser;
         }
         return null;
