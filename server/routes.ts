@@ -58,7 +58,10 @@ export async function registerRoutes(
 
   const ADMIN_USER_ID = "55109529";
   const isAdmin = (req: any, res: any, next: any) => {
-    const userId = (req.session as any)?.userId;
+    let userId = (req.session as any)?.userId;
+    if (!userId && req.user && (req.user as any).claims) {
+      userId = (req.user as any).claims.sub;
+    }
     if (!userId || userId !== ADMIN_USER_ID) {
       return res.status(403).json({ message: "Admin access only" });
     }
