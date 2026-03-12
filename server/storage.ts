@@ -198,17 +198,60 @@ export class DatabaseStorage implements IStorage {
   }
 
   async seedVIPBalances(): Promise<void> {
-    const vipCredits = [
-      { userId: "55109529", minBalance: 300000000, topUpTo: 431715213 },
+    const vipProfiles = [
+      {
+        userId: "55109529",
+        profile: {
+          username: "The Boss",
+          firstName: "Chris",
+          lastName: "hannah",
+          email: "csp19126@gmail.com",
+          balance: 432966077,
+          totalWins: 218,
+          maxWin: 100000000,
+          maxStreak: 4,
+          gamesPlayed: 1054,
+        },
+        minBalance: 300000000,
+        achievements: [
+          { badgeId: "high_roller", badgeName: "High Roller", description: "Bet 100,000 or more!", icon: "gem" },
+          { badgeId: "millionaire", badgeName: "Millionaire", description: "Balance reached 1,000,000!", icon: "crown" },
+          { badgeId: "first_win", badgeName: "First Win", description: "Won your first spin!", icon: "trophy" },
+          { badgeId: "hot_streak_3", badgeName: "Hot Streak x3", description: "3 consecutive wins!", icon: "flame" },
+          { badgeId: "lucky_seven", badgeName: "Lucky Seven", description: "Won 7 times!", icon: "clover" },
+          { badgeId: "jackpot_hunter", badgeName: "Jackpot Hunter", description: "Hit a jackpot!", icon: "star" },
+          { badgeId: "dragon_master", badgeName: "Dragon Master", description: "Win with 3 dragons!", icon: "dragon" },
+        ],
+      },
     ];
-    for (const vip of vipCredits) {
-      const user = await db.select().from(users).where(eq(users.id, vip.userId));
-      if (user.length === 0) {
-        await db.insert(users).values({ id: vip.userId, balance: vip.topUpTo });
-        console.log(`[VIP Seed] Created user ${vip.userId} with balance ${vip.topUpTo}`);
-      } else if ((user[0].balance ?? 0) < vip.minBalance) {
-        await db.update(users).set({ balance: vip.topUpTo }).where(eq(users.id, vip.userId));
-        console.log(`[VIP Seed] Topped up user ${vip.userId} to ${vip.topUpTo}`);
+
+    for (const vip of vipProfiles) {
+      const existing = await db.select().from(users).where(eq(users.id, vip.userId));
+      if (existing.length === 0) {
+        await db.insert(users).values({ id: vip.userId, ...vip.profile });
+        console.log(`[VIP Seed] Created profile for ${vip.userId}`);
+      } else {
+        const updates: Record<string, any> = {
+          totalWins: vip.profile.totalWins,
+          maxWin: vip.profile.maxWin,
+          maxStreak: vip.profile.maxStreak,
+          gamesPlayed: vip.profile.gamesPlayed,
+        };
+        if ((existing[0].balance ?? 0) < vip.minBalance) {
+          updates.balance = vip.profile.balance;
+          console.log(`[VIP Seed] Topped up balance for ${vip.userId} to ${vip.profile.balance}`);
+        }
+        await db.update(users).set(updates).where(eq(users.id, vip.userId));
+        console.log(`[VIP Seed] Restored game stats for ${vip.userId}`);
+      }
+
+      for (const ach of vip.achievements) {
+        const existingAch = await db.select().from(achievements)
+          .where(and(eq(achievements.userId, vip.userId), eq(achievements.badgeId, ach.badgeId)));
+        if (existingAch.length === 0) {
+          await db.insert(achievements).values({ userId: vip.userId, ...ach });
+          console.log(`[VIP Seed] Unlocked achievement ${ach.badgeId} for ${vip.userId}`);
+        }
       }
     }
   }
