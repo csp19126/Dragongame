@@ -56,6 +56,109 @@ export async function registerRoutes(
     }
   });
 
+  const ADMIN_USER_ID = "55109529";
+  const isAdmin = (req: any, res: any, next: any) => {
+    const userId = (req.session as any)?.userId;
+    if (!userId || userId !== ADMIN_USER_ID) {
+      return res.status(403).json({ message: "Admin access only" });
+    }
+    next();
+  };
+
+  app.get("/api/admin/dashboard/users", isAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const safe = allUsers.map(({ password: _, ...u }) => u);
+      res.json(safe);
+    } catch { res.status(500).json({ message: "Failed to fetch users" }); }
+  });
+
+  app.patch("/api/admin/dashboard/users/:id", isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { balance, username, firstName, lastName, password } = req.body;
+      const updates: any = {};
+      if (balance !== undefined) updates.balance = Number(balance);
+      if (username !== undefined) updates.username = username;
+      if (firstName !== undefined) updates.firstName = firstName;
+      if (lastName !== undefined) updates.lastName = lastName;
+      if (password) {
+        const hashed = await bcrypt.hash(password, 10);
+        updates.password = hashed;
+      }
+      const user = await storage.adminUpdateUser(id, updates);
+      const { password: _, ...safe } = user;
+      res.json(safe);
+    } catch { res.status(500).json({ message: "Failed to update user" }); }
+  });
+
+  app.delete("/api/admin/dashboard/users/:id", isAdmin, async (req, res) => {
+    try {
+      if (req.params.id === ADMIN_USER_ID) return res.status(400).json({ message: "Cannot delete admin account" });
+      await storage.adminDeleteUser(req.params.id);
+      res.json({ success: true });
+    } catch { res.status(500).json({ message: "Failed to delete user" }); }
+  });
+
+  app.get("/api/admin/dashboard/gift-cards", isAdmin, async (req, res) => {
+    try {
+      const cards = await storage.getAllGiftCards();
+      res.json(cards);
+    } catch { res.status(500).json({ message: "Failed to fetch gift cards" }); }
+  });
+
+  app.post("/api/admin/dashboard/gift-cards", isAdmin, async (req, res) => {
+    try {
+      const { code, denomination } = req.body;
+      if (!code || !denomination) return res.status(400).json({ message: "Code and denomination required" });
+      const card = await storage.createGiftCard(code.toUpperCase(), Number(denomination));
+      res.json(card);
+    } catch (err: any) {
+      if (err.message?.includes("unique")) return res.status(400).json({ message: "Gift card code already exists" });
+      res.status(500).json({ message: "Failed to create gift card" });
+    }
+  });
+
+  app.delete("/api/admin/dashboard/gift-cards/:id", isAdmin, async (req, res) => {
+    try {
+      await storage.adminDeleteGiftCard(Number(req.params.id));
+      res.json({ success: true });
+    } catch { res.status(500).json({ message: "Failed to delete gift card" }); }
+  });
+
+  app.get("/api/admin/dashboard/withdrawals", isAdmin, async (req, res) => {
+    try {
+      const all = await storage.getAllWithdrawals();
+      res.json(all);
+    } catch { res.status(500).json({ message: "Failed to fetch withdrawals" }); }
+  });
+
+  app.patch("/api/admin/dashboard/withdrawals/:id", isAdmin, async (req, res) => {
+    try {
+      const { status } = req.body;
+      const updated = await storage.updateWithdrawalStatus(Number(req.params.id), status);
+      res.json(updated);
+    } catch { res.status(500).json({ message: "Failed to update withdrawal" }); }
+  });
+
+  app.get("/api/admin/dashboard/stats", isAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const allCards = await storage.getAllGiftCards();
+      const allW = await storage.getAllWithdrawals();
+      res.json({
+        totalUsers: allUsers.length,
+        totalBalance: allUsers.reduce((s, u) => s + (u.balance ?? 0), 0),
+        totalWins: allUsers.reduce((s, u) => s + (u.totalWins ?? 0), 0),
+        totalGamesPlayed: allUsers.reduce((s, u) => s + (u.gamesPlayed ?? 0), 0),
+        activeGiftCards: allCards.filter(c => !c.isRedeemed).length,
+        redeemedGiftCards: allCards.filter(c => c.isRedeemed).length,
+        pendingWithdrawals: allW.filter(w => w.status === "pending").length,
+        totalWithdrawals: allW.length,
+      });
+    } catch { res.status(500).json({ message: "Failed to fetch stats" }); }
+  });
+
   app.post(api.auth.register.path, async (req, res) => {
     try {
       const input = api.auth.register.input.parse(req.body);

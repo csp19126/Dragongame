@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/lang-context";
 import { Button } from "@/components/ui/button";
-import { LogOut, Globe, Trophy, User, Bell, Plus, Coins } from "lucide-react";
+import { LogOut, Globe, Trophy, User, Bell, Plus, Coins, Crown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -178,6 +178,14 @@ export function Header() {
                           <span className="font-bold">{t.profile}</span>
                         </Link>
                       </DropdownMenuItem>
+                      {user.id === "55109529" && (
+                        <DropdownMenuItem asChild className="rounded-md p-3 cursor-pointer transition-colors" style={{ background: "rgba(251,191,36,0.08)" }}>
+                          <Link href="/admin" data-testid="link-admin">
+                            <Crown className="w-5 h-5 mr-3 text-yellow-400" />
+                            <span className="font-bold text-yellow-300">Admin Panel</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem 
                         onClick={() => logout.mutate()} 
                         className="text-destructive focus:text-destructive focus:bg-destructive/10 rounded-md p-3 cursor-pointer transition-colors"

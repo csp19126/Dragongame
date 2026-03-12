@@ -25,6 +25,13 @@ export interface IStorage {
   createGiftCard(code: string, denomination: number): Promise<GiftCard>;
   createWithdrawal(userId: string, amount: number, note?: string): Promise<Withdrawal>;
   getWithdrawals(userId: string): Promise<Withdrawal[]>;
+  getAllUsers(): Promise<User[]>;
+  adminUpdateUser(userId: string, data: { balance?: number; username?: string; firstName?: string; lastName?: string; password?: string }): Promise<User>;
+  adminDeleteUser(userId: string): Promise<void>;
+  getAllGiftCards(): Promise<GiftCard[]>;
+  adminDeleteGiftCard(id: number): Promise<void>;
+  getAllWithdrawals(): Promise<Withdrawal[]>;
+  updateWithdrawalStatus(id: number, status: string): Promise<Withdrawal>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -195,6 +202,40 @@ export class DatabaseStorage implements IStorage {
 
   async getWithdrawals(userId: string): Promise<Withdrawal[]> {
     return await db.select().from(withdrawals).where(eq(withdrawals.userId, userId)).orderBy(desc(withdrawals.createdAt));
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.balance));
+  }
+
+  async adminUpdateUser(userId: string, data: { balance?: number; username?: string; firstName?: string; lastName?: string; password?: string }): Promise<User> {
+    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, userId)).returning();
+    return updated;
+  }
+
+  async adminDeleteUser(userId: string): Promise<void> {
+    await db.delete(achievements).where(eq(achievements.userId, userId));
+    await db.delete(gameStates).where(eq(gameStates.userId, userId));
+    await db.delete(deposits).where(eq(deposits.userId, userId));
+    await db.delete(withdrawals).where(eq(withdrawals.userId, userId));
+    await db.delete(users).where(eq(users.id, userId));
+  }
+
+  async getAllGiftCards(): Promise<GiftCard[]> {
+    return await db.select().from(giftCards).orderBy(desc(giftCards.createdAt));
+  }
+
+  async adminDeleteGiftCard(id: number): Promise<void> {
+    await db.delete(giftCards).where(eq(giftCards.id, id));
+  }
+
+  async getAllWithdrawals(): Promise<Withdrawal[]> {
+    return await db.select().from(withdrawals).orderBy(desc(withdrawals.createdAt));
+  }
+
+  async updateWithdrawalStatus(id: number, status: string): Promise<Withdrawal> {
+    const [updated] = await db.update(withdrawals).set({ status, updatedAt: new Date() }).where(eq(withdrawals.id, id)).returning();
+    return updated;
   }
 
   async seedVIPBalances(): Promise<void> {

@@ -13,6 +13,7 @@ import Deposit from "@/pages/Deposit";
 import About from "@/pages/About";
 import Terms from "@/pages/Terms";
 import Profile from "@/pages/Profile";
+import Admin from "@/pages/Admin";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/about" component={About} />
       <Route path="/terms" component={Terms} />
       <Route path="/profile" component={Profile} />
+      <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
   );
