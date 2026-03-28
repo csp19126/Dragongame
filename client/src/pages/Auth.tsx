@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { SiReplit } from "react-icons/si";
+import { FaGoogle, FaFacebook, FaApple } from "react-icons/fa";
 
 export default function Auth() {
   const { login, register, user } = useAuth();
@@ -59,6 +59,13 @@ export default function Auth() {
   };
 
   const isLoading = login.isPending || register.isPending;
+  const handleSocialAuth = (provider: "google" | "facebook" | "apple") => {
+    toast({
+      title: `${provider[0].toUpperCase()}${provider.slice(1)} login`,
+      description: "OAuth credentials are required to enable this provider locally.",
+      variant: "destructive",
+    });
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] relative overflow-hidden">
@@ -103,27 +110,40 @@ export default function Auth() {
           </CardHeader>
 
           <CardContent className="pb-8 px-8 space-y-6">
-            {/* Replit Auth Button */}
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button 
-                onClick={() => {
-                  window.location.href = "/api/login";
-                }}
-                className="w-full h-14 text-lg font-bold bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white border-2 border-orange-400 rounded-2xl shadow-[0_0_20px_rgba(234,88,12,0.4)] transition-all group uppercase tracking-widest"
+            <div className="space-y-3">
+              <Button
+                type="button"
+                onClick={() => handleSocialAuth("google")}
+                className="w-full h-12 font-black bg-white text-black hover:bg-white/90 rounded-2xl"
               >
-                <SiReplit className="mr-3 h-6 w-6 group-hover:scale-110 transition-transform" />
-                {lang === "en" ? "Sign in with Replit" : "Đăng nhập với Replit"}
+                <FaGoogle className="mr-2 h-4 w-4" />
+                {lang === "en" ? "Continue with Google" : "Tiếp tục với Google"}
               </Button>
-            </motion.div>
+              <Button
+                type="button"
+                onClick={() => handleSocialAuth("facebook")}
+                className="w-full h-12 font-black bg-[#1877F2] text-white hover:bg-[#1877F2]/90 rounded-2xl"
+              >
+                <FaFacebook className="mr-2 h-4 w-4" />
+                {lang === "en" ? "Continue with Facebook" : "Tiếp tục với Facebook"}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleSocialAuth("apple")}
+                className="w-full h-12 font-black bg-black text-white hover:bg-black/90 rounded-2xl"
+              >
+                <FaApple className="mr-2 h-4 w-4" />
+                {lang === "en" ? "Continue with Apple" : "Tiếp tục với Apple"}
+              </Button>
+            </div>
 
-            {/* Divider */}
             <div className="relative py-2">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-yellow-500/20" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
                 <span className="bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] px-3 text-yellow-500/50 font-black tracking-[0.15em]">
-                  {lang === "en" ? "OR GUEST ACCESS" : "HOẶC KHÁCH"}
+                  {lang === "en" ? "OR USE USERNAME/PASSWORD" : "HOẶC DÙNG TÊN/PASSWORD"}
                 </span>
               </div>
             </div>

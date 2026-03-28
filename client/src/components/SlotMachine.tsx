@@ -422,6 +422,7 @@ export function SlotMachine({ balance }: { balance: number }) {
   const [showFakeRepeater, setShowFakeRepeater] = useState(false);
   const [lossCount, setLossCount] = useState(0);
   const [screenFlash, setScreenFlash] = useState<string | null>(null);
+  const [spinCharge, setSpinCharge] = useState(false);
   const autoSpinRef = useRef(false);
   const spinningRef = useRef(false);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -454,6 +455,7 @@ export function SlotMachine({ balance }: { balance: number }) {
 
     spinningRef.current = true;
     setIsSpinning(true);
+    setSpinCharge(false);
     setLastWin(0);
     setWinLines([]);
     setShowParticles(false);
@@ -502,6 +504,7 @@ export function SlotMachine({ balance }: { balance: number }) {
         }
 
         stopTimeoutsRef.current.push(setTimeout(() => {
+          if (col === 2) setSpinCharge(true);
           clearInterval(colIntervalsRef.current[col]);
           setGrid(prev => {
             const next = prev.map(c => [...c]);
@@ -516,6 +519,7 @@ export function SlotMachine({ balance }: { balance: number }) {
 
           if (col === 2) {
             setIsSpinning(false);
+            setSpinCharge(false);
             setSlowingCol(-1);
             spinningRef.current = false;
             setFreeSpins(result.totalFreeSpins);
@@ -610,6 +614,7 @@ export function SlotMachine({ balance }: { balance: number }) {
       stopTimeoutsRef.current.forEach(clearTimeout);
       stopTimeoutsRef.current = [];
       setIsSpinning(false);
+      setSpinCharge(false);
       setSlowingCol(-1);
       spinningRef.current = false;
       setAutoSpin(false);
@@ -829,13 +834,41 @@ export function SlotMachine({ balance }: { balance: number }) {
                   `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(var(--slot-gold),0.6), 0 0 60px -5px rgba(var(--slot-purple),0.5)`,
                   `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(var(--slot-gold),0.3), 0 0 40px -5px rgba(var(--slot-purple),0.3)`,
                 ]
-              } : {}}
+              , scale: spinCharge ? [1, 1.01, 1] : [1, 1.006, 1] } : {}}
               transition={isSpinning ? { duration: 0.8, repeat: Infinity, ease: "easeInOut" } : {}}
               style={{
                 background: `linear-gradient(180deg, var(--slot-grid-dark) 0%, var(--slot-grid-mid) 50%, var(--slot-grid-dark) 100%)`,
                 boxShadow: `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(var(--slot-gold),0.2), 0 0 30px -5px rgba(var(--slot-purple),0.1)`,
               }}
             >
+              {isSpinning && (
+                <>
+                  <div
+                    className={`absolute inset-0 pointer-events-none z-[19] spin-aura ${spinCharge ? "opacity-80" : ""}`}
+                    style={{
+                      background:
+                        "radial-gradient(circle at 50% 35%, rgba(var(--slot-gold),0.18) 0%, rgba(var(--slot-purple),0.16) 35%, transparent 70%)",
+                    }}
+                  />
+                  <div
+                    className="absolute inset-0 pointer-events-none z-[19] spin-speed-lines"
+                    style={{
+                      background:
+                        "repeating-linear-gradient(90deg, transparent 0 10px, rgba(255,255,255,0.06) 10px 12px, transparent 12px 28px)",
+                      opacity: spinCharge ? 0.55 : 0.35,
+                    }}
+                  />
+                  <div
+                    className="absolute inset-0 pointer-events-none z-[19] spin-reel-streaks"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, transparent 0%, rgba(251,191,36,0.06) 15%, rgba(139,92,246,0.08) 50%, rgba(251,191,36,0.06) 85%, transparent 100%)",
+                      opacity: spinCharge ? 0.55 : 0.3,
+                    }}
+                  />
+                </>
+              )}
+
               <div className="absolute inset-0 pointer-events-none z-20 opacity-[0.025]"
                 style={{
                   backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(255,255,255,0.08) 1px, rgba(255,255,255,0.08) 2px)',

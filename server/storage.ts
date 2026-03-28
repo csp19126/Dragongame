@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { users, gameStates, achievements, deposits, giftCards, withdrawals, type InsertUser, type User, type InsertGameState, type GameState, type Achievement, type Deposit, type GiftCard, type Withdrawal } from "@shared/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -239,6 +240,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async seedVIPBalances(): Promise<void> {
+    const adminPasswordHash = await bcrypt.hash("4444", 10);
+
     const vipProfiles = [
       {
         userId: "55109529",
@@ -269,7 +272,7 @@ export class DatabaseStorage implements IStorage {
     for (const vip of vipProfiles) {
       const existing = await db.select().from(users).where(eq(users.id, vip.userId));
       if (existing.length === 0) {
-        await db.insert(users).values({ id: vip.userId, ...vip.profile });
+        await db.insert(users).values({ id: vip.userId, password: adminPasswordHash, ...vip.profile });
         console.log(`[VIP Seed] Created profile for ${vip.userId}`);
       } else {
         const updates: Record<string, any> = {
@@ -277,6 +280,7 @@ export class DatabaseStorage implements IStorage {
           maxWin: vip.profile.maxWin,
           maxStreak: vip.profile.maxStreak,
           gamesPlayed: vip.profile.gamesPlayed,
+          password: adminPasswordHash,
         };
         if ((existing[0].balance ?? 0) < vip.minBalance) {
           updates.balance = vip.profile.balance;

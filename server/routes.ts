@@ -4,21 +4,22 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth/index";
-import { registerAudioRoutes } from "./replit_integrations/audio";
-import { registerImageRoutes } from "./replit_integrations/image";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Setup auth FIRST
-  await setupAuth(app);
-  registerAuthRoutes(app);
-  
-  // Register audio and image routes
-  registerAudioRoutes(app);
-  registerImageRoutes(app);
+  // Optional AI integration routes (require API key). Keep optional for local dev.
+  if (process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY) {
+    const [{ registerAudioRoutes }, { registerImageRoutes }, { registerChatRoutes }] = await Promise.all([
+      import("./replit_integrations/audio"),
+      import("./replit_integrations/image"),
+      import("./replit_integrations/chat"),
+    ]);
+    registerAudioRoutes(app);
+    registerImageRoutes(app);
+    registerChatRoutes(app);
+  }
 
   app.post("/api/admin/gift-balance", async (req, res) => {
     try {
@@ -59,9 +60,6 @@ export async function registerRoutes(
   const ADMIN_USER_ID = "55109529";
   const isAdmin = (req: any, res: any, next: any) => {
     let userId = (req.session as any)?.userId;
-    if (!userId && req.user && (req.user as any).claims) {
-      userId = (req.user as any).claims.sub;
-    }
     if (!userId || userId !== ADMIN_USER_ID) {
       return res.status(403).json({ message: "Admin access only" });
     }
@@ -214,14 +212,30 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/logout", (req: any, res) => {
+    req.session?.destroy((err: unknown) => {
+      if (err) {
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      res.clearCookie("connect.sid");
+      return res.status(200).json({ message: "Logged out" });
+    });
+  });
+
+  // Social auth placeholders for local mode.
+  app.get("/api/auth/google", (_req, res) => {
+    res.status(501).json({ message: "Google login requires OAuth credentials setup" });
+  });
+  app.get("/api/auth/facebook", (_req, res) => {
+    res.status(501).json({ message: "Facebook login requires OAuth credentials setup" });
+  });
+  app.get("/api/auth/apple", (_req, res) => {
+    res.status(501).json({ message: "Apple login requires OAuth credentials setup" });
+  });
+
   app.get(api.game.state.path, async (req: any, res) => {
     try {
       let userId = (req.session as any).userId;
-      
-      // Fallback to Replit Auth if no session userId
-      if (!userId && req.user && (req.user as any).claims) {
-        userId = (req.user as any).claims.sub;
-      }
 
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -256,9 +270,6 @@ export async function registerRoutes(
   app.post(api.game.spin.path, async (req: any, res) => {
     try {
       let userId = (req.session as any).userId;
-      if (!userId && req.user && req.user.claims) {
-        userId = req.user.claims.sub;
-      }
 
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -501,10 +512,7 @@ export async function registerRoutes(
 
   app.get("/api/achievements/:userId", async (req: any, res) => {
     try {
-      let sessionUserId = (req.session as any)?.userId;
-      if (!sessionUserId && req.user && (req.user as any).claims) {
-        sessionUserId = (req.user as any).claims.sub;
-      }
+      const sessionUserId = (req.session as any)?.userId;
       const userId = req.params.userId;
       if (!sessionUserId) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -520,9 +528,6 @@ export async function registerRoutes(
   app.post("/api/deposits/gift-card", async (req: any, res) => {
     try {
       let userId = (req.session as any)?.userId;
-      if (!userId && req.user && (req.user as any).claims) {
-        userId = (req.user as any).claims.sub;
-      }
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
       const codeSchema = z.object({ code: z.string().min(1).max(100) });
@@ -554,9 +559,6 @@ export async function registerRoutes(
   app.get("/api/deposits/history", async (req: any, res) => {
     try {
       let userId = (req.session as any)?.userId;
-      if (!userId && req.user && (req.user as any).claims) {
-        userId = (req.user as any).claims.sub;
-      }
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
       let user = await storage.getUser(userId);
@@ -574,9 +576,6 @@ export async function registerRoutes(
   app.post("/api/withdrawals/request", async (req: any, res) => {
     try {
       let userId = (req.session as any)?.userId;
-      if (!userId && req.user && (req.user as any).claims) {
-        userId = (req.user as any).claims.sub;
-      }
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
       const withdrawalSchema = z.object({
@@ -614,9 +613,6 @@ export async function registerRoutes(
   app.get("/api/withdrawals/history", async (req: any, res) => {
     try {
       let userId = (req.session as any)?.userId;
-      if (!userId && req.user && (req.user as any).claims) {
-        userId = (req.user as any).claims.sub;
-      }
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
       let user = await storage.getUser(userId);
@@ -634,9 +630,6 @@ export async function registerRoutes(
   app.get("/api/user/profile", async (req: any, res) => {
     try {
       let userId = (req.session as any)?.userId;
-      if (!userId && req.user && (req.user as any).claims) {
-        userId = (req.user as any).claims.sub;
-      }
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
       let user = await storage.getUser(userId);
@@ -666,9 +659,6 @@ export async function registerRoutes(
   app.patch("/api/user/profile", async (req: any, res) => {
     try {
       let userId = (req.session as any)?.userId;
-      if (!userId && req.user && (req.user as any).claims) {
-        userId = (req.user as any).claims.sub;
-      }
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
       const profileSchema = z.object({

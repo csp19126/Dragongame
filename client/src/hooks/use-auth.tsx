@@ -5,7 +5,7 @@ import {
   UseMutationResult,
 } from "@tanstack/react-query";
 import { User as SelectUser, InsertUser } from "@shared/schema";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type AuthContextType = {
   user: SelectUser | null;
@@ -61,16 +61,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async () => {
-      window.location.href = "/api/login";
-      return null as any;
+    mutationFn: async (data: InsertUser) => {
+      const res = await apiRequest("POST", "/api/login", data);
+      return (await res.json()) as SelectUser;
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/user"], user);
     },
   });
 
   const registerMutation = useMutation({
-    mutationFn: async () => {
-      window.location.href = "/api/login";
-      return null as any;
+    mutationFn: async (data: InsertUser) => {
+      const res = await apiRequest("POST", "/api/register", data);
+      return (await res.json()) as SelectUser;
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/user"], user);
     },
   });
 

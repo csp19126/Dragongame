@@ -395,6 +395,48 @@
   animation: spinButtonPulse 0.6s ease-in-out infinite;
 }
 
+@keyframes spinAura {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(1);
+    filter: blur(0px) saturate(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.06);
+    filter: blur(1px) saturate(1.25);
+  }
+}
+
+@keyframes speedLines {
+  0% { transform: translate3d(-30%, 0, 0); opacity: 0.25; }
+  30% { opacity: 0.6; }
+  100% { transform: translate3d(30%, 0, 0); opacity: 0.25; }
+}
+
+@keyframes reelStreaks {
+  0% { transform: translate3d(0, -10%, 0); opacity: 0.15; }
+  50% { opacity: 0.35; }
+  100% { transform: translate3d(0, 10%, 0); opacity: 0.15; }
+}
+
+.spin-aura {
+  animation: spinAura 0.65s ease-in-out infinite;
+  will-change: transform, opacity, filter;
+}
+
+.spin-speed-lines {
+  animation: speedLines 0.35s linear infinite;
+  will-change: transform, opacity;
+  mix-blend-mode: screen;
+}
+
+.spin-reel-streaks {
+  animation: reelStreaks 0.5s ease-in-out infinite;
+  will-change: transform, opacity;
+  mix-blend-mode: screen;
+}
+
 @keyframes nearMissShake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-3px); }
