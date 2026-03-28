@@ -4,25 +4,41 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-// We are skipping the crashing Replit Auth import
-// import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth/index";
 import { registerAudioRoutes } from "./replit_integrations/audio";
 import { registerImageRoutes } from "./replit_integrations/image";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  // We DISABLE these because they cause the "clientId" crash on Railway
-  // await setupAuth(app);
-  // registerAuthRoutes(app);
-
+  // WE REMOVED setupAuth(app) HERE TO STOP THE CRASH
+  
   registerAudioRoutes(app);
   registerImageRoutes(app);
 
-  // This ensures that even without a login, the app knows who "you" are
+  // FORCE THE APP TO THINK YOU ARE LOGGED IN AS ADMIN
   app.use((req, res, next) => {
-    (req.session as any).userId = "55109529"; // Your Admin ID
+    (req.session as any).userId = "55109529";
     next();
   });
 
-  // ... (The rest of your game logic stays the same)
+  app.get(api.game.state.path, async (req: any, res) => {
+    try {
+      const user = await storage.getUser("55109529");
+      if (!user) return res.status(401).json({ message: "User not found" });
+      res.json({ 
+        balance: user.balance, 
+        gameStates: [], 
+        streak: user.streak ?? 0,
+        totalWins: user.totalWins ?? 0,
+        gamesPlayed: user.gamesPlayed ?? 0
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Server Error" });
+    }
+  });
+
+  // Basic Spin Route to keep the game alive
+  app.post(api.game.spin.path, async (req: any, res) => {
+     res.json({ success: true, symbol: "🐉", win: 100 });
+  });
+
   return httpServer;
 }
