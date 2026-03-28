@@ -7,10 +7,15 @@ import bcrypt from "bcryptjs";
 import { registerAudioRoutes } from "./replit_integrations/audio";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { setupAuth } from "./replit_integrations/auth";
+export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+
 // Setup auth FIRST
+
   // await setupAuth(app);
+
   // registerAuthRoutes(app);
-  // FORCE THE APP TO THINK YOU ARE LOGGED IN AS ADMIN
+
+  // FORCE THE APP TO THINK YOU ARE LOGGED IN AS ADMI
   app.use((req, res, next) => {
     (req.session as any).userId = "55109529";
     next();
