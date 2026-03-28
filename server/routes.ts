@@ -9,13 +9,9 @@ import { registerImageRoutes } from "./replit_integrations/image";
 import { setupAuth } from "./replit_integrations/auth";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  // setupAuth is now safe to call without OpenID credentials — it will log a
-  // warning and return early if OIDC_CLIENT_ID / REPL_ID are not configured.
- // await setupAuth(app);
-
-  //registerAudioRoutes(app);
-  //registerImageRoutes(app);
-
+// Setup auth FIRST
+  // await setupAuth(app);
+  // registerAuthRoutes(app);
   // FORCE THE APP TO THINK YOU ARE LOGGED IN AS ADMIN
   app.use((req, res, next) => {
     (req.session as any).userId = "55109529";
