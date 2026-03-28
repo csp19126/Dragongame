@@ -7,8 +7,6 @@ import bcrypt from "bcryptjs";
 import { registerAudioRoutes } from "./replit_integrations/audio";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { setupAuth } from "./replit_integrations/auth";
-
-export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
 // Setup auth FIRST
   // await setupAuth(app);
   // registerAuthRoutes(app);
