@@ -6,10 +6,13 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { registerAudioRoutes } from "./replit_integrations/audio";
 import { registerImageRoutes } from "./replit_integrations/image";
+import { setupAuth } from "./replit_integrations/auth";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  // WE REMOVED setupAuth(app) HERE TO STOP THE CRASH
-  
+  // setupAuth is now safe to call without OpenID credentials — it will log a
+  // warning and return early if OIDC_CLIENT_ID / REPL_ID are not configured.
+  await setupAuth(app);
+
   registerAudioRoutes(app);
   registerImageRoutes(app);
 
