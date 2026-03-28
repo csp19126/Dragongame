@@ -13,8 +13,8 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   // Setup auth FIRST
-  await setupAuth(app);
-  registerAuthRoutes(app);
+  // await setupAuth(app);
+  // registerAuthRoutes(app);
   
   // Register audio and image routes
   registerAudioRoutes(app);
