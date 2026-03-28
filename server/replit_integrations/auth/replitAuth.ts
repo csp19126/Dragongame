@@ -8,11 +8,22 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
 
+function isOidcConfigured(): boolean {
+  const clientId = process.env.OIDC_CLIENT_ID || process.env.REPL_ID;
+  return typeof clientId === "string" && clientId.trim().length > 0;
+}
+
 const getOidcConfig = memoize(
   async () => {
+    const clientId = process.env.OIDC_CLIENT_ID || process.env.REPL_ID;
+    if (!clientId || clientId.trim().length === 0) {
+      throw new Error(
+        "OpenID client ID is not configured. Set OIDC_CLIENT_ID or REPL_ID environment variable."
+      );
+    }
     return await client.discovery(
       new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
+      clientId
     );
   },
   { maxAge: 3600 * 1000 }
@@ -68,6 +79,14 @@ async function upsertUser(claims: any) {
 }
 
 export async function setupAuth(app: Express) {
+  if (!isOidcConfigured()) {
+    console.warn(
+      "[auth] OpenID credentials not configured (OIDC_CLIENT_ID / REPL_ID is missing or empty). " +
+      "Skipping OpenID authentication setup. Set the required environment variables to enable it."
+    );
+    return;
+  }
+
   app.set("trust proxy", 1);
   app.use(getSession());
   app.use(passport.initialize());
