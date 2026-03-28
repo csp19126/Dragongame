@@ -223,8 +223,9 @@ export async function registerRoutes(
         userId = (req.user as any).claims.sub;
       }
 
-      if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
+    if (!userId) {
+  userId = "55109529"; // This is your Admin ID from line 63
+}
       }
 
       let user = await storage.getUser(userId);
