@@ -224,7 +224,7 @@ export async function registerRoutes(
       }
 
     if (!userId) {
-  userId = "55109529"; // This is your Admin ID from line 63
+  userId = "55109529"; // Force use your admin ID
 }
       }
 
