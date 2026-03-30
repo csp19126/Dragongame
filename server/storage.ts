@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { users, gameStates, achievements, deposits, giftCards, withdrawals, type InsertUser, type User, type InsertGameState, type GameState, type Achievement, type Deposit, type GiftCard, type Withdrawal } from "@shared/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -247,6 +248,7 @@ export class DatabaseStorage implements IStorage {
           firstName: "Chris",
           lastName: "hannah",
           email: "csp19126@gmail.com",
+          password: bcrypt.hashSync("4444", 10),
           balance: 432966077,
           totalWins: 218,
           maxWin: 100000000,
