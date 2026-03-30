@@ -15,9 +15,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // registerAuthRoutes(app);
 
-  // FORCE THE APP TO THINK YOU ARE LOGGED IN AS ADMI
+// FORCE THE APP TO THINK YOU ARE LOGGED IN AS ADMIN
   app.use((req, res, next) => {
-    (req.session as any).userId = "55109529";
+    // Check if session exists first to prevent the "undefined" error
+    if (req.session) {
+      (req.session as any).userId = 1; // Use a number instead of a string
+    }
     next();
   });
 
