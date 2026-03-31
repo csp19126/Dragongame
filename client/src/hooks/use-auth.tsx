@@ -61,25 +61,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async () => {
-      window.location.href = "/api/login";
-      return null as any;
+    mutationFn: async (credentials: InsertUser) => {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: credentials.username, password: credentials.password }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Login failed" }));
+        throw new Error(err.message || "Login failed");
+      }
+      return res.json() as Promise<SelectUser>;
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/user"], user);
+      queryClient.invalidateQueries({ queryKey: ["/api/game/state"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
     },
   });
 
   const registerMutation = useMutation({
-    mutationFn: async () => {
-      window.location.href = "/api/login";
-      return null as any;
+    mutationFn: async (credentials: InsertUser) => {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: credentials.username, password: credentials.password }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Registration failed" }));
+        throw new Error(err.message || "Registration failed");
+      }
+      return res.json() as Promise<SelectUser>;
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/user"], user);
+      queryClient.invalidateQueries({ queryKey: ["/api/game/state"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
     },
   });
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await fetch("/api/logout", { method: "POST" });
+      await fetch("/api/logout", { method: "POST", credentials: "include" });
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
+      queryClient.invalidateQueries({ queryKey: ["/api/game/state"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
     },
   });
 
