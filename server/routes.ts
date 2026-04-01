@@ -22,7 +22,7 @@ export async function registerRoutes(
   }
 
   // --- REGISTER ---
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -44,10 +44,10 @@ export async function registerRoutes(
   });
 
   // --- LOGIN ---
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
-      const user = await storage.getUserByUsername(username);
+      const user = await (storage as any).getUserByUsername(username);
       if (!user) return res.status(401).json({ message: "Invalid" });
       const match = await bcrypt.compare(password, user.password);
       if (!match) return res.status(401).json({ message: "Invalid" });
@@ -61,11 +61,11 @@ export async function registerRoutes(
   });
 
   // --- SPIN ---
-  app.post("/api/game/spin", async (req: any, res) => {
+  app.post("/api/game/spin", async (req: any, res: any) => {
     try {
       const userId = (req.session as any).userId;
       const { betAmount } = req.body;
-      let user = await storage.getUser(userId);
+      let user = await (storage as any).getUser(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
       let gameState = await (storage as any).getGameState(user.id, "default");
@@ -94,7 +94,7 @@ export async function registerRoutes(
         }
       });
 
-      if (winAmount > 0) user = await storage.creditBalanceAtomic(user.id, winAmount);
+      if (winAmount > 0) user = await (storage as any).creditBalanceAtomic(user.id, winAmount);
       const nextWins = winAmount > 0 ? ((gameState as any)?.consecutiveWins ?? 0) + 1 : 0;
       
       await (storage as any).updateGameState(user.id, "default", { 
@@ -103,7 +103,7 @@ export async function registerRoutes(
         consecutiveWins: nextWins
       });
 
-      const updatedUser = await storage.updateStreak(user.id, nextWins, user.maxStreak ?? 0, (user.totalWins ?? 0) + (winAmount > 0 ? 1 : 0), Math.max(user.maxWin ?? 0, winAmount));
+      const updatedUser = await (storage as any).updateStreak(user.id, nextWins, user.maxStreak ?? 0, (user.totalWins ?? 0) + (winAmount > 0 ? 1 : 0), Math.max(user.maxWin ?? 0, winAmount));
 
       res.json({ grid, winLines, winAmount, newBalance: updatedUser.balance, streak: nextWins });
     } catch (err) {
@@ -112,7 +112,7 @@ export async function registerRoutes(
   });
 
   // --- ORACLE ---
-  app.post("/api/game/oracle", async (req: any, res) => {
+  app.post("/api/game/oracle", async (req: any, res: any) => {
     try {
       const userId = (req.session as any)?.userId;
       const result = await (storage as any).consultOracle(userId);
