@@ -27,6 +27,8 @@ export interface IStorage {
   createWithdrawal(userId: string, amount: number, note?: string): Promise<Withdrawal>;
   getWithdrawals(userId: string): Promise<Withdrawal[]>;
   getAllUsers(): Promise<User[]>;
+  updateActiveModifier(userId: string, modifier: number): Promise<void>;
+  consultOracle(userId: string): Promise<{ message: string; type: "good" | "bad" | "neutral" }>;
   adminUpdateUser(userId: string, data: { balance?: number; username?: string; firstName?: string; lastName?: string; password?: string }): Promise<User>;
   adminDeleteUser(userId: string): Promise<void>;
   getAllGiftCards(): Promise<GiftCard[]>;
@@ -90,6 +92,43 @@ export class DatabaseStorage implements IStorage {
       sql`${gameStates.userId} = ${userId} AND ${gameStates.slotId} = ${slotId}`
     );
     return state;
+  }
+
+  async updateActiveModifier(userId: string, modifier: number): Promise<void> {
+    await db.update(gameStates)
+      .set({ activeModifier: modifier, updatedAt: new Date() })
+      .where(eq(gameStates.userId, userId));
+  }
+
+  async consultOracle(userId: string): Promise<{ message: string; type: "good" | "bad" | "neutral" }> {
+    const outcomes = [
+      { text: "The Great Dragon breathes fire! (2x Multiplier)", mod: 200, type: "good" },
+      { text: "A Golden Lotus blooms. (1.5x Multiplier)", mod: 150, type: "good" },
+      { text: "The spirits are silent. (No change)", mod: 100, type: "neutral" },
+      { text: "A storm approaches. (0.5x Multiplier)", mod: 50, type: "bad" },
+      { text: "The Dragon is sleeping. (0.2x Multiplier)", mod: 20, type: "bad" }
+    ];
+
+    // Pick a random outcome
+    const result = outcomes[Math.floor(Math.random() * outcomes.length)];
+
+    // We check if the user has a game state record first
+    const existing = await db.select().from(gameStates).where(eq(gameStates.userId, userId));
+    
+    if (existing.length > 0) {
+      await db.update(gameStates)
+        .set({ activeModifier: result.mod, updatedAt: new Date() })
+        .where(eq(gameStates.userId, userId));
+    } else {
+      // If they've never played, create a basic state for them with the modifier
+      await db.insert(gameStates).values({
+        userId,
+        slotId: "default",
+        activeModifier: result.mod
+      } as any);
+    }
+
+    return { message: result.text, type: result.type as "good" | "bad" | "neutral" };
   }
 
   async updateGameState(userId: string, slotId: string, state: Partial<InsertGameState>): Promise<GameState> {
