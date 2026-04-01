@@ -1,0 +1,1 @@
+psql "postgresql://postgres:hYvtiauJVIvIiTMQHOXeRsTctmsTNSZz@autorack.proxy.rlwy.net:26765/railway" -c "TRUNCATE achievements, gift_cards, users, game_states, sessions, deposits CASCADE;" && psql "postgresql://postgres:hYvtiauJVIvIiTMQHOXeRsTctmsTNSZz@autorack.proxy.rlwy.net:26765/railway" -f my_data.sql

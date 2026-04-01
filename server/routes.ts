@@ -115,18 +115,70 @@ export async function registerRoutes(
     }
   });
 
-  // --- API: LEADERBOARD & AUTH ---
+  // --- API: LEADERBOARD ---
   app.get("/api/game/leaderboard", async (req, res) => {
     const leaderboardUsers = await storage.getLeaderboard();
-    res.json(leaderboardUsers.map((u: any, idx: number) => ({ rank: idx + 1, username: u.username, balance: u.balance })));
+    res.json(leaderboardUsers.map((u: any, idx: number) => ({ 
+      rank: idx + 1, 
+      username: u.username, 
+      balance: u.balance,
+      totalWins: u.totalWins ?? 0,
+      maxWin: u.maxWin ?? 0
+    })));
   });
 
+  // --- API: AUTH (REGISTER) ---
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      const existing = await storage.getUserByUsername(username);
+      if (existing) return res.status(400).json({ message: "Username exists" });
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await storage.createUser({ 
+        username, 
+        password: hashedPassword, 
+        firstName: "", 
+        lastName: "", 
+        email: `${username}@example.com`,
+        balance: 50000 
+      });
+
+      (req.session as any).userId = user.id;
+      const { password: _, ...safeUser } = user;
+      res.status(201).json(safeUser);
+    } catch (err) {
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  // --- API: AUTH (LOGIN) ---
   app.post("/api/auth/login", async (req, res) => {
-    const { username, password } = req.body;
-    const user = await storage.getUserByUsername(username);
-    if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ message: "Invalid" });
-    (req.session as any).userId = user.id;
-    res.json(user);
+    try {
+      const { username, password } = req.body;
+      const user = await storage.getUserByUsername(username);
+      
+      if (!user) return res.status(401).json({ message: "Invalid credentials" });
+
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) return res.status(401).json({ message: "Invalid credentials" });
+
+      (req.session as any).userId = user.id;
+      const { password: _, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (err) {
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // --- API: PROFILE ---
+  app.get("/api/user/profile", async (req: any, res) => {
+    const userId = req.session.userId;
+    if (!userId) return res.status(401).send("Unauthorized");
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(401).send("Unauthorized");
+    const { password: _, ...safeUser } = user;
+    res.json(safeUser);
   });
 
   return httpServer;
