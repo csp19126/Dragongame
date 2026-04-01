@@ -6,7 +6,7 @@ import { useLang } from "@/lib/lang-context";
 import { useToast } from "@/hooks/use-toast";
 import { soundManager } from "@/lib/sound";
 import confetti from "canvas-confetti";
-import { Loader2, Brain, Flame, Zap, Crown, RotateCw, Gift, Sparkles, Share2, AlertTriangle } from "lucide-react";
+import { Loader2, Brain, Flame, Zap, Crown, RotateCw, Gift, Sparkles, Share2, AlertTriangle, Wand2 } from "lucide-react";
 
 const SYMBOLS = ["🐉", "🧧", "🏮", "💎", "🪙", "🎎", "🌸", "🏯", "⚔️", "📜"];
 const BET_AMOUNTS = [1000, 5000, 10000, 50000, 100000, 500000, 1000000];
@@ -423,6 +423,11 @@ export function SlotMachine({ balance }: { balance: number }) {
   const [lossCount, setLossCount] = useState(0);
   const [screenFlash, setScreenFlash] = useState<string | null>(null);
   const [spinCharge, setSpinCharge] = useState(false);
+  
+  // ORACLE STATES
+  const [oracleActive, setOracleActive] = useState(false);
+  const [oracleLoading, setOracleLoading] = useState(false);
+
   const autoSpinRef = useRef(false);
   const spinningRef = useRef(false);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -435,6 +440,31 @@ export function SlotMachine({ balance }: { balance: number }) {
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     setScreenFlash(color);
     flashTimerRef.current = setTimeout(() => setScreenFlash(null), 150);
+  };
+
+  const handleConsultOracle = async () => {
+    setOracleLoading(true);
+    try {
+      const res = await fetch("/api/game/oracle", { method: "POST" });
+      const data = await res.json();
+      
+      setOracleActive(true);
+      soundManager.bonus(); // Use bonus sound for oracle activation
+      
+      toast({
+        title: "ORACLE REVEALS...",
+        description: data.message,
+        className: data.type === 'good' 
+          ? "bg-gradient-to-r from-yellow-600 to-amber-700 text-white border-yellow-400 font-black shadow-[0_0_20px_rgba(234,179,8,0.5)]"
+          : data.type === 'bad'
+          ? "bg-gradient-to-r from-red-800 to-red-950 text-white border-red-500 font-black"
+          : "bg-slate-800 text-white border-slate-500"
+      });
+    } catch (err) {
+      toast({ title: "Spirits are quiet", description: "Try again later", variant: "destructive" });
+    } finally {
+      setOracleLoading(false);
+    }
   };
 
   const isWinningCell = (col: number, row: number): boolean => {
@@ -467,12 +497,14 @@ export function SlotMachine({ balance }: { balance: number }) {
     flashScreen('rgba(var(--slot-purple),0.2)');
 
     try {
-      const clearAllTimers = () => {
-        colIntervalsRef.current.forEach(clearInterval);
-        colIntervalsRef.current = [];
-        stopTimeoutsRef.current.forEach(clearTimeout);
-        stopTimeoutsRef.current = [];
-      };
+      const activeBet = bet;
+      const result = await spinMutation.mutateAsync({ slotId: "main", betAmount: activeBet });
+      
+      // Reset Oracle glow after spin starts
+      setOracleActive(false);
+
+      const isNearMiss = result.isNearMiss;
+      const isFakeRepeater = result.isFakeRepeater;
 
       colIntervalsRef.current = [0, 1, 2].map((col) => {
         return setInterval(() => {
@@ -483,11 +515,6 @@ export function SlotMachine({ balance }: { balance: number }) {
           });
         }, 30 + (col * 10));
       });
-
-      const activeBet = bet;
-      const result = await spinMutation.mutateAsync({ slotId: "main", betAmount: activeBet });
-      const isNearMiss = result.isNearMiss;
-      const isFakeRepeater = result.isFakeRepeater;
 
       const reelStopBase = 250;
       const reelStopGap = isNearMiss ? 350 : 180;
@@ -1045,8 +1072,10 @@ export function SlotMachine({ balance }: { balance: number }) {
                 : `linear-gradient(180deg, var(--slot-spin-top) 0%, var(--slot-spin-mid) 25%, var(--slot-spin-low) 60%, var(--slot-spin-bottom) 100%)`,
               boxShadow: isSpinning
                 ? `0 2px 0 var(--slot-purple-darkest), 0 4px 15px rgba(var(--slot-purple-deep),0.3)`
+                : oracleActive
+                ? `0 0 25px rgba(234,179,8,0.8), 0 5px 0 var(--slot-purple-darkest)`
                 : `0 5px 0 var(--slot-purple-darkest), 0 8px 25px rgba(var(--slot-purple-deep),0.5), inset 0 1px 0 rgba(255,255,255,0.2)`,
-              border: `1px solid rgba(var(--slot-gold),0.35)`,
+              border: oracleActive ? `2px solid rgba(234,179,8,1)` : `1px solid rgba(var(--slot-gold),0.35)`,
             }}
           >
             {isSpinning ? (
@@ -1061,8 +1090,9 @@ export function SlotMachine({ balance }: { balance: number }) {
                 <Gift className="w-5 h-5" /> {t.freeButton} ({freeSpins})
               </span>
             ) : (
-              <span className="text-yellow-200 flex items-center gap-2">
-                <Zap className="w-5 h-5" /> {t.spin}
+              <span className={`flex items-center gap-2 ${oracleActive ? "text-yellow-400 scale-110" : "text-yellow-200"}`}>
+                <Zap className={`w-5 h-5 ${oracleActive ? "animate-pulse" : ""}`} /> 
+                {oracleActive ? "POWER SPIN" : t.spin}
               </span>
             )}
           </Button>
@@ -1077,6 +1107,20 @@ export function SlotMachine({ balance }: { balance: number }) {
             }`}
           >
             <RotateCw className={`w-5 h-5 ${autoSpin ? "animate-spin" : ""}`} />
+          </Button>
+
+          <Button
+            onClick={handleConsultOracle}
+            disabled={isSpinning || oracleLoading}
+            data-testid="button-oracle"
+            className={`h-14 w-12 sm:w-14 rounded-xl bg-white/[0.04] text-amber-400/70 hover:bg-white/[0.08] border border-white/[0.06] group transition-all duration-200 ${oracleLoading ? "animate-pulse" : ""}`}
+            title="Consult Oracle"
+          >
+            {oracleLoading ? (
+               <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Wand2 className={`w-5 h-5 group-hover:scale-110 transition-transform ${oracleActive ? "text-yellow-400" : ""}`} />
+            )}
           </Button>
 
           <Button
