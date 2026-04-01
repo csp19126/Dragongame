@@ -33,6 +33,10 @@ export const gameStates = pgTable("game_states", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(), 
   slotId: text("slot_id").notNull(), 
+  // 1. We store the 3 symbols as a string (e.g., "Dragon,Coin,Lotus")
+  lastReels: text("last_reels"), 
+  // 2. We store the Oracle's luck multiplier here
+  activeModifier: integer("active_modifier").default(100), // 100 = 1.0x (using integers for safety)
   lastSpinResult: text("last_spin_result"), 
   freeSpins: integer("free_spins").default(0),
   consecutiveWins: integer("consecutive_wins").default(0),
@@ -108,3 +112,19 @@ export const withdrawals = pgTable("withdrawals", {
 export const insertWithdrawalSchema = createInsertSchema(withdrawals).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertWithdrawal = z.infer<typeof insertWithdrawalSchema>;
 export type Withdrawal = typeof withdrawals.$inferSelect;
+
+// Define the symbols and their "Weights" (Higher weight = appears more often)
+export const SLOT_SYMBOLS = [
+  { id: "dragon", name: "Golden Dragon", value: 500, weight: 2, image: "/assets/dragon.png" },
+  { id: "drum", name: "Bronze Drum", value: 100, weight: 8, image: "/assets/drum.png" },
+  { id: "lotus", name: "Golden Lotus", value: 50, weight: 15, image: "/assets/lotus.png" },
+  { id: "lantern", name: "Jade Lantern", value: 20, weight: 25, image: "/assets/lantern.png" },
+  { id: "coin", name: "Lucky Coin", value: 5, weight: 50, image: "/assets/coin.png" },
+];
+
+// Define the ways to win (House Advantage built-in)
+export const PAYLINES = [
+  [0, 0, 0], // Straight line
+  [0, 1, 0], // Small V
+  [1, 0, 1], // Inverted V
+];
