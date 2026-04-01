@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes } from "../shared/routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { getSessionMiddleware } from "./session";

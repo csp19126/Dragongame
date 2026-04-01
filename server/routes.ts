@@ -1,40 +1,28 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
-import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { SLOT_SYMBOLS, PAYLINES } from "@shared/schema";
+import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
-  // --- HELPER: THE WEIGHTED ENGINE ---
+  // --- ENGINE: WEIGHTED RANDOMNESS ---
   function getWeightedSymbol() {
-    const totalWeight = SLOT_SYMBOLS.reduce((sum, s) => sum + s.weight, 0);
+    const symbols = SLOT_SYMBOLS;
+    const totalWeight = symbols.reduce((sum, s) => sum + s.weight, 0);
     let random = Math.random() * totalWeight;
-    for (const symbol of SLOT_SYMBOLS) {
+    for (const symbol of symbols) {
       if (random < symbol.weight) return symbol;
       random -= symbol.weight;
     }
-    return SLOT_SYMBOLS[SLOT_SYMBOLS.length - 1]; 
+    return symbols[symbols.length - 1]; 
   }
 
-  // Optional AI integration routes
-  if (process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY) {
-    const [{ registerAudioRoutes }, { registerImageRoutes }, { registerChatRoutes }] = await Promise.all([
-      import("./replit_integrations/audio"),
-      import("./replit_integrations/image"),
-      import("./replit_integrations/chat"),
-    ]);
-    registerAudioRoutes(app);
-    registerImageRoutes(app);
-    registerChatRoutes(app);
-  }
-
-  // --- ORACLE ENDPOINT ---
+  // --- API: CONSULT THE ORACLE ---
   app.post("/api/game/oracle", async (req: any, res) => {
     const userId = (req.session as any)?.userId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
@@ -46,30 +34,31 @@ export async function registerRoutes(
     }
   });
 
-  // --- MAIN SPIN ROUTE ---
-  app.post(api.game.spin.path, async (req: any, res) => {
+  // --- API: THE WEIGHTED SPIN ---
+  app.post("/api/game/spin", async (req: any, res) => {
     try {
       const userId = (req.session as any).userId;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-      const input = api.game.spin.input.parse(req.body);
+      const { betAmount, slotId } = req.body;
       let user = await storage.getUser(userId) || await storage.getUserByUsername(userId);
       if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-      let gameState = await storage.getGameState(user.id, input.slotId);
+      let gameState = await storage.getGameState(user.id, slotId || "default");
       if (!gameState) {
-        gameState = await storage.updateGameState(user.id, input.slotId, { freeSpins: 0, activeModifier: 100 });
+        gameState = await storage.updateGameState(user.id, slotId || "default", { freeSpins: 0, activeModifier: 100 });
       }
 
       const isFreeSpin = (gameState?.freeSpins ?? 0) > 0;
       if (!isFreeSpin) {
-        const deducted = await storage.deductBalanceAtomic(user.id, input.betAmount);
+        const deducted = await storage.deductBalanceAtomic(user.id, betAmount);
         if (!deducted) return res.status(400).json({ message: "Insufficient balance" });
         user = deducted;
       }
 
       const modifier = (gameState?.activeModifier ?? 100) / 100;
 
+      // 3x3 Weighted Grid
       const grid: string[][] = [
         [getWeightedSymbol().id, getWeightedSymbol().id, getWeightedSymbol().id],
         [getWeightedSymbol().id, getWeightedSymbol().id, getWeightedSymbol().id],
@@ -79,27 +68,31 @@ export async function registerRoutes(
       let winAmount = 0;
       const winLines: number[] = [];
 
-      PAYLINES.forEach((line, idx) => {
-        const vals = line.map(([col, row]) => (grid[col] && grid[col][row]) ? grid[col][row] : null);
+      PAYLINES.forEach((line: any, idx: number) => {
+        let vals: (string | null)[] = [];
+        if (Array.isArray(line[0])) {
+          vals = (line as [number, number][]).map(([col, row]) => (grid[col] && grid[col][row]) ? grid[col][row] : null);
+        } else {
+          vals = [grid[0][line[0]], grid[1][line[1]], grid[2][line[2]]];
+        }
 
         if (vals[0] && vals[0] === vals[1] && vals[1] === vals[2]) {
           const symbol = SLOT_SYMBOLS.find(s => s.id === vals[0]);
           if (symbol) {
-            const baseWin = symbol.value * (input.betAmount / 1000);
+            const baseWin = symbol.value * (betAmount / 1000);
             winAmount += Math.floor(baseWin * modifier);
             winLines.push(idx);
           }
         }
       });
 
-      const newFreeSpins = (gameState?.freeSpins ?? 0) - (isFreeSpin ? 1 : 0);
-      const newConsecutiveWins = winAmount > 0 ? (gameState?.consecutiveWins ?? 0) + 1 : 0;
-      
-      await storage.updateGameState(user.id, input.slotId, { 
+      const nextWins = winAmount > 0 ? (gameState?.consecutiveWins ?? 0) + 1 : 0;
+
+      await storage.updateGameState(user.id, slotId || "default", { 
         lastReels: grid.flat().join(","),
         activeModifier: 100,
-        freeSpins: newFreeSpins,
-        consecutiveWins: newConsecutiveWins
+        freeSpins: (gameState?.freeSpins ?? 0) - (isFreeSpin ? 1 : 0),
+        consecutiveWins: nextWins
       });
 
       if (winAmount > 0) {
@@ -107,90 +100,33 @@ export async function registerRoutes(
       }
 
       const updatedUser = await storage.updateStreak(
-        user.id, 
-        newConsecutiveWins, 
-        user.maxStreak ?? 0, 
-        (user.totalWins ?? 0) + (winAmount > 0 ? 1 : 0), 
-        Math.max(user.maxWin ?? 0, winAmount)
+        user.id, nextWins, user.maxStreak ?? 0, (user.totalWins ?? 0) + (winAmount > 0 ? 1 : 0), Math.max(user.maxWin ?? 0, winAmount)
       );
 
       res.json({
-        grid,
-        winLines,
-        winAmount,
+        grid, winLines, winAmount,
         newBalance: updatedUser.balance,
         oracleApplied: modifier !== 1.0,
-        streak: newConsecutiveWins,
+        streak: nextWins,
         gamesPlayed: updatedUser.gamesPlayed
       });
     } catch (err) {
-      console.error("Spin error:", err);
       res.status(500).json({ message: "Spin failed" });
     }
   });
 
-  // --- ADMIN & AUTH ---
-  const ADMIN_USER_ID = "55109529";
-  const isAdmin = (req: any, res: any, next: any) => {
-    const uId = (req.session as any)?.userId;
-    if (!uId || uId !== ADMIN_USER_ID) return res.status(403).json({ message: "Admin access only" });
-    next();
-  };
-
-  app.post("/api/admin/gift-balance", async (req, res) => {
-    const { userId, amount, adminKey } = req.body;
-    if (adminKey !== (process.env.ADMIN_KEY || "dragon888admin")) return res.status(403).json({ message: "Forbidden" });
-    const user = await storage.getUser(userId) || await storage.getUserByUsername(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    await storage.updateBalance(user.id, (user.balance ?? 0) + amount);
-    res.json({ success: true });
-  });
-
-  app.post(api.auth.register.path, async (req, res) => {
-    const input = api.auth.register.input.parse(req.body);
-    const hashedPassword = await bcrypt.hash(input.password, 10);
-    const user = await storage.createUser({ ...input, password: hashedPassword, email: `${input.username}@example.com` });
-    (req.session as any).userId = user.id;
-    const { password: _, ...safeUser } = user;
-    res.status(201).json(safeUser);
-  });
-
-  app.post(api.auth.login.path, async (req, res) => {
-    const input = api.auth.login.input.parse(req.body);
-    const user = await storage.getUserByUsername(input.username);
-    if (!user || !(await bcrypt.compare(input.password, user.password))) return res.status(401).json({ message: "Invalid credentials" });
-    (req.session as any).userId = user.id;
-    const { password: _, ...safeUser } = user;
-    res.status(200).json(safeUser);
-  });
-
-  app.post("/api/logout", (req: any, res) => {
-    req.session?.destroy(() => {
-      res.clearCookie("connect.sid");
-      res.status(200).json({ message: "Logged out" });
-    });
-  });
-
-  app.get(api.game.state.path, async (req: any, res) => {
-    const userId = (req.session as any).userId;
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    const user = await storage.getUser(userId) || await storage.getUserByUsername(userId);
-    if (!user) return res.status(401).json({ message: "Unauthorized" });
-    res.json({ balance: user.balance, streak: user.streak, totalWins: user.totalWins });
-  });
-
-  app.get(api.game.leaderboard.path, async (req, res) => {
+  // --- API: LEADERBOARD & AUTH ---
+  app.get("/api/game/leaderboard", async (req, res) => {
     const leaderboardUsers = await storage.getLeaderboard();
-    res.json(leaderboardUsers.map((u, idx) => ({ rank: idx + 1, username: u.username, balance: u.balance })));
+    res.json(leaderboardUsers.map((u: any, idx: number) => ({ rank: idx + 1, username: u.username, balance: u.balance })));
   });
 
-  app.post("/api/deposits/gift-card", async (req: any, res) => {
-    const userId = (req.session as any)?.userId;
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    const { code } = req.body;
-    const result = await storage.redeemGiftCardAtomic(code.toUpperCase(), userId);
-    if (!result) return res.status(400).json({ message: "Invalid code" });
-    res.json(result);
+  app.post("/api/auth/login", async (req, res) => {
+    const { username, password } = req.body;
+    const user = await storage.getUserByUsername(username);
+    if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ message: "Invalid" });
+    (req.session as any).userId = user.id;
+    res.json(user);
   });
 
   return httpServer;
