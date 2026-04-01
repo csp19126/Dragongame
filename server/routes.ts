@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema";
+import { SLOT_SYMBOLS, PAYLINES } from "../../shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
