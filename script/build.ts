@@ -30,7 +30,6 @@ const allowlist = [
   "xlsx",
   "zod",
   "zod-validation-error",
-  "shared",
 ];
 
 async function buildAll() {
@@ -46,6 +45,7 @@ async function buildAll() {
     ...Object.keys(pkg.devDependencies || {}),
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
+  const externalFiltered = externals.filter((dep) => !dep.startsWith("."));
 
   await esbuild({
     entryPoints: ["server/index.ts"],
@@ -57,7 +57,7 @@ async function buildAll() {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
-    external: externals,
+    external: externalFiltered,
     logLevel: "info",
   });
 }
