@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 // FIXED PATH: Moving from server to shared is only one folder up (..)
-import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema";
+import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema.js"; // Added .js for ESM compatibility
 
 export async function registerRoutes(
   httpServer: Server,
@@ -37,8 +37,11 @@ export async function registerRoutes(
       });
 
       (req.session as any).userId = user.id;
-      const { password: _, ...safeUser } = user;
-      res.status(201).json(safeUser);
+      // CRITICAL: Save session before responding to avoid JSON.parse error
+      req.session.save(() => {
+        const { password: _, ...safeUser } = user;
+        res.status(201).json(safeUser);
+      });
     } catch (err) {
       res.status(500).json({ message: "Reg Error" });
     }
@@ -54,8 +57,11 @@ export async function registerRoutes(
       if (!match) return res.status(401).json({ message: "Invalid" });
 
       (req.session as any).userId = user.id;
-      const { password: _, ...safeUser } = user;
-      res.json(safeUser);
+      // CRITICAL: Save session before responding to avoid JSON.parse error
+      req.session.save(() => {
+        const { password: _, ...safeUser } = user;
+        res.json(safeUser);
+      });
     } catch (err) {
       res.status(500).json({ message: "Login Error" });
     }

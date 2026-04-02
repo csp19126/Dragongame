@@ -1,12 +1,12 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
+import { registerRoutes } from "./routes.js"; // Added .js
+import { serveStatic } from "./static.js"; // Added .js
 import { createServer } from "http";
-import { getSessionMiddleware } from "./session";
+import { getSessionMiddleware } from "./session.js"; // Added .js
 
 const app = express();
-app.set('trust proxy', 1); // CRITICAL FOR RAILWAY
+app.set('trust proxy', 1); 
 
 const httpServer = createServer(app);
 
@@ -14,14 +14,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(getSessionMiddleware());
 
+// Global Error Handler to catch "Line 1" HTML errors
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(err);
+  res.status(500).json({ message: "Internal Server Error" });
+});
+
 (async () => {
   await registerRoutes(httpServer, app);
-  const { storage } = await import("./storage");
   
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
-    const { setupVite } = await import("./vite");
+    const { setupVite } = await import("./vite.js");
     await setupVite(httpServer, app);
   }
 
