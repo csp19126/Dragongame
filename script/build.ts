@@ -46,19 +46,19 @@ async function buildAll() {
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
-  await esbuild({
-    entryPoints: ["server/index.ts"],
-    platform: "node",
-    bundle: true,
-    format: "cjs",
-    outfile: "dist/index.cjs",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
-    minify: true,
-    external: externals,
-    logLevel: "info",
-  });
+// script/build.ts
+await esbuild.build({
+  entryPoints: ["server/index.ts"],
+  outfile: "dist/index.js",
+  bundle: true,
+  platform: "node",
+  target: "node20",
+  // THIS IS THE FIX: Only mark actual npm packages as external
+  external: Object.keys(pkg.dependencies || {}).filter(
+    (dep) => !dep.startsWith("./") && !dep.startsWith("../")
+  ),
+  format: "cjs",
+});
 }
 
 buildAll().catch((err) => {
