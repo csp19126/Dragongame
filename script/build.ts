@@ -2,7 +2,6 @@ import { build as esbuildBuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
 
-// These packages must be kept outside the bundle to avoid "Could not resolve" errors
 const forcedExternal = [
   "esbuild",
   "vite",
@@ -49,8 +48,6 @@ async function buildAll() {
   console.log("⚙️ Building server (esbuild)...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   
-  // Logic: Only bundle local files and things in the allowlist.
-  // Everything else in node_modules, plus our forcedExternals, stays out.
   const externals = [
     ...Object.keys(pkg.dependencies || {}),
     ...Object.keys(pkg.devDependencies || {}),
@@ -66,16 +63,15 @@ async function buildAll() {
     platform: "node",
     target: "node20",
     external: externals,
-    format: "cjs",
-    // This stops the "import.meta" warnings during server build
-    define: {
-      "import.meta.dirname": "__dirname",
-      "import.meta.url": "import.meta.url"
+    format: "esm", // CHANGED FROM 'cjs' TO 'esm'
+    banner: {
+      // This is necessary to make __dirname work in ESM mode
+      js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
     },
     sourcemap: true,
   });
   
-  console.log("✅ Build complete: dist/index.js created.");
+  console.log("✅ Build complete: dist/index.js created in ESM format.");
 }
 
 buildAll().catch((err) => {
