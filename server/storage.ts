@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, gameStates, achievements, deposits, giftCards, withdrawals, type InsertUser, type User, type InsertGameState, type GameState, type Achievement, type Deposit, type GiftCard, type Withdrawal } from "@shared/schema";
+import { users, gameStates, achievements, deposits, giftCards, withdrawals, type InsertUser, type User, type InsertGameState, type GameState, type Achievement, type Deposit, type GiftCard, type Withdrawal } from "../../shared/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
