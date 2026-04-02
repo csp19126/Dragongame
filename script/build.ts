@@ -2,8 +2,15 @@ import { build as esbuildBuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
 
-// server deps to bundle to reduce openat(2) syscalls
-// which helps cold start times
+// These packages must be kept outside the bundle to avoid "Could not resolve" errors
+const forcedExternal = [
+  "esbuild",
+  "vite",
+  "@babel/core",
+  "@babel/preset-typescript",
+  "lightningcss"
+];
+
 const allowlist = [
   "@google/generative-ai",
   "axios",
@@ -33,20 +40,22 @@ const allowlist = [
 ];
 
 async function buildAll() {
-  // 1. Clean old build
+  console.log("🧹 Cleaning dist...");
   await rm("dist", { recursive: true, force: true });
 
-  // 2. Build Frontend (Vite)
-  console.log("building client...");
+  console.log("📦 Building client (Vite)...");
   await viteBuild();
 
-  // 3. Build Backend (esbuild)
-  console.log("building server...");
+  console.log("⚙️ Building server (esbuild)...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   
-  // Logic: Bundle everything in the allowlist OR anything that is a local path
-  // Mark as external ONLY if it's in the package.json and NOT in our allowlist
-  const externals = Object.keys(pkg.dependencies || {}).filter(
+  // Logic: Only bundle local files and things in the allowlist.
+  // Everything else in node_modules, plus our forcedExternals, stays out.
+  const externals = [
+    ...Object.keys(pkg.dependencies || {}),
+    ...Object.keys(pkg.devDependencies || {}),
+    ...forcedExternal
+  ].filter(
     (dep) => !allowlist.includes(dep) && !dep.startsWith("./") && !dep.startsWith("../")
   );
 
@@ -58,13 +67,18 @@ async function buildAll() {
     target: "node20",
     external: externals,
     format: "cjs",
+    // This stops the "import.meta" warnings during server build
+    define: {
+      "import.meta.dirname": "__dirname",
+      "import.meta.url": "import.meta.url"
+    },
     sourcemap: true,
   });
   
-  console.log("✓ Build complete: dist/index.js created.");
+  console.log("✅ Build complete: dist/index.js created.");
 }
 
 buildAll().catch((err) => {
-  console.error("Build failed:", err);
+  console.error("❌ Build failed:", err);
   process.exit(1);
 });
