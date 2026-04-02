@@ -63,15 +63,22 @@ async function buildAll() {
     platform: "node",
     target: "node20",
     external: externals,
-    format: "esm", // CHANGED FROM 'cjs' TO 'esm'
+    format: "esm",
+    // THE CRITICAL FIX: Manually defining __dirname and require for ESM
     banner: {
-      // This is necessary to make __dirname work in ESM mode
-      js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+      js: `
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+      `,
     },
     sourcemap: true,
   });
   
-  console.log("✅ Build complete: dist/index.js created in ESM format.");
+  console.log("✅ Build complete: dist/index.js created with ESM compatibility.");
 }
 
 buildAll().catch((err) => {
