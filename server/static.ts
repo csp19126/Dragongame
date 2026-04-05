@@ -13,7 +13,7 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("/{*path}", (_req, res) => {
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api")) return next(); // Don't serve HTML for API calls
     res.sendFile(path.resolve(distPath, "index.html"));
   });
-}
