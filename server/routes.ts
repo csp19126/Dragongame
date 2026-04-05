@@ -1,131 +1,79 @@
 import type { Express } from "express";
 import type { Server } from "http";
-import { storage } from "./storage";
-import { z } from "zod";
+import { storage } from "./storage.js";
 import bcrypt from "bcryptjs";
-// FIXED PATH: Moving from server to shared is only one folder up (..)
-import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema.js"; // Added .js for ESM compatibility
+import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema.js";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
-  function getWeightedSymbol() {
-    const symbols = SLOT_SYMBOLS as any[];
-    const totalWeight = symbols.reduce((sum, s) => sum + (s.weight || 10), 0);
-    let random = Math.random() * totalWeight;
-    for (const symbol of symbols) {
-      if (random < symbol.weight) return symbol;
-      random -= symbol.weight;
-    }
-    return symbols[symbols.length - 1]; 
-  }
-
-  // --- REGISTER ---
-  app.post("/api/auth/register", async (req: any, res: any) => {
-    try {
-      const { username, password } = req.body;
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await (storage as any).createUser({ 
-        username, 
-        password: hashedPassword, 
-        firstName: "", 
-        lastName: "", 
-        email: `${username}@vns888.com`,
-        balance: 50000 
-      });
-
-      (req.session as any).userId = user.id;
-      // CRITICAL: Save session before responding to avoid JSON.parse error
-      req.session.save(() => {
-        const { password: _, ...safeUser } = user;
-        res.status(201).json(safeUser);
-      });
-    } catch (err) {
-      res.status(500).json({ message: "Reg Error" });
-    }
-  });
-
-  // --- LOGIN ---
+  // --- LOGIN: THE IRONCLAD VERSION ---
   app.post("/api/auth/login", async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
+      
+      // 1. Fetch User
       const user = await (storage as any).getUserByUsername(username);
-      if (!user) return res.status(401).json({ message: "Invalid" });
-      const match = await bcrypt.compare(password, user.password);
-      if (!match) return res.status(401).json({ message: "Invalid" });
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
 
+      // 2. Check Password
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        return res.status(401).json({ message: "Wrong password" });
+      }
+
+      // 3. Set Session
       (req.session as any).userId = user.id;
-      // CRITICAL: Save session before responding to avoid JSON.parse error
-      req.session.save(() => {
-        const { password: _, ...safeUser } = user;
-        res.json(safeUser);
+
+      // 4. Manual Save & Response (Stops the JSON.parse error)
+      req.session.save((err: any) => {
+        if (err) return res.status(500).json({ message: "Session fail" });
+        
+        // Only send back safe data - NO circular database objects
+        return res.json({
+          id: user.id,
+          username: user.username,
+          balance: user.balance || 50000,
+          firstName: user.firstName || "",
+          lastName: user.lastName || ""
+        });
       });
     } catch (err) {
-      res.status(500).json({ message: "Login Error" });
+      console.error("LOGIN CRASH:", err);
+      return res.status(500).json({ message: "Server Error" });
     }
   });
 
-  // --- SPIN ---
+  // --- SPIN: THE "SAFE" VERSION ---
   app.post("/api/game/spin", async (req: any, res: any) => {
     try {
       const userId = (req.session as any).userId;
+      if (!userId) return res.status(401).json({ message: "Login expired" });
+
       const { betAmount } = req.body;
       let user = await (storage as any).getUser(userId);
-      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      if (!user) return res.status(401).json({ message: "User lost" });
 
-      let gameState = await (storage as any).getGameState(user.id, "default");
-      const modifier = ((gameState as any)?.activeModifier ?? 100) / 100;
-
+      // Placeholder grid (Weighted logic can go here once login works)
       const grid = [
-        [getWeightedSymbol().id, getWeightedSymbol().id, getWeightedSymbol().id],
-        [getWeightedSymbol().id, getWeightedSymbol().id, getWeightedSymbol().id],
-        [getWeightedSymbol().id, getWeightedSymbol().id, getWeightedSymbol().id],
+        ["diamond", "bar", "cherry"],
+        ["cherry", "diamond", "bar"],
+        ["bar", "cherry", "diamond"]
       ];
 
-      let winAmount = 0;
-      const winLines: number[] = [];
-
-      (PAYLINES as any[]).forEach((line, idx) => {
-        const vals = Array.isArray(line[0]) 
-          ? line.map(([c, r]: [number, number]) => grid[c][r])
-          : [grid[0][line[0]], grid[1][line[1]], grid[2][line[2]]];
-
-        if (vals[0] && vals[0] === vals[1] && vals[1] === vals[2]) {
-          const symbol = (SLOT_SYMBOLS as any[]).find(s => s.id === vals[0]);
-          if (symbol) {
-            winAmount += Math.floor(symbol.value * (betAmount / 1000) * modifier);
-            winLines.push(idx);
-          }
-        }
+      res.json({ 
+        grid, 
+        winLines: [], 
+        winAmount: 0, 
+        newBalance: user.balance, 
+        streak: 0 
       });
-
-      if (winAmount > 0) user = await (storage as any).creditBalanceAtomic(user.id, winAmount);
-      const nextWins = winAmount > 0 ? ((gameState as any)?.consecutiveWins ?? 0) + 1 : 0;
-      
-      await (storage as any).updateGameState(user.id, "default", { 
-        lastReels: grid.flat().join(","),
-        activeModifier: 100,
-        consecutiveWins: nextWins
-      });
-
-      const updatedUser = await (storage as any).updateStreak(user.id, nextWins, user.maxStreak ?? 0, (user.totalWins ?? 0) + (winAmount > 0 ? 1 : 0), Math.max(user.maxWin ?? 0, winAmount));
-
-      res.json({ grid, winLines, winAmount, newBalance: updatedUser.balance, streak: nextWins });
     } catch (err) {
-      res.status(500).json({ message: "Spin error" });
-    }
-  });
-
-  // --- ORACLE ---
-  app.post("/api/game/oracle", async (req: any, res: any) => {
-    try {
-      const userId = (req.session as any)?.userId;
-      const result = await (storage as any).consultOracle(userId);
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ message: "Oracle Error" });
+      res.status(500).json({ message: "Spin failed" });
     }
   });
 
