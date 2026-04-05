@@ -17,3 +17,4 @@ export function serveStatic(app: Express) {
     if (req.path.startsWith("/api")) return next(); // Don't serve HTML for API calls
     res.sendFile(path.resolve(distPath, "index.html"));
   });
+}
