@@ -30,7 +30,8 @@ export async function registerRoutes(
       if (!match) return res.status(401).json({ message: "Wrong password" });
 
       req.session.userId = user.id;
-      req.session.save(() => {
+      req.session.save((err: any) => {
+        if (err) return res.status(500).json({ message: "Session Save Error" });
         const { password: _, ...safeUser } = user;
         res.json(safeUser);
       });
@@ -61,21 +62,17 @@ export async function registerRoutes(
     }
   });
 
-  // --- GAME: SPIN (STRENGTHENED) ---
+  // --- GAME: SPIN (STRENGTHENED & SYNCED) ---
   app.post("/api/game/spin", async (req: any, res: any) => {
     try {
-      // We use req.session.userId because that's what we set during Login
       const userId = req.session.userId; 
-      
       if (!userId) {
-         console.log("No User ID found in session!");
-         return res.status(401).json({ message: "Unauthorized" });
+         return res.status(401).json({ message: "Unauthorized - No Session Found" });
       }
-      // ... rest of the spin code
 
       const { betAmount } = req.body;
       let user = await (storage as any).getUser(userId);
-      if (!user || user.balance < betAmount) {
+      if (!user || (user.balance ?? 0) < betAmount) {
         return res.status(400).json({ message: "Insufficient funds or User not found" });
       }
 
@@ -102,12 +99,21 @@ export async function registerRoutes(
         }
       });
 
+      // 1. Update the balance in the DB
       const updatedUser = await (storage as any).creditBalanceAtomic(user.id, winAmount - betAmount);
+      
+      // 2. Reset the Oracle modifier
       await (storage as any).updateGameState(user.id, "default", { activeModifier: 100 });
 
-      // CRITICAL FIX: FORCE SESSION SAVE BEFORE SENDING DATA
+      // 3. MANDATORY: Touch the session and save BEFORE sending JSON
+      req.session.userId = userId; 
       req.session.save((err: any) => {
-        if (err) return res.status(500).json({ message: "Session sync failed" });
+        if (err) {
+          console.error("SESSION SYNC FAILED:", err);
+          return res.status(500).json({ message: "Session sync failed" });
+        }
+        
+        // ONLY respond once the session table is updated
         res.json({ 
           grid, 
           winLines, 

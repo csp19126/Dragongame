@@ -9,11 +9,12 @@ export function getSessionMiddleware() {
     store: new PostgresStore({
       pool: pool,
       tableName: "session",
-      createTableIfMissing: false // <--- CHANGED TO FALSE
+      createTableIfMissing: false,
+      pruneSessionInterval: 60 * 15, // Only check for old sessions every 15 mins
     }),
     name: "dragon_session",
     secret: "dragon_gold_888_secret", 
-    resave: false,
+    resave: true,                // Force resave to keep it alive during DB writes
     saveUninitialized: false,
     proxy: true,
     cookie: {
