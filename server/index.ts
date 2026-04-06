@@ -6,10 +6,7 @@ import { createServer } from "http";
 import { getSessionMiddleware } from "./session.js";
 
 const app = express();
-
-// --- RAILWAY CONFIGURATION ---
-// Tells Express to trust the Railway proxy for secure cookies
-app.set('trust proxy', 1); 
+app.set("trust proxy", 1); // CRITICAL: Tells Express to trust the Railway headers
 
 // Standard middleware for reading JSON data from the Login/Spin buttons
 app.use(express.json());

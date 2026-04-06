@@ -64,8 +64,14 @@ export async function registerRoutes(
   // --- GAME: SPIN (STRENGTHENED) ---
   app.post("/api/game/spin", async (req: any, res: any) => {
     try {
-      const userId = req.session.userId;
-      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      // We use req.session.userId because that's what we set during Login
+      const userId = req.session.userId; 
+      
+      if (!userId) {
+         console.log("No User ID found in session!");
+         return res.status(401).json({ message: "Unauthorized" });
+      }
+      // ... rest of the spin code
 
       const { betAmount } = req.body;
       let user = await (storage as any).getUser(userId);
