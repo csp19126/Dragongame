@@ -43,11 +43,13 @@ export async function registerRoutes(
     }
   });
 
-  // --- AUTH: LOGIN ---
-  app.post("/api/auth/login", async (req, res) => {
+// --- AUTH: LOGIN ---
+  // We use an array of paths so BOTH work
+  app.post(["/api/auth/login", "/api/login"], async (req, res) => {
     try {
       const { username, password } = req.body;
       const user = await (storage as any).getUserByUsername(username);
+      
       if (!user) return res.status(401).json({ message: "User not found" });
       
       const match = await bcrypt.compare(password, user.password);
@@ -60,6 +62,28 @@ export async function registerRoutes(
       });
     } catch (err) {
       res.status(500).json({ message: "Login Error" });
+    }
+  });
+
+  // --- AUTH: REGISTER ---
+  app.post(["/api/auth/register", "/api/register"], async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      const existing = await (storage as any).getUserByUsername(username);
+      if (existing) return res.status(400).json({ message: "Username taken" });
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await (storage as any).createUser({
+        username,
+        password: hashedPassword,
+        balance: 50000,
+        isAdmin: false
+      });
+
+      (req.session as any).userId = user.id;
+      req.session.save(() => res.status(201).json(user));
+    } catch (err) {
+      res.status(500).json({ message: "Registration failed" });
     }
   });
 
