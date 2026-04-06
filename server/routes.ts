@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import type { Server } from "http";
-import { storage } from "./storage.js";
+import { storage } from "./storage.js"; // <--- Added .js here
 import bcrypt from "bcryptjs";
-import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema.js";
+import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema.js"; // <--- Added .js here
 
 export async function registerRoutes(
   httpServer: Server,

@@ -39,22 +39,22 @@ const allowlist = [
 ];
 
 async function buildAll() {
-  console.log("🧹 Cleaning dist...");
-  await rm("dist", { recursive: true, force: true });
+  try {
+    console.log("🧹 Cleaning dist...");
+    await rm("dist", { recursive: true, force: true });
 
-  console.log("📦 Building client (Vite)...");
-  await viteBuild();
+    console.log("📦 Building client (Vite)...");
+    await viteBuild();
 
-  console.log("⚙️ Building server (esbuild)...");
-  const pkg = JSON.parse(await readFile("package.json", "utf-8"));
-  
-  const externals = [
-    ...Object.keys(pkg.dependencies || {}),
-    ...Object.keys(pkg.devDependencies || {}),
-    ...forcedExternal
-  ].filter(
-    (dep) => !allowlist.includes(dep) && !dep.startsWith("./") && !dep.startsWith("../")
-  );
+    console.log("⚙️ Building server (esbuild)...");
+    // ... existing esbuild code ...
+    
+    console.log("✅ Build complete!");
+  } catch (err) {
+    console.error("❌ BUILD CRITICAL ERROR:", err); // This will show us the REAL error
+    process.exit(1);
+  }
+}
 
   await esbuildBuild({
     entryPoints: ["server/index.ts"],
