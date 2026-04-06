@@ -1,23 +1,26 @@
 import session from "express-session";
-import MemoryStore from "memorystore";
+import pgSession from "connect-pg-simple";
+import { pool } from "./db.js";
 
-const SessionStore = MemoryStore(session);
+const PostgresStore = pgSession(session);
 
 export function getSessionMiddleware() {
   return session({
+    store: new PostgresStore({
+      pool: pool,                // Using the pool from your db.ts
+      tableName: "session",      // Database table for logins
+      createTableIfMissing: true // Automatically creates the table
+    }),
     name: "dragon_session",
-    secret: "dragon_gold_888", 
-    resave: true,              // Force the session to stay active during DB writes
+    secret: "dragon_gold_888",
+    resave: false,               
     saveUninitialized: false,
-    proxy: true,               // Required for Railway's networking
+    proxy: true,                 // Essential for Railway/Cloud hosting
     cookie: {
-      maxAge: 24 * 60 * 60 * 1000,
-      secure: false,           // Set to true only if you have forced SSL
+      maxAge: 30 * 24 * 60 * 60 * 1000, // Stay logged in for 30 days
+      secure: false,             
       sameSite: "lax",
       httpOnly: true,
     },
-    store: new SessionStore({
-      checkPeriod: 86400000
-    }),
   });
 }
