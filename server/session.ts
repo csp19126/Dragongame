@@ -1,4 +1,3 @@
-// server/session.ts
 import session from "express-session";
 import pgSession from "connect-pg-simple";
 import { pool } from "./db.js";
@@ -13,16 +12,16 @@ export function getSessionMiddleware() {
       createTableIfMissing: true
     }),
     name: "dragon_session",
-    secret: "dragon_gold_888_secret", // Hardcoded for consistency
-    resave: false,
-    saveUninitialized: false,
+    secret: "dragon_gold_888_secret", 
+    resave: true,                // Force save to ensure it writes to DB
+    saveUninitialized: true,     // Create a session even before login to test connectivity
     proxy: true,
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      secure: false, // Must be false for Railway's default setup
-      sameSite: "lax",
-      httpOnly: true,
-      path: "/" // Ensures the cookie is sent for all /api calls
+      secure: false,             // MUST be false for non-HTTPS or proxy setups
+      sameSite: "lax",           // Required for subdomains
+      httpOnly: false,           // Set to false temporarily so we can "see" it in DevTools
+      path: "/" 
     },
   });
 }
