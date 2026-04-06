@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, json } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   streak: integer("streak").default(0).notNull(),
   maxStreak: integer("max_streak").default(0).notNull(),
   gamesPlayed: integer("games_played").default(0).notNull(),
+  isAdmin: boolean("is_admin").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -112,6 +113,12 @@ export const withdrawals = pgTable("withdrawals", {
 export const insertWithdrawalSchema = createInsertSchema(withdrawals).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertWithdrawal = z.infer<typeof insertWithdrawalSchema>;
 export type Withdrawal = typeof withdrawals.$inferSelect;
+
+export const sessions = pgTable("session", {
+  sid: varchar("sid").primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire", { precision: 6 }).notNull(),
+});
 
 // Define the symbols and their "Weights" (Higher weight = appears more often)
 export const SLOT_SYMBOLS = [
