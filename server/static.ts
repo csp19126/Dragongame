@@ -8,9 +8,9 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // The fix is right here: changing '*' to '(.*)' 
-  // to satisfy the new Express 5.0 path requirements.
-  app.get("(.*)", (req, res, next) => {
+  // This "index" name inside the parentheses gives the wildcard a label
+  // which prevents the PathError crash in Express 5.
+  app.get("/:index*", (req, res, next) => {
     if (req.path.startsWith("/api")) {
       return next();
     }
