@@ -47,41 +47,42 @@ async function buildAll() {
     await viteBuild();
 
     console.log("⚙️ Building server (esbuild)...");
-    // ... existing esbuild code ...
+    const pkg = JSON.parse(await readFile("package.json", "utf-8"));
     
-    console.log("✅ Build complete!");
-  } catch (err) {
-    console.error("❌ BUILD CRITICAL ERROR:", err); // This will show us the REAL error
-    process.exit(1);
-  }
-}
+    const externals = [
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.devDependencies || {}),
+      ...forcedExternal
+    ].filter(
+      (dep) => !allowlist.includes(dep) && !dep.startsWith("./") && !dep.startsWith("../")
+    );
 
-  await esbuildBuild({
-    entryPoints: ["server/index.ts"],
-    outfile: "dist/index.js",
-    bundle: true,
-    platform: "node",
-    target: "node20",
-    external: externals,
-    format: "esm",
-    // THE CRITICAL FIX: Manually defining __dirname and require for ESM
-    banner: {
-      js: `
+    await esbuildBuild({
+      entryPoints: ["server/index.ts"],
+      outfile: "dist/index.js",
+      bundle: true,
+      platform: "node",
+      target: "node20",
+      external: externals,
+      format: "esm",
+      banner: {
+        js: `
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-      `,
-    },
-    sourcemap: true,
-  });
-  
-  console.log("✅ Build complete: dist/index.js created with ESM compatibility.");
+        `,
+      },
+      sourcemap: true,
+    });
+    
+    console.log("✅ Build complete: dist/index.js created.");
+  } catch (err) {
+    console.error("❌ BUILD CRITICAL ERROR:", err);
+    process.exit(1);
+  }
 }
 
-buildAll().catch((err) => {
-  console.error("❌ Build failed:", err);
-  process.exit(1);
-});
+buildAll();
