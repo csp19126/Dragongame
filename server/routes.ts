@@ -1,15 +1,14 @@
 import type { Express } from "express";
 import type { Server } from "http";
-import { storage } from "./storage.js"; // <--- Added .js here
+import { storage } from "./storage.js";
 import bcrypt from "bcryptjs";
-import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema.js"; // <--- Added .js here
+import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema.js";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
 
-  // --- HELPER: WEIGHTED SYMBOLS (The "Soul" of the math) ---
   function getWeightedSymbol() {
     const symbols = SLOT_SYMBOLS as any[];
     const totalWeight = symbols.reduce((sum, s) => sum + (s.weight || 10), 0);
@@ -21,41 +20,16 @@ export async function registerRoutes(
     return symbols[symbols.length - 1];
   }
 
-  // --- AUTH: REGISTER (The missing piece) ---
-  app.post("/api/auth/register", async (req, res) => {
-    try {
-      const { username, password } = req.body;
-      const existing = await (storage as any).getUserByUsername(username);
-      if (existing) return res.status(400).json({ message: "Username taken" });
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await (storage as any).createUser({
-        username,
-        password: hashedPassword,
-        balance: 50000,
-        isAdmin: false
-      });
-
-      (req.session as any).userId = user.id;
-      req.session.save(() => res.status(201).json(user));
-    } catch (err) {
-      res.status(500).json({ message: "Registration failed" });
-    }
-  });
-
-// --- AUTH: LOGIN ---
-  // We use an array of paths so BOTH work
-  app.post(["/api/auth/login", "/api/login"], async (req, res) => {
+  // --- AUTH: LOGIN ---
+  app.post(["/api/auth/login", "/api/login"], async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
       const user = await (storage as any).getUserByUsername(username);
-      
       if (!user) return res.status(401).json({ message: "User not found" });
-      
       const match = await bcrypt.compare(password, user.password);
       if (!match) return res.status(401).json({ message: "Wrong password" });
 
-      (req.session as any).userId = user.id;
+      req.session.userId = user.id;
       req.session.save(() => {
         const { password: _, ...safeUser } = user;
         res.json(safeUser);
@@ -66,7 +40,7 @@ export async function registerRoutes(
   });
 
   // --- AUTH: REGISTER ---
-  app.post(["/api/auth/register", "/api/register"], async (req, res) => {
+  app.post(["/api/auth/register", "/api/register"], async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
       const existing = await (storage as any).getUserByUsername(username);
@@ -80,22 +54,24 @@ export async function registerRoutes(
         isAdmin: false
       });
 
-      (req.session as any).userId = user.id;
+      req.session.userId = user.id;
       req.session.save(() => res.status(201).json(user));
     } catch (err) {
       res.status(500).json({ message: "Registration failed" });
     }
   });
 
-  // --- GAME: SPIN ---
-  app.post("/api/game/spin", async (req, res) => {
+  // --- GAME: SPIN (STRENGTHENED) ---
+  app.post("/api/game/spin", async (req: any, res: any) => {
     try {
-      const userId = (req.session as any).userId;
+      const userId = req.session.userId;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
       const { betAmount } = req.body;
       let user = await (storage as any).getUser(userId);
-      if (user.balance < betAmount) return res.status(400).json({ message: "Insufficient funds" });
+      if (!user || user.balance < betAmount) {
+        return res.status(400).json({ message: "Insufficient funds or User not found" });
+      }
 
       let gameState = await (storage as any).getGameState(user.id, "default");
       const modifier = ((gameState as any)?.activeModifier ?? 100) / 100;
@@ -120,42 +96,43 @@ export async function registerRoutes(
         }
       });
 
-      // Deduct bet and add win
       const updatedUser = await (storage as any).creditBalanceAtomic(user.id, winAmount - betAmount);
-      
-      // Reset Oracle after use
       await (storage as any).updateGameState(user.id, "default", { activeModifier: 100 });
 
-      res.json({ 
-        grid, 
-        winLines, 
-        winAmount, 
-        newBalance: updatedUser.balance,
-        streak: (gameState as any)?.consecutiveWins || 0 
+      // CRITICAL FIX: FORCE SESSION SAVE BEFORE SENDING DATA
+      req.session.save((err: any) => {
+        if (err) return res.status(500).json({ message: "Session sync failed" });
+        res.json({ 
+          grid, 
+          winLines, 
+          winAmount, 
+          newBalance: updatedUser.balance,
+          streak: (gameState as any)?.consecutiveWins || 0 
+        });
       });
     } catch (err) {
+      console.error("SPIN ERROR:", err);
       res.status(500).json({ message: "Spin Error" });
     }
   });
 
   // --- GAME: ORACLE ---
-  app.post("/api/game/oracle", async (req, res) => {
+  app.post("/api/game/oracle", async (req: any, res: any) => {
     try {
-      const userId = (req.session as any).userId;
+      const userId = req.session.userId;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
       
-      await (storage as any).updateGameState(userId, "default", {
-        activeModifier: 250 // 2.5x Luck!
+      await (storage as any).updateGameState(userId, "default", { activeModifier: 250 });
+      req.session.save(() => {
+        res.json({ message: "The Dragon grants you 2.5x Luck!", active: true });
       });
-
-      res.json({ message: "The Dragon grants you 2.5x Luck!", active: true });
     } catch (err) {
       res.status(500).json({ message: "Oracle is silent." });
     }
   });
 
-  // --- GAME: LEADERBOARD (Fixes the Home page list) ---
-  app.get("/api/game/leaderboard", async (req, res) => {
+  // --- GAME: LEADERBOARD ---
+  app.get("/api/game/leaderboard", async (req: any, res: any) => {
     try {
       const users = await (storage as any).getTopUsers(10);
       res.json(users);
@@ -165,12 +142,11 @@ export async function registerRoutes(
   });
 
   // --- ADMIN: GIFT CARDS ---
-  app.post("/api/admin/giftcard", async (req, res) => {
+  app.post("/api/admin/giftcard", async (req: any, res: any) => {
     try {
-      const userId = (req.session as any).userId;
+      const userId = req.session.userId;
       const user = await (storage as any).getUser(userId);
       
-      // Check column 'is_admin' or 'isAdmin' based on your schema
       if (!user.isAdmin && !user.is_admin) {
         return res.status(403).json({ message: "Unauthorized" });
       }
