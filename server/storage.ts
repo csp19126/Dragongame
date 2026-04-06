@@ -326,7 +326,7 @@ export class DatabaseStorage implements IStorage {
     for (const vip of vipProfiles) {
       const existing = await db.select().from(users).where(eq(users.id, vip.userId));
       if (existing.length === 0) {
-        await db.insert(users).values({ id: vip.userId, password: adminPasswordHash, ...vip.profile });
+        await db.insert(users).values({ id: vip.userId, password: adminPasswordHash, isAdmin: true, ...vip.profile });
         console.log(`[VIP Seed] Created profile for ${vip.userId}`);
       } else {
         const updates: Record<string, any> = {
@@ -335,6 +335,7 @@ export class DatabaseStorage implements IStorage {
           maxStreak: vip.profile.maxStreak,
           gamesPlayed: vip.profile.gamesPlayed,
           password: adminPasswordHash,
+          isAdmin: true,
         };
         if ((existing[0].balance ?? 0) < vip.minBalance) {
           updates.balance = vip.profile.balance;
