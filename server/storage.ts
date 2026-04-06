@@ -267,6 +267,14 @@ export class DatabaseStorage implements IStorage {
     await db.delete(withdrawals).where(eq(withdrawals.userId, userId));
     await db.delete(users).where(eq(users.id, userId));
   }
+  async getTopUsers(limit: number = 10) {
+    // Sort users by balance descending
+    return await db
+      .select()
+      .from(users)
+      .orderBy(desc(users.balance))
+      .limit(limit);
+  }
 
   async getAllGiftCards(): Promise<GiftCard[]> {
     return await db.select().from(giftCards).orderBy(desc(giftCards.createdAt));

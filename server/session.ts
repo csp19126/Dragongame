@@ -1,20 +1,22 @@
 import session from "express-session";
 import MemoryStore from "memorystore";
+import { storage } from "./storage.js";
 
-const MemoryStoreSession = MemoryStore(session);
+const SessionStore = MemoryStore(session);
 
 export function getSessionMiddleware() {
   return session({
-    secret: process.env.SESSION_SECRET || "dragongame-secret-key",
+    name: "dragon_session",
+    secret: "dragon_gold_888", 
     resave: false,
     saveUninitialized: false,
-    store: new MemoryStoreSession({ checkPeriod: 86400000 }),
-    proxy: true, 
     cookie: {
-      httpOnly: true,
-      secure: true, 
-      sameSite: 'none', 
-      maxAge: 7 * 24 * 60 * 60 * 1000, 
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      secure: false, // Set to false for Railway unless using full SSL
+      sameSite: "lax",
     },
+    store: new SessionStore({
+      checkPeriod: 86400000
+    }),
   });
 }
