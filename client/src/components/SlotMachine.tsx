@@ -84,6 +84,48 @@ function AnimatedWinCounter({ value }: { value: number }) {
   return <span>{display.toLocaleString()}</span>;
 }
 
+// Smooth animated balance counter with win/loss color flash
+function AnimatedBalance({ value, prevValue }: { value: number; prevValue: number }) {
+  const [display, setDisplay] = useState(value);
+  const rafRef = useRef<number>();
+  const startRef = useRef(value);
+  const targetRef = useRef(value);
+
+  useEffect(() => {
+    if (value === display && value === prevValue) return;
+    startRef.current = display;
+    targetRef.current = value;
+    const duration = 600;
+    const startTime = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(startRef.current + (targetRef.current - startRef.current) * eased);
+      setDisplay(current);
+      if (progress < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [value]);
+
+  const isWin = value > prevValue;
+  const isLoss = value < prevValue;
+
+  return (
+    <motion.span
+      key={value}
+      initial={{ scale: isWin ? 1.35 : isLoss ? 0.9 : 1, color: isWin ? "#4ade80" : isLoss ? "#f87171" : "#eab308" }}
+      animate={{ scale: 1, color: "#d97706" }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="font-mono text-lg font-bold"
+      style={{ display: "inline-block" }}
+    >
+      {display.toLocaleString()}
+    </motion.span>
+  );
+}
+
 function StreakIcon({ streak }: { streak: number }) {
   if (streak >= 10) return <Crown className="w-5 h-5 text-yellow-300 inline-block" />;
   if (streak >= 5) return <Zap className="w-5 h-5 text-cyan-300 inline-block" />;
@@ -91,13 +133,14 @@ function StreakIcon({ streak }: { streak: number }) {
   return null;
 }
 
-function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
+function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing, justStopped }: {
   symbol: string;
   isSpinning: boolean;
   col: number;
   row: number;
   isWinning: boolean;
   isSlowing: boolean;
+  justStopped: boolean;
 }) {
   const [spinSymbol, setSpinSymbol] = useState(getRandomSymbol());
   const glow = SYMBOL_GLOW[isSpinning ? spinSymbol : symbol] || SYMBOL_GLOW["📜"];
@@ -125,9 +168,11 @@ function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
   const displaySymbol = isSpinning ? spinSymbol : symbol;
 
   return (
-    <div
+    <motion.div
       data-testid={`cell-${col}-${row}`}
       className="relative flex items-center justify-center aspect-square overflow-hidden"
+      animate={justStopped ? { scaleY: [1, 0.88, 1.06, 0.97, 1] } : {}}
+      transition={{ duration: 0.35, ease: "easeOut" }}
     >
       {!isSpinning && (
         <motion.div
@@ -235,7 +280,7 @@ function GridCell({ symbol, isSpinning, col, row, isWinning, isSlowing }: {
           }}
         />
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -411,6 +456,7 @@ export function SlotMachine({ balance }: { balance: number }) {
   const [grid, setGrid] = useState<string[][]>(makeGrid);
   const [isSpinning, setIsSpinning] = useState(false);
   const [slowingCol, setSlowingCol] = useState(-1);
+  const [stoppedCols, setStoppedCols] = useState<Set<number>>(new Set());
   const [bet, setBet] = useState(1000);
   const [lastWin, setLastWin] = useState(0);
   const [winLines, setWinLines] = useState<number[]>([]);
@@ -423,7 +469,8 @@ export function SlotMachine({ balance }: { balance: number }) {
   const [lossCount, setLossCount] = useState(0);
   const [screenFlash, setScreenFlash] = useState<string | null>(null);
   const [spinCharge, setSpinCharge] = useState(false);
-  
+  const [prevBalance, setPrevBalance] = useState(balance);
+
   // ORACLE STATES
   const [oracleActive, setOracleActive] = useState(false);
   const [oracleLoading, setOracleLoading] = useState(false);
@@ -492,6 +539,8 @@ export function SlotMachine({ balance }: { balance: number }) {
     setShowNearMiss(false);
     setShowFakeRepeater(false);
     setSlowingCol(-1);
+    setStoppedCols(new Set());
+    setPrevBalance(balance);
     soundManager.spinStart();
     if (bet >= 100000) soundManager.tension();
     flashScreen('rgba(var(--slot-purple),0.2)');
@@ -538,6 +587,8 @@ export function SlotMachine({ balance }: { balance: number }) {
             next[col] = result.grid[col];
             return next;
           });
+          setStoppedCols(prev => new Set([...prev, col]));
+          setTimeout(() => setStoppedCols(prev => { const s = new Set(prev); s.delete(col); return s; }), 400);
           soundManager.reelStop();
 
           if (col === 1 && isNearMiss) {
@@ -860,9 +911,16 @@ export function SlotMachine({ balance }: { balance: number }) {
                   `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(var(--slot-gold),0.3), 0 0 40px -5px rgba(var(--slot-purple),0.3)`,
                   `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(var(--slot-gold),0.6), 0 0 60px -5px rgba(var(--slot-purple),0.5)`,
                   `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 2px rgba(var(--slot-gold),0.3), 0 0 40px -5px rgba(var(--slot-purple),0.3)`,
-                ]
-              , scale: spinCharge ? [1, 1.01, 1] : [1, 1.006, 1] } : {}}
-              transition={isSpinning ? { duration: 0.8, repeat: Infinity, ease: "easeInOut" } : {}}
+                ],
+                scale: spinCharge ? [1, 1.01, 1] : [1, 1.006, 1],
+              } : winLines.length > 0 ? {
+                boxShadow: [
+                  `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 3px rgba(var(--slot-gold),0.9), 0 0 60px rgba(var(--slot-gold),0.5), 0 0 100px rgba(var(--slot-gold),0.2)`,
+                  `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 3px rgba(var(--slot-gold),0.4), 0 0 30px rgba(var(--slot-gold),0.2), 0 0 60px rgba(var(--slot-gold),0.1)`,
+                  `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 3px rgba(var(--slot-gold),0.9), 0 0 60px rgba(var(--slot-gold),0.5), 0 0 100px rgba(var(--slot-gold),0.2)`,
+                ],
+              } : {}}
+              transition={(isSpinning || winLines.length > 0) ? { duration: 0.8, repeat: Infinity, ease: "easeInOut" } : {}}
               style={{
                 background: `linear-gradient(180deg, var(--slot-grid-dark) 0%, var(--slot-grid-mid) 50%, var(--slot-grid-dark) 100%)`,
                 boxShadow: `inset 0 10px 40px rgba(0,0,0,0.95), inset 0 -10px 40px rgba(0,0,0,0.95), inset 6px 0 20px rgba(0,0,0,0.6), inset -6px 0 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(var(--slot-gold),0.2), 0 0 30px -5px rgba(var(--slot-purple),0.1)`,
@@ -935,6 +993,7 @@ export function SlotMachine({ balance }: { balance: number }) {
                         row={row}
                         isWinning={isWinningCell(col, row)}
                         isSlowing={slowingCol === col}
+                        justStopped={stoppedCols.has(col)}
                       />
                     ))}
 
@@ -1006,14 +1065,7 @@ export function SlotMachine({ balance }: { balance: number }) {
 
               <div className="flex flex-col items-end">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-yellow-500/60 font-bold">{t.balance}</span>
-                <motion.span
-                  key={balance}
-                  initial={{ color: "#eab308" }}
-                  animate={{ color: "#d97706" }}
-                  className="font-mono text-lg font-bold"
-                >
-                  {balance.toLocaleString()}
-                </motion.span>
+                <AnimatedBalance value={balance} prevValue={prevBalance} />
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar, json } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -114,11 +114,10 @@ export const insertWithdrawalSchema = createInsertSchema(withdrawals).omit({ id:
 export type InsertWithdrawal = z.infer<typeof insertWithdrawalSchema>;
 export type Withdrawal = typeof withdrawals.$inferSelect;
 
-export const sessions = pgTable("session", {
-  sid: varchar("sid").primaryKey(),
-  sess: json("sess").notNull(),
-  expire: timestamp("expire", { precision: 6 }).notNull(),
-});
+// NOTE: The "session" table is intentionally NOT defined here.
+// It is created and managed automatically by connect-pg-simple (session middleware).
+// Defining it in Drizzle schema would cause Drizzle migrations to drop it on deploy,
+// destroying all active sessions and kicking logged-in players.
 
 // Define the symbols and their "Weights" (Higher weight = appears more often)
 export const SLOT_SYMBOLS = [
