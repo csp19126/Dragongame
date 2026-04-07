@@ -9,7 +9,7 @@ export function getSessionMiddleware() {
     store: new PostgresStore({
       pool: pool,
       tableName: "session",
-      createTableIfMissing: false,
+      createTableIfMissing: true,
       pruneSessionInterval: 60 * 15, // Only check for old sessions every 15 mins
     }),
     name: "dragon_session",
