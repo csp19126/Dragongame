@@ -68,6 +68,7 @@ export function useSpin() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slotId, betAmount }),
+        credentials: "include",
       });
       
       if (!res.ok) {

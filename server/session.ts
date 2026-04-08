@@ -13,7 +13,7 @@ export function getSessionMiddleware() {
       pruneSessionInterval: 60 * 15, // Only check for old sessions every 15 mins
     }),
     name: "dragon_session",
-    secret: "dragon_gold_888_secret", 
+    secret: process.env.SESSION_SECRET || "dragon_gold_888_secret",
     resave: true,                // Force resave to keep it alive during DB writes
     saveUninitialized: false,
     proxy: true,

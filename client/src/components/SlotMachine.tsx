@@ -492,7 +492,7 @@ export function SlotMachine({ balance }: { balance: number }) {
   const handleConsultOracle = async () => {
     setOracleLoading(true);
     try {
-      const res = await fetch("/api/game/oracle", { method: "POST" });
+      const res = await fetch("/api/game/oracle", { method: "POST", credentials: "include" });
       const data = await res.json();
       
       setOracleActive(true);

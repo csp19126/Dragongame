@@ -28,8 +28,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: async () => {
       try {
         const [stateRes, profileRes] = await Promise.all([
-          fetch("/api/game/state"),
-          fetch("/api/user/profile"),
+          fetch("/api/game/state", { credentials: "include" }),
+          fetch("/api/user/profile", { credentials: "include" }),
         ]);
         if (stateRes.ok) {
           const gameState = await stateRes.json();
