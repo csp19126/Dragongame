@@ -86,7 +86,9 @@ export async function registerRoutes(
             // MATH: (Base Value / 10) * (Bet / 100)
             // Example: 1M bet on Dragon (Value 5000) = 50M Win!
             const lineMultiplier = symbolDef.value / 10;
-            const lineWin = Math.floor(lineMultiplier * betAmount);
+            // The payout is: (Symbol Base Value / 10) * Total Bet
+// Example: Dragon (5000) with 1M bet = (500) * 1,000,000 = 50,000,000đ
+const lineWin = Math.floor((symbolDef.value / 10) * betAmount);
             winAmount += lineWin;
             winLines.push(idx);
           }
