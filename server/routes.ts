@@ -9,29 +9,36 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  function getWeightedSymbol() {
+  // --- RNG ENGINE: WEIGHTED SYMBOLS ---
+  function getWeightedSymbol(modifier: number = 1) {
     const symbols = SLOT_SYMBOLS as any[];
-    const totalWeight = symbols.reduce((sum, s) => sum + (s.weight || 10), 0);
+    // If modifier > 1, we artificially boost the weight of higher value symbols
+    const totalWeight = symbols.reduce((sum, s) => {
+      const weightBoost = (s.value > 100 && modifier > 1) ? s.weight * modifier : s.weight;
+      return sum + weightBoost;
+    }, 0);
+
     let random = Math.random() * totalWeight;
     for (const symbol of symbols) {
-      if (random < symbol.weight) return symbol;
-      random -= symbol.weight;
+      const currentWeight = (symbol.value > 100 && modifier > 1) ? symbol.weight * modifier : symbol.weight;
+      if (random < currentWeight) return symbol;
+      random -= currentWeight;
     }
     return symbols[symbols.length - 1];
   }
 
-  // --- AUTH: LOGIN ---
+  // --- AUTH: LOGIN & SESSION ---
   app.post(["/api/auth/login", "/api/login"], async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
       const user = await (storage as any).getUserByUsername(username);
       if (!user) return res.status(401).json({ message: "User not found" });
+      
       const match = await bcrypt.compare(password, user.password);
       if (!match) return res.status(401).json({ message: "Wrong password" });
 
       req.session.userId = user.id;
-      req.session.save((err: any) => {
-        if (err) return res.status(500).json({ message: "Session Save Error" });
+      req.session.save(() => {
         const { password: _, ...safeUser } = user;
         res.json(safeUser);
       });
@@ -40,104 +47,101 @@ export async function registerRoutes(
     }
   });
 
-  // --- AUTH: REGISTER ---
-  app.post(["/api/auth/register", "/api/register"], async (req: any, res: any) => {
-    try {
-      const { username, password } = req.body;
-      const existing = await (storage as any).getUserByUsername(username);
-      if (existing) return res.status(400).json({ message: "Username taken" });
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await (storage as any).createUser({
-        username,
-        password: hashedPassword,
-        balance: 50000,
-        isAdmin: false
-      });
-
-      req.session.userId = user.id;
-      req.session.save(() => res.status(201).json(user));
-    } catch (err) {
-      res.status(500).json({ message: "Registration failed" });
-    }
-  });
-
-  // --- GAME: SPIN (STRENGTHENED & SYNCED) ---
+  // --- GAME: SPIN (The Multiplier Engine) ---
   app.post("/api/game/spin", async (req: any, res: any) => {
     try {
-      const userId = req.session.userId; 
-      if (!userId) {
-         return res.status(401).json({ message: "Unauthorized - No Session Found" });
-      }
+      const userId = req.session.userId;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
       const { betAmount } = req.body;
-      let user = await (storage as any).getUser(userId);
-      if (!user || (user.balance ?? 0) < betAmount) {
-        return res.status(400).json({ message: "Insufficient funds or User not found" });
+      const user = await (storage as any).getUser(userId);
+
+      if (!user || user.balance < betAmount) {
+        return res.status(400).json({ message: "Insufficient balance" });
       }
 
-      let gameState = await (storage as any).getGameState(user.id, "default");
-      const modifier = ((gameState as any)?.activeModifier ?? 100) / 100;
+      // Fetch Oracle state (Luck Modifier)
+      const gameState = await (storage as any).getGameState(userId, "default");
+      const luckMod = (gameState?.activeModifier ?? 100) / 100;
 
+      // Generate 3x3 Grid
       const grid = [
-        [getWeightedSymbol().id, getWeightedSymbol().id, getWeightedSymbol().id],
-        [getWeightedSymbol().id, getWeightedSymbol().id, getWeightedSymbol().id],
-        [getWeightedSymbol().id, getWeightedSymbol().id, getWeightedSymbol().id],
+        [getWeightedSymbol(luckMod).id, getWeightedSymbol(luckMod).id, getWeightedSymbol(luckMod).id],
+        [getWeightedSymbol(luckMod).id, getWeightedSymbol(luckMod).id, getWeightedSymbol(luckMod).id],
+        [getWeightedSymbol(luckMod).id, getWeightedSymbol(luckMod).id, getWeightedSymbol(luckMod).id],
       ];
 
       let winAmount = 0;
       const winLines: number[] = [];
 
+      // Calculate Wins based on Bet Multipliers
       (PAYLINES as any[]).forEach((line, idx) => {
-        const symbolsOnLine = [grid[0][line[0]], grid[1][line[1]], grid[2][line[2]]];
-        if (symbolsOnLine[0] === symbolsOnLine[1] && symbolsOnLine[1] === symbolsOnLine[2]) {
-          const symbolDef = (SLOT_SYMBOLS as any[]).find(s => s.id === symbolsOnLine[0]);
+        const s1 = grid[0][line[0]];
+        const s2 = grid[1][line[1]];
+        const s3 = grid[2][line[2]];
+
+        if (s1 === s2 && s2 === s3) {
+          const symbolDef = (SLOT_SYMBOLS as any[]).find(s => s.id === s1);
           if (symbolDef) {
-            winAmount += Math.floor(symbolDef.value * (betAmount / 100) * modifier);
+            // MATH: (Base Value / 10) * (Bet / 100)
+            // Example: 1M bet on Dragon (Value 5000) = 50M Win!
+            const lineMultiplier = symbolDef.value / 10;
+            const lineWin = Math.floor(lineMultiplier * betAmount);
+            winAmount += lineWin;
             winLines.push(idx);
           }
         }
       });
 
-      // 1. Update the balance in the DB
+      // Update Database Atomics
       const updatedUser = await (storage as any).creditBalanceAtomic(user.id, winAmount - betAmount);
       
-      // 2. Reset the Oracle modifier
-      await (storage as any).updateGameState(user.id, "default", { activeModifier: 100 });
+      // Consume Oracle luck
+      if (luckMod > 1) {
+        await (storage as any).updateGameState(userId, "default", { activeModifier: 100 });
+      }
 
-      // 3. MANDATORY: Touch the session and save BEFORE sending JSON
-      req.session.userId = userId; 
-      req.session.save((err: any) => {
-        if (err) {
-          console.error("SESSION SYNC FAILED:", err);
-          return res.status(500).json({ message: "Session sync failed" });
-        }
-        
-        // ONLY respond once the session table is updated
-        res.json({ 
-          grid, 
-          winLines, 
-          winAmount, 
+      // Sync Session & Respond
+      req.session.save(() => {
+        res.json({
+          grid,
+          winLines,
+          winAmount,
           newBalance: updatedUser.balance,
-          streak: (gameState as any)?.consecutiveWins || 0 
+          isJackpot: winAmount >= betAmount * 50,
+          streak: (gameState?.consecutiveWins ?? 0) + (winAmount > 0 ? 1 : -gameState?.consecutiveWins)
         });
       });
     } catch (err) {
-      console.error("SPIN ERROR:", err);
-      res.status(500).json({ message: "Spin Error" });
+      console.error(err);
+      res.status(500).json({ message: "Server Error" });
     }
   });
 
-  // --- GAME: ORACLE ---
+  // --- GAME: ORACLE (LUCK INJECTION) ---
   app.post("/api/game/oracle", async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const roll = Math.random();
+      let modifier = 100;
+      let message = "The spirits are indifferent.";
+      let type = "neutral";
+
+      if (roll > 0.8) {
+        modifier = 300; // 3x Luck
+        message = "🐉 THE GOLDEN DRAGON BLESSES YOUR NEXT SPIN!";
+        type = "good";
+      } else if (roll < 0.2) {
+        modifier = 50; // Half luck
+        message = "🌑 Shadows cloud your vision. Be careful.";
+        type = "bad";
+      }
+
+      await (storage as any).updateGameState(userId, "default", { activeModifier: modifier });
       
-      await (storage as any).updateGameState(userId, "default", { activeModifier: 250 });
-      req.session.save(() => {
-        res.json({ message: "The Dragon grants you 2.5x Luck!", active: true });
-      });
+      res.json({ message, type });
     } catch (err) {
       res.status(500).json({ message: "Oracle is silent." });
     }
@@ -201,30 +205,8 @@ export async function registerRoutes(
 
   // --- GAME: LEADERBOARD ---
   app.get("/api/game/leaderboard", async (req: any, res: any) => {
-    try {
-      const users = await (storage as any).getTopUsers(10);
-      res.json(users);
-    } catch (err) {
-      res.status(500).json({ message: "Leaderboard error" });
-    }
-  });
-
-  // --- ADMIN: GIFT CARDS ---
-  app.post("/api/admin/giftcard", async (req: any, res: any) => {
-    try {
-      const userId = req.session.userId;
-      const user = await (storage as any).getUser(userId);
-      
-      if (!user.isAdmin && !user.is_admin) {
-        return res.status(403).json({ message: "Unauthorized" });
-      }
-
-      const { amount } = req.body;
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      res.json({ message: `Code: ${code} created for ${amount}đ`, code });
-    } catch (err) {
-      res.status(500).json({ message: "Admin Error" });
-    }
+    const topUsers = await (storage as any).getTopUsers(10);
+    res.json(topUsers);
   });
 
   return httpServer;
