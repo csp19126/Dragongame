@@ -143,6 +143,62 @@ export async function registerRoutes(
     }
   });
 
+  // --- GAME: STATE (used by auth hook to check session) ---
+  app.get("/api/game/state", async (req: any, res: any) => {
+    try {
+      const userId = req.session.userId;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const user = await (storage as any).getUser(userId);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      res.setHeader("Cache-Control", "no-store");
+      res.json({
+        balance: user.balance,
+        streak: user.streak,
+        maxStreak: user.maxStreak,
+        totalWins: user.totalWins,
+        maxWin: user.maxWin,
+        gamesPlayed: user.gamesPlayed,
+        gameStates: [],
+      });
+    } catch (err) {
+      res.status(500).json({ message: "State error" });
+    }
+  });
+
+  // --- USER: PROFILE ---
+  app.get("/api/user/profile", async (req: any, res: any) => {
+    try {
+      const userId = req.session.userId;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const user = await (storage as any).getUser(userId);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      const { password: _, ...safeUser } = user;
+      res.setHeader("Cache-Control", "no-store");
+      res.json(safeUser);
+    } catch (err) {
+      res.status(500).json({ message: "Profile error" });
+    }
+  });
+
+  // --- AUTH: LOGOUT ---
+  app.post("/api/logout", (req: any, res: any) => {
+    req.session.destroy((err: any) => {
+      if (err) return res.status(500).json({ message: "Logout failed" });
+      res.clearCookie("dragon_session");
+      res.json({ message: "Logged out" });
+    });
+  });
+
+  // --- GAME: ACHIEVEMENTS ---
+  app.get("/api/achievements/:userId", async (req: any, res: any) => {
+    try {
+      const achievements = await (storage as any).getAchievements(req.params.userId);
+      res.json(achievements);
+    } catch (err) {
+      res.status(500).json({ message: "Achievements error" });
+    }
+  });
+
   // --- GAME: LEADERBOARD ---
   app.get("/api/game/leaderboard", async (req: any, res: any) => {
     try {
