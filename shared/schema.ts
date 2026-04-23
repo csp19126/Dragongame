@@ -2,14 +2,27 @@ import { pgTable, text, serial, integer, boolean, timestamp, varchar } from "dri
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+export {
+  conversations,
+  messages,
+  insertConversationSchema,
+  insertMessageSchema,
+  type Conversation,
+  type InsertConversation,
+  type Message,
+  type InsertMessage,
+} from "./models/chat";
 
-// --- USERS TABLE ---
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   email: text("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
   balance: integer("balance").default(1000).notNull(),
+  tokens: integer("tokens").default(0).notNull(),
   totalWins: integer("total_wins").default(0).notNull(),
   maxWin: integer("max_win").default(0).notNull(),
   streak: integer("streak").default(0).notNull(),
@@ -17,18 +30,17 @@ export const users = pgTable("users", {
   gamesPlayed: integer("games_played").default(0).notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
-
-// --- GAME STATE ---
-export const gameStates = pgTable("game_states", {
-  id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull(), 
-  slotId: text("slot_id").notNull(), 
-  activeModifier: integer("active_modifier").default(100), // 100 = 1.0x
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// --- ACHIEVEMENTS (The missing piece #1) ---
+export const gameStates = pgTable("game_states", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  slotId: text("slot_id").notNull(),
+  activeModifier: integer("active_modifier").default(100),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const achievements = pgTable("achievements", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
@@ -39,7 +51,6 @@ export const achievements = pgTable("achievements", {
   unlockedAt: timestamp("unlocked_at").defaultNow(),
 });
 
-// --- DEPOSITS (The missing piece #2) ---
 export const deposits = pgTable("deposits", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
@@ -50,7 +61,6 @@ export const deposits = pgTable("deposits", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// --- GIFT CARDS (The missing piece #3) ---
 export const giftCards = pgTable("gift_cards", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
@@ -61,7 +71,6 @@ export const giftCards = pgTable("gift_cards", {
   redeemedAt: timestamp("redeemed_at"),
 });
 
-// --- WITHDRAWALS (The missing piece #4) ---
 export const withdrawals = pgTable("withdrawals", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
@@ -72,9 +81,8 @@ export const withdrawals = pgTable("withdrawals", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// --- SLOT LOGIC (BOSS MULTIPLIERS) ---
 export const SLOT_SYMBOLS = [
-  { id: "dragon", name: "Imperial Dragon", value: 888, weight: 2 }, 
+  { id: "dragon", name: "Imperial Dragon", value: 888, weight: 2 },
   { id: "drum", name: "Bronze Drum", value: 100, weight: 8 },
   { id: "lotus", name: "Golden Lotus", value: 50, weight: 15 },
   { id: "lantern", name: "Jade Lantern", value: 20, weight: 25 },
@@ -82,11 +90,39 @@ export const SLOT_SYMBOLS = [
 ];
 
 export const PAYLINES = [
-  [0, 0, 0], [1, 1, 1], [2, 2, 2],
-  [0, 1, 2], [2, 1, 0],
+  [0, 0, 0],
+  [1, 1, 1],
+  [2, 2, 2],
+  [0, 1, 2],
+  [2, 1, 0],
 ];
 
-// TYPES FOR STORAGE
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertGameStateSchema = createInsertSchema(gameStates).omit({
+  id: true,
+  updatedAt: true,
+});
+export const insertDepositSchema = createInsertSchema(deposits).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertWithdrawalSchema = createInsertSchema(withdrawals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
+export type GameState = typeof gameStates.$inferSelect;
+export type InsertGameState = z.infer<typeof insertGameStateSchema>;
+export type Achievement = typeof achievements.$inferSelect;
+export type Deposit = typeof deposits.$inferSelect;
+export type InsertDeposit = z.infer<typeof insertDepositSchema>;
+export type GiftCard = typeof giftCards.$inferSelect;
+export type Withdrawal = typeof withdrawals.$inferSelect;
+export type InsertWithdrawal = z.infer<typeof insertWithdrawalSchema>;

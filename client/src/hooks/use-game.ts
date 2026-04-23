@@ -65,7 +65,7 @@ export function useGameState() {
 export function useSpin() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ slotId, betAmount }: { slotId: string; betAmount: number }) => {
+    mutationFn: async ({ slotId = "default", betAmount }: { slotId?: string; betAmount: number }) => {
       const res = await fetch("/api/game/spin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

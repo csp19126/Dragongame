@@ -115,31 +115,31 @@ function LiveWinsTicker() {
 }
 
 function SlotPreview() {
-  const symbols = ["A", "B", "C"];
+  const symbols = ["🐉", "🪙", "🌸", "🏮", "🥁"];
   const [reel, setReel] = useState([0, 1, 2]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setReel((prev) => prev.map(() => Math.floor(Math.random() * 3)));
+      setReel((prev) => prev.map(() => Math.floor(Math.random() * symbols.length)));
     }, 1200);
     return () => clearInterval(interval);
   }, []);
 
-  const symbolColors = ["text-yellow-400", "text-red-400", "text-purple-400"];
+  const symbolColors = ["text-yellow-400", "text-amber-300", "text-pink-300", "text-orange-300", "text-violet-300"];
 
   return (
     <motion.div
       data-testid="slot-preview"
       className="flex gap-2 justify-center my-6"
-      animate={{ scale: [1, 1.02, 1] }}
+      animate={{ scale: [1, 1.03, 1] }}
       transition={{ duration: 2, repeat: Infinity }}
     >
       {reel.map((s, i) => (
         <motion.div
           key={i}
-          animate={{ rotateX: [0, 360] }}
-          transition={{ duration: 0.5, delay: i * 0.1 }}
-          className="w-16 h-16 bg-gradient-to-b from-purple-800/60 to-purple-900/60 border-2 border-yellow-500/40 rounded-md flex items-center justify-center"
+          animate={{ rotateX: [0, 360], y: [0, -2, 0] }}
+          transition={{ duration: 0.6, delay: i * 0.12 }}
+          className="w-16 h-16 bg-gradient-to-b from-purple-800/70 to-purple-950/80 border-2 border-yellow-500/40 rounded-md flex items-center justify-center shadow-[0_0_18px_rgba(251,191,36,0.22)]"
         >
           <span className={`text-2xl font-black ${symbolColors[s]}`}>{symbols[s]}</span>
         </motion.div>
@@ -403,7 +403,7 @@ export default function Home() {
                     data-testid="text-max-win"
                     className="text-2xl font-display font-black text-yellow-400"
                   >
-                    {maxWin.toLocaleString()}d
+                    {maxWin.toLocaleString()}đ
                   </div>
                 </Card>
               </div>
@@ -466,7 +466,7 @@ export default function Home() {
               <Trophy className="w-4 h-4 text-yellow-500/70 mx-auto mb-1" />
               <div className="text-[10px] text-yellow-100/50 uppercase font-bold">{t.maxWin}</div>
               <div data-testid="text-max-win-mobile" className="text-lg font-black text-yellow-400">
-                {maxWin.toLocaleString()}d
+                {maxWin.toLocaleString()}đ
               </div>
             </Card>
           </div>
@@ -548,7 +548,7 @@ function MiniLeaderboard() {
             </div>
           </div>
           <div className="text-sm font-black text-yellow-400 shrink-0">
-            {(entry.balance ?? 0).toLocaleString()}d
+            {(entry.balance ?? 0).toLocaleString()}đ
           </div>
         </motion.div>
       ))}

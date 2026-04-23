@@ -70,6 +70,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = req.session.userId;
       if (!userId) return res.status(401).json({ message: "Unauthorized", upstreamErrors: "" });
       const { betAmount } = req.body;
+      if (!Number.isFinite(betAmount) || betAmount <= 0) {
+        return res.status(400).json({ message: "Invalid bet amount", upstreamErrors: "" });
+      }
       const user = await (storage as any).getUser(userId);
 
       if (!user || user.balance < betAmount) {
@@ -99,9 +102,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (s1 === s2 && s2 === s3) {
           const symbolDef = (SLOT_SYMBOLS as any[]).find(s => s.id === s1);
           if (symbolDef) {
-            // The payout is: (Symbol Base Value / 10) * Total Bet
-            // Example: Dragon (5000) with 1M bet = (500) * 1,000,000 = 50,000,000đ
-            const lineWin = Math.floor((symbolDef.value / 10) * betAmount);
+            // Payout scales with stake while staying in sane ranges.
+            const lineWin = Math.floor(symbolDef.value * (betAmount / 100));
             winAmount += lineWin;
             winLines.push(idx);
           }
@@ -132,7 +134,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           winLines: winLines ?? [],
           winAmount: winAmount ?? 0,
           newBalance: updatedUser.balance,
-          isJackpot: winAmount >= betAmount * 50,
+          isJackpot: winAmount >= betAmount * 10,
           streak: newStreak,
           totalWins: newTotalWins,
           maxWin: newMaxWin,

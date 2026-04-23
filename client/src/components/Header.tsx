@@ -56,18 +56,18 @@ function AnimatedBalance({ value }: { value: number }) {
 
 export function Header() {
   const { user, logout } = useAuth();
-  const { t, toggleLang, lang } = useLang();
+  const { t, toggleLang } = useLang();
   const [hasNewAchievement, setHasNewAchievement] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-yellow-500/10 bg-background/60 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40">
+    <header className="sticky top-0 z-50 w-full border-b border-yellow-500/20 bg-gradient-to-r from-[#120625]/90 via-[#1a0b35]/80 to-[#120625]/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40">
       <div className="container mx-auto px-4 md:px-6 h-16 md:h-20 flex items-center justify-between gap-2">
         <Link href="/" className="flex items-center gap-2 md:gap-3 group" data-testid="link-home">
           <motion.div 
             whileHover={{ rotate: 360, scale: 1.1 }}
-            className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-primary to-purple-600 rounded-xl flex items-center justify-center text-2xl md:text-3xl shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all duration-500"
+            className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-yellow-500/90 to-orange-500/90 rounded-xl flex items-center justify-center text-2xl md:text-3xl shadow-[0_0_22px_rgba(251,191,36,0.45)] transition-all duration-500"
           >
-            <Coins className="w-5 h-5 md:w-6 md:h-6 text-yellow-300" />
+            <Coins className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </motion.div>
           <span className="font-display text-2xl md:text-3xl gold-gradient-text hidden md:inline-block tracking-tighter">VnSlot</span>
         </Link>
@@ -77,6 +77,7 @@ export function Header() {
             variant="ghost" 
             size="icon" 
             onClick={toggleLang} 
+            className="hover:bg-white/10"
             data-testid="button-language-toggle"
           >
             <Globe className="w-5 h-5" />
@@ -98,7 +99,7 @@ export function Header() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="hidden md:flex items-center gap-1 border-yellow-500/30 text-yellow-400"
+                  className="hidden md:flex items-center gap-1 border-yellow-500/40 text-yellow-300 bg-yellow-500/5 hover:bg-yellow-500/10"
                   data-testid="button-top-up"
                 >
                   <Plus className="w-4 h-4" />
@@ -110,6 +111,7 @@ export function Header() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="hover:bg-white/10"
                   data-testid="button-notifications"
                 >
                   <Bell className="w-5 h-5" />
@@ -123,6 +125,7 @@ export function Header() {
                 <Button 
                   variant="ghost" 
                   size="icon" 
+                  className="hover:bg-white/10"
                   data-testid="button-leaderboard"
                 >
                   <Trophy className="w-5 h-5 text-yellow-400" />
@@ -134,7 +137,7 @@ export function Header() {
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="bg-primary/10 text-primary border border-primary/20"
+                    className="bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/20"
                     data-testid="button-user-menu"
                   >
                     <User className="w-5 h-5" />
