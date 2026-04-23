@@ -4,25 +4,19 @@ import { storage } from "./storage.js";
 import bcrypt from "bcryptjs";
 import { SLOT_SYMBOLS, PAYLINES } from "../shared/schema.js";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
+export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
 
-  // --- RNG ENGINE: WEIGHTED SYMBOLS ---
   function getWeightedSymbol(modifier: number = 1) {
     const symbols = SLOT_SYMBOLS as any[];
-    // If modifier > 1, we artificially boost the weight of higher value symbols
     const totalWeight = symbols.reduce((sum, s) => {
-      const weightBoost = (s.value > 100 && modifier > 1) ? s.weight * modifier : s.weight;
-      return sum + weightBoost;
+      const boost = (s.value > 100 && modifier > 1) ? s.weight * modifier : s.weight;
+      return sum + boost;
     }, 0);
-
     let random = Math.random() * totalWeight;
-    for (const symbol of symbols) {
-      const currentWeight = (symbol.value > 100 && modifier > 1) ? symbol.weight * modifier : symbol.weight;
-      if (random < currentWeight) return symbol;
-      random -= currentWeight;
+    for (const s of symbols) {
+      const weight = (s.value > 100 && modifier > 1) ? s.weight * modifier : s.weight;
+      if (random < weight) return s;
+      random -= weight;
     }
     return symbols[symbols.length - 1];
   }
@@ -71,12 +65,10 @@ export async function registerRoutes(
     }
   });
 
-  // --- GAME: SPIN (The Multiplier Engine) ---
   app.post("/api/game/spin", async (req: any, res: any) => {
     try {
       const userId = req.session.userId;
       if (!userId) return res.status(401).json({ message: "Unauthorized", upstreamErrors: "" });
-
       const { betAmount } = req.body;
       const user = await (storage as any).getUser(userId);
 
@@ -169,16 +161,16 @@ export async function registerRoutes(
 
       if (roll > 0.8) {
         modifier = 300; // 3x Luck
-        message = "🐉 THE GOLDEN DRAGON BLESSES YOUR NEXT SPIN!";
+        message = "THE GOLDEN DRAGON BLESSES YOUR NEXT SPIN!";
         type = "good";
       } else if (roll < 0.2) {
         modifier = 50; // Half luck
-        message = "🌑 Shadows cloud your vision. Be careful.";
+        message = "Shadows cloud your vision. Be careful.";
         type = "bad";
       }
 
       await (storage as any).updateGameState(userId, "default", { activeModifier: modifier });
-      
+
       res.json({ message, type, upstreamErrors: "" });
     } catch (err) {
       res.status(500).json({ message: "Oracle is silent.", upstreamErrors: "" });
@@ -231,7 +223,6 @@ export async function registerRoutes(
       res.json({ message: "Logged out", upstreamErrors: "" });
     });
   });
-
   // --- GAME: ACHIEVEMENTS ---
   app.get("/api/achievements/:userId", async (req: any, res: any) => {
     try {
