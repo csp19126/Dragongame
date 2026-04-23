@@ -66,17 +66,18 @@ export function SlotMachine({ balance }: { balance: number }) {
       
       // Simulate High-End Reel Timing
       setTimeout(() => {
-        setGrid(result.grid);
+        setGrid(result.grid ?? grid);
         setIsSpinning(false);
-        setWinLines(result.winLines);
-        setLastWin(result.winAmount);
+        setWinLines(result.winLines ?? []);
+        setLastWin(result.winAmount ?? 0);
 
-        if (result.winAmount > 0) {
-          if (result.winAmount >= bet * 5) {
+        const winAmt = result.winAmount ?? 0;
+        if (winAmt > 0) {
+          if (winAmt >= bet * 5) {
             confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 }, colors: ['#fbbf24', '#ef4444'] });
             shakeControls.start({ x: [0, -10, 10, -5, 5, 0], transition: { duration: 0.3 } });
           }
-          soundManager.win(result.winAmount >= bet * 5);
+          soundManager.win(winAmt >= bet * 5);
         }
         if (autoSpin) setTimeout(handleSpin, 1200);
       }, 1000);

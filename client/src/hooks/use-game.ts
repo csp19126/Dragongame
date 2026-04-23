@@ -8,6 +8,7 @@ export interface GameStateResponse {
   totalWins: number;
   maxWin: number;
   gamesPlayed: number;
+  upstreamErrors?: string;
 }
 
 export interface SpinResponse {
@@ -28,6 +29,7 @@ export interface SpinResponse {
   maxWin: number;
   gamesPlayed: number;
   newAchievements?: any[];
+  upstreamErrors: string;
 }
 
 export interface LeaderboardEntry {
