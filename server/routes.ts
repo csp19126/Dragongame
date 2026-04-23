@@ -1,4 +1,49 @@
-import type { Express } from "express";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  balance: integer("balance").default(1000).notNull(),
+  totalWins: integer("total_wins").default(0).notNull(),
+  maxWin: integer("max_win").default(0).notNull(),
+  streak: integer("streak").default(0).notNull(),
+  maxStreak: integer("max_streak").default(0).notNull(),
+  gamesPlayed: integer("games_played").default(0).notNull(),
+  isAdmin: boolean("is_admin").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const gameStates = pgTable("game_states", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(), 
+  slotId: text("slot_id").notNull(), 
+  activeModifier: integer("active_modifier").default(100),
+  freeSpins: integer("free_spins").default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const giftCards = pgTable("gift_cards", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  denomination: integer("denomination").notNull(),
+  isRedeemed: boolean("is_redeemed").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const SLOT_SYMBOLS = [
+  { id: "dragon", name: "Imperial Dragon", value: 888, weight: 2 }, 
+  { id: "drum", name: "Bronze Drum", value: 100, weight: 8 },
+  { id: "lotus", name: "Golden Lotus", value: 50, weight: 15 },
+  { id: "lantern", name: "Jade Lantern", value: 20, weight: 25 },
+  { id: "coin", name: "Lucky Coin", value: 10, weight: 50 },
+];
+
+export const PAYLINES = [[0,0,0],[1,1,1],[2,2,2],[0,1,2],[2,1,0]];
+export type User = typeof users.$inferSelect;import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage.js";
 import bcrypt from "bcryptjs";
