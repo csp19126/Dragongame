@@ -19,9 +19,19 @@ export interface GameStateResponse {
   lastDailyBonusAt: string | null;
 }
 
+export interface LineWin {
+  line: number;
+  symbol: string;
+  amount: number;
+  withWild: boolean;
+}
+
 export interface SpinResponse {
   grid: string[][];
   winLines: number[];
+  lineWins: LineWin[];
+  scatterCount: number;
+  scatterWin: number;
   winAmount: number;
   freeSpinsAwarded: number;
   dragonLine: boolean;

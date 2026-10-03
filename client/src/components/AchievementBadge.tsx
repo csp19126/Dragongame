@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Trophy, Flame, Zap, Crown, Star, Target, Gem, Gift } from "lucide-react";
+import { Trophy, Flame, Zap, Crown, Star, Target, Gem, Gift, Mail, Sparkles } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
   trophy: Trophy,
@@ -10,6 +10,8 @@ const ICON_MAP: Record<string, any> = {
   target: Target,
   gem: Gem,
   gift: Gift,
+  mail: Mail,
+  sparkles: Sparkles,
 };
 
 interface Badge {

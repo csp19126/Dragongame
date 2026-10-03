@@ -4,9 +4,10 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { storage } from "./storage";
 import {
-  BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, FREE_SPINS_AWARD,
-  FREE_SPINS_TRIGGER_MULTIPLE, ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, type User, type PublicUser,
+  BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
+  ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, type User, type PublicUser,
 } from "@shared/schema";
+import { exactRtp } from "./game";
 
 declare module "express-session" {
   interface SessionData {
@@ -114,11 +115,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/game/config", (_req, res) => {
     res.json({
-      symbols: SLOT_SYMBOLS.map(({ id, name, pays }) => ({ id, name, pays })),
+      symbols: SLOT_SYMBOLS.map(({ id, name, kind, pays }) => ({ id, name, kind, pays })),
       paylines: PAYLINES,
+      scatterPays: SCATTER_PAYS,
       bets: BET_OPTIONS,
-      freeSpinsAward: FREE_SPINS_AWARD,
-      freeSpinsTriggerMultiple: FREE_SPINS_TRIGGER_MULTIPLE,
+      maxWinMultiple: MAX_WIN_MULTIPLE,
+      rtp: Number(exactRtp().rtp.toFixed(5)),
       oracleMultiplier: ORACLE_WIN_MULTIPLIER,
     });
   });

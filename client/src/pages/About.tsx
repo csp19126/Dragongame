@@ -3,7 +3,7 @@ import { useLang } from "@/lib/lang-context";
 import { motion } from "framer-motion";
 import { Shield, Dice5, Globe, Gift, HeartHandshake } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { SLOT_SYMBOLS } from "@shared/schema";
+import { MAX_WIN_MULTIPLE } from "@shared/schema";
 
 export default function About() {
   const { lang } = useLang();
@@ -11,8 +11,8 @@ export default function About() {
 
   const stats = [
     { value: "96.0%", label: vi ? "Tỷ lệ hoàn trả" : "Return to player" },
-    { value: "5", label: vi ? "Hàng thưởng" : "Paylines" },
-    { value: `${Math.max(...SLOT_SYMBOLS.map((s) => s.pays)) * 5}×`, label: vi ? "Thưởng tối đa" : "Max payout" },
+    { value: "9", label: vi ? "Hàng thưởng" : "Paylines" },
+    { value: `${MAX_WIN_MULTIPLE}×`, label: vi ? "Thưởng tối đa" : "Max payout" },
     { value: "0đ", label: vi ? "Chi phí" : "Cost to play" },
   ];
 

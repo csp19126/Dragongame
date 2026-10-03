@@ -2,7 +2,7 @@ import { db } from "./db";
 import {
   users, gameStates, achievements, deposits, giftCards,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
-  STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS,
+  STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
 } from "@shared/schema";
 import { eq, desc, sql, and, or, isNull, lt, count, sum } from "drizzle-orm";
 import { spin as runSpin, type SpinOutcome } from "./game";
@@ -18,6 +18,8 @@ const ACHIEVEMENTS = {
   millionaire: { name: "Millionaire", description: "Balance reached 1,000,000!", icon: "trophy" },
   jackpot_hunter: { name: "Jackpot Hunter", description: "Won 50x your bet in one spin!", icon: "target" },
   lucky_seven: { name: "Lucky Seven", description: "Won 7 times!", icon: "gift" },
+  lucky_envelope: { name: "Lucky Envelope", description: "Landed 3 red envelopes!", icon: "mail" },
+  pearl_power: { name: "Pearl Power", description: "Won a line with the Dragon Pearl wild!", icon: "sparkles" },
 } as const;
 type BadgeId = keyof typeof ACHIEVEMENTS;
 
@@ -153,6 +155,8 @@ export class DatabaseStorage {
       if (user.balance >= 1_000_000) earned.push("millionaire");
       if (outcome.winAmount >= bet * 50) earned.push("jackpot_hunter");
       if (user.totalWins >= 7) earned.push("lucky_seven");
+      if (outcome.freeSpinsAwarded > 0) earned.push("lucky_envelope");
+      if (outcome.lineWins.some((w) => w.withWild || w.symbol === WILD_ID)) earned.push("pearl_power");
 
       const newAchievements: Achievement[] = [];
       if (earned.length) {

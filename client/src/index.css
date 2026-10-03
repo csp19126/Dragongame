@@ -478,3 +478,77 @@
   0%, 100% { transform: scale(1.05); }
   50% { transform: scale(1.2); }
 }
+
+/* ---------- Slot machine v2 ---------- */
+
+/* A reel strip scrolling downwards; the strip holds the same symbols twice so the loop is seamless */
+@keyframes reelScroll {
+  from { transform: translate3d(0, -50%, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+.reel-strip {
+  animation: reelScroll 0.32s linear infinite;
+  filter: blur(2px) brightness(1.15);
+  will-change: transform;
+}
+
+/* Reel landing: overshoot then settle, like a real mechanical stop */
+@keyframes reelLand {
+  0% { transform: translate3d(0, -18%, 0); }
+  60% { transform: translate3d(0, 6%, 0); }
+  80% { transform: translate3d(0, -2%, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+.reel-land { animation: reelLand 0.42s cubic-bezier(.2,.9,.3,1.2) both; }
+
+/* Marquee bulbs around the cabinet */
+@keyframes bulbChase {
+  0%, 100% { opacity: .25; box-shadow: none; }
+  50% { opacity: 1; box-shadow: 0 0 8px 2px currentColor; }
+}
+.bulb { width: 7px; height: 7px; border-radius: 9999px; background: currentColor; opacity: .35; }
+.bulbs-idle .bulb { animation: bulbChase 2.4s ease-in-out infinite; }
+.bulbs-spin .bulb { animation: bulbChase .45s linear infinite; }
+.bulbs-win .bulb { animation: bulbChase .18s steps(2) infinite; }
+
+/* Scatter envelopes shake and glow when they pay */
+@keyframes envelopeShake {
+  0%, 100% { transform: rotate(0) scale(1.1); }
+  25% { transform: rotate(-12deg) scale(1.25); }
+  75% { transform: rotate(12deg) scale(1.25); }
+}
+.scatter-hit { animation: envelopeShake .5s ease-in-out infinite; filter: drop-shadow(0 0 16px #ef4444) !important; }
+
+/* Wild pearl shimmer */
+@keyframes pearlShimmer {
+  0%, 100% { filter: drop-shadow(0 0 6px #a78bfa) hue-rotate(0deg); }
+  50% { filter: drop-shadow(0 0 18px #e9d5ff) hue-rotate(40deg); }
+}
+.wild-glow { animation: pearlShimmer 1.6s ease-in-out infinite; }
+
+/* Cabinet shake on big wins */
+.cabinet-shake { animation: screenShake .6s ease-in-out 2; }
+
+/* Light sweep across the spin button */
+@keyframes buttonShine {
+  0% { transform: translateX(-120%) skewX(-20deg); }
+  60%, 100% { transform: translateX(220%) skewX(-20deg); }
+}
+.spin-shine::after {
+  content: ""; position: absolute; inset: 0; width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+  animation: buttonShine 2.6s ease-in-out infinite;
+}
+
+/* Free spins mode: pulsing purple-gold frame */
+@keyframes freeFrame {
+  0%, 100% { box-shadow: 0 0 25px 4px rgba(168,85,247,.55), inset 0 0 25px rgba(250,204,21,.2); }
+  50% { box-shadow: 0 0 45px 10px rgba(250,204,21,.55), inset 0 0 35px rgba(168,85,247,.35); }
+}
+.free-spins-frame { animation: freeFrame 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reel-strip, .reel-land, .bulb, .scatter-hit, .wild-glow, .cabinet-shake, .spin-shine::after, .free-spins-frame {
+    animation: none !important;
+  }
+}
