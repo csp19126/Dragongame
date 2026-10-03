@@ -1,6 +1,6 @@
 // Network-first service worker: always fetch the latest game, fall back to the
 // cached copy only when offline. The API is never cached.
-const CACHE_NAME = 'vnslot-888-v3';
+const CACHE_NAME = 'vnslot-888-v4';
 const PRECACHE_URLS = ['/', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -29,6 +29,10 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((hit) => hit || caches.match('/')))
+      // Offline: serve the cached copy. Only page navigations may fall back to the
+      // app shell; a script or image must never be answered with HTML.
+      .catch(() =>
+        caches.match(event.request).then((hit) => hit || (event.request.mode === 'navigate' ? caches.match('/') : Response.error()))
+      )
   );
 });
