@@ -26,13 +26,28 @@ export interface LineWin {
   withWild: boolean;
 }
 
+export interface SpinStep {
+  grid: string[][];
+  held: string[];
+  lineWins: LineWin[];
+  multiplier: number;
+  win: number;
+}
+
 export interface SpinResponse {
+  steps: SpinStep[];
   grid: string[][];
   winLines: number[];
   lineWins: LineWin[];
+  repeats: number;
   scatterCount: number;
   scatterWin: number;
+  /** Everything credited: slot win plus any jackpot */
   winAmount: number;
+  gameWin: number;
+  jackpotHit: boolean;
+  jackpotWin: number;
+  jackpotPool: number | null;
   freeSpinsAwarded: number;
   dragonLine: boolean;
   bet: number;
@@ -95,4 +110,18 @@ export function useRecentWins() {
     queryKey: ["/api/game/recent-wins"],
     refetchInterval: 15_000,
   });
+}
+
+export const JACKPOT_KEY = ["/api/game/jackpot"];
+
+export interface JackpotResponse {
+  amount: number;
+  lastWinner: string | null;
+  lastAmount: number | null;
+  lastWonAt: string | null;
+}
+
+/** The shared Hũ Rồng pot, refreshed every 10 seconds so everyone sees it grow */
+export function useJackpot() {
+  return useQuery<JackpotResponse>({ queryKey: JACKPOT_KEY, refetchInterval: 10_000, staleTime: 5_000 });
 }

@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useGameState, useAchievements, useLeaderboard, useRecentWins } from "@/hooks/use-game";
+import { useGameState, useAchievements, useLeaderboard, useRecentWins, useJackpot } from "@/hooks/use-game";
 import { SlotMachine } from "@/components/SlotMachine";
 import { Header } from "@/components/Header";
 import { StreakDisplay } from "@/components/StreakDisplay";
@@ -123,10 +123,13 @@ const ALL_ACHIEVEMENTS = [
   { id: "lucky_seven", name: "Lucky Seven", description: "Win 7 times", icon: "gift" },
   { id: "lucky_envelope", name: "Lucky Envelope", description: "Land 3 red envelopes", icon: "mail" },
   { id: "pearl_power", name: "Pearl Power", description: "Win a line with a wild", icon: "sparkles" },
+  { id: "chain_reaction", name: "Chain Reaction", description: "3 Repeaters in one spin", icon: "repeat" },
+  { id: "no_hu", name: "Nổ Hũ!", description: "Win the Hũ Rồng jackpot", icon: "crown" },
 ];
 
 function Landing() {
   const { t } = useLang();
+  const { data: jackpot } = useJackpot();
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] flex flex-col relative overflow-hidden">
       <FloatingSymbols />
@@ -150,9 +153,9 @@ function Landing() {
 
           <div className="grid grid-cols-3 gap-2 sm:gap-6 mt-6">
             {[
-              { label: t.maxWinStat, value: `${MAX_WIN_MULTIPLE}×`, Icon: Trophy },
+              { label: t.maxWinStat, value: `${MAX_WIN_MULTIPLE.toLocaleString()}×`, Icon: Trophy },
               { label: t.freeSpins, value: "10", Icon: Zap },
-              { label: t.dailyCoins, value: "50K", Icon: Gift },
+              { label: t.jackpotName, value: jackpot ? jackpot.amount.toLocaleString() : "…", Icon: Gift },
             ].map((stat, i) => (
               <div key={i} data-testid={`stat-card-${i}`} className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-yellow-500/30 rounded-md p-3 sm:p-6 backdrop-blur-xl">
                 <stat.Icon className="w-6 h-6 sm:w-9 sm:h-9 text-yellow-500 mx-auto mb-1" />
