@@ -233,6 +233,12 @@ export default function Home() {
         {/* One layout for all sizes, so there is only ever one slot machine mounted */}
         <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_260px] gap-4 p-3 sm:p-4 max-w-[1400px] mx-auto">
           <section className="order-1 lg:order-2 flex flex-col items-center gap-4 min-w-0">
+            <div className="w-full max-w-md text-center lg:hidden" data-testid="game-title">
+              <h1 className="font-display text-4xl sm:text-5xl leading-none bg-gradient-to-b from-yellow-200 via-yellow-400 to-orange-500 bg-clip-text text-transparent drop-shadow-[0_2px_12px_rgba(250,204,21,0.35)]">
+                VnSlot 888
+              </h1>
+              <p className="text-[11px] sm:text-xs font-black tracking-[0.35em] text-yellow-500/80 uppercase mt-1">🐉 {t.subtitle} 🐉</p>
+            </div>
             <div className="w-full max-w-md lg:hidden"><RecentWinsTicker /></div>
             {gameState ? (
               <SlotMachine />
