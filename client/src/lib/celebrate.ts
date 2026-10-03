@@ -93,7 +93,7 @@ export function cannons(durationMs: number) {
   });
 }
 
-export type WinTier = "none" | "small" | "win" | "big" | "mega" | "epic";
+export type WinTier = "none" | "small" | "win" | "big" | "mega" | "epic" | "jackpot";
 
 /** How a win should be celebrated, by its size relative to the bet */
 export function winTier(winAmount: number, bet: number): WinTier {

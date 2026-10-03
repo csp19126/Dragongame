@@ -1,8 +1,9 @@
 import { db } from "./db";
 import {
-  users, gameStates, achievements, deposits, giftCards,
+  users, gameStates, achievements, deposits, giftCards, jackpot,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
+  JACKPOT_CONTRIBUTION, JACKPOT_FULL_BET, JACKPOT_SEED,
 } from "@shared/schema";
 import { eq, desc, sql, and, or, isNull, lt, count, sum } from "drizzle-orm";
 import { spin as runSpin, type SpinOutcome } from "./game";
@@ -20,10 +21,17 @@ const ACHIEVEMENTS = {
   lucky_seven: { name: "Lucky Seven", description: "Won 7 times!", icon: "gift" },
   lucky_envelope: { name: "Lucky Envelope", description: "Landed 3 red envelopes!", icon: "mail" },
   pearl_power: { name: "Pearl Power", description: "Won a line with the Dragon Pearl wild!", icon: "sparkles" },
+  chain_reaction: { name: "Chain Reaction", description: "3 Repeaters in one spin!", icon: "repeat" },
+  no_hu: { name: "Nổ Hũ!", description: "Won the Hũ Rồng jackpot!", icon: "crown" },
 } as const;
 type BadgeId = keyof typeof ACHIEVEMENTS;
 
 export interface SpinResult extends SpinOutcome {
+  /** What the slot itself paid; winAmount adds the jackpot on top */
+  gameWin: number;
+  jackpotWin: number;
+  /** The jackpot after this spin (null only if the jackpot row is missing) */
+  jackpotPool: number | null;
   bet: number;
   isFreeSpin: boolean;
   blessed: boolean;
@@ -87,13 +95,15 @@ export class DatabaseStorage {
    * balance, and the whole thing runs in a transaction so a crash can't take a
    * stake without paying the win.
    */
-  async spin(userId: string, requestedBet: number): Promise<SpinResult | SpinError> {
+  /** `play` is only overridden by tests (to force a specific grid); the game always uses the real RNG. */
+  async spin(userId: string, requestedBet: number, play: typeof runSpin = runSpin): Promise<SpinResult | SpinError> {
     const state = await this.ensureGameState(userId);
 
     return db.transaction(async (tx) => {
       // 0. Lock this player's rows in a fixed order (user, then game state). Concurrent
       //    spins for the same player then queue up instead of deadlocking each other.
-      await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update");
+      //    The shared jackpot row is always locked last, so this order can't form a cycle.
+      const [me] = await tx.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, userId)).for("update");
       await tx.select({ id: gameStates.id }).from(gameStates).where(eq(gameStates.id, state.id)).for("update");
 
       // 1. Pay for the spin: free spin first, otherwise stake from balance
@@ -121,10 +131,25 @@ export class DatabaseStorage {
         .returning({ id: gameStates.id });
       const blessed = !!blessing;
 
-      // 3. Spin
-      const outcome = runSpin(bet, { blessed });
+      // 3. Spin (Repeater included)
+      const outcome = play(bet, { blessed });
+
+      // 3b. Jackpot: paid spins feed the pot; middle-row pearls win it
+      const contribution = isFreeSpin ? 0 : Math.floor(bet * JACKPOT_CONTRIBUTION);
+      let jackpotWin = 0;
+      let jackpotPool: number | null = null;
+      if (outcome.jackpotHit) {
+        const [pot] = await tx.select().from(jackpot).where(eq(jackpot.id, 1)).for("update");
+        const amount = (pot?.amount ?? JACKPOT_SEED) + contribution;
+        jackpotWin = Math.floor(amount * Math.min(1, bet / JACKPOT_FULL_BET));
+        jackpotPool = Math.max(JACKPOT_SEED, amount - jackpotWin);
+        await tx.insert(jackpot)
+          .values({ id: 1, amount: jackpotPool, lastWinner: me.username, lastAmount: jackpotWin, lastWonAt: new Date() })
+          .onConflictDoUpdate({ target: jackpot.id, set: { amount: jackpotPool, lastWinner: me.username, lastAmount: jackpotWin, lastWonAt: new Date() } });
+      }
+      const totalWin = outcome.winAmount + jackpotWin;
       // A "win" means the spin actually made a profit; getting your stake back isn't a win
-      const won = outcome.winAmount > bet;
+      const won = totalWin > bet;
 
       // 4. Free spins: awarded spins are locked to the bet that won them
       const [gs] = await tx.update(gameStates).set({
@@ -136,12 +161,12 @@ export class DatabaseStorage {
 
       // 5. Pay out and update stats in one statement
       const [user] = await tx.update(users).set({
-        balance: sql`${users.balance} + ${outcome.winAmount}`,
+        balance: sql`${users.balance} + ${totalWin}`,
         gamesPlayed: sql`${users.gamesPlayed} + 1`,
         totalWins: won ? sql`${users.totalWins} + 1` : users.totalWins,
         streak: won ? sql`${users.streak} + 1` : 0,
         maxStreak: won ? sql`greatest(${users.maxStreak}, ${users.streak} + 1)` : users.maxStreak,
-        maxWin: sql`greatest(${users.maxWin}, ${outcome.winAmount})`,
+        maxWin: sql`greatest(${users.maxWin}, ${totalWin})`,
       }).where(eq(users.id, userId)).returning();
       if (!user) throw new Error("User vanished mid-spin");
 
@@ -153,10 +178,12 @@ export class DatabaseStorage {
       if (outcome.dragonLine) earned.push("dragon_master");
       if (bet >= 100000 && !isFreeSpin) earned.push("high_roller");
       if (user.balance >= 1_000_000) earned.push("millionaire");
-      if (outcome.winAmount >= bet * 50) earned.push("jackpot_hunter");
+      if (totalWin >= bet * 50) earned.push("jackpot_hunter");
       if (user.totalWins >= 7) earned.push("lucky_seven");
       if (outcome.freeSpinsAwarded > 0) earned.push("lucky_envelope");
       if (outcome.lineWins.some((w) => w.withWild || w.symbol === WILD_ID)) earned.push("pearl_power");
+      if (outcome.repeats >= 3) earned.push("chain_reaction");
+      if (jackpotWin > 0) earned.push("no_hu");
 
       const newAchievements: Achievement[] = [];
       if (earned.length) {
@@ -171,8 +198,19 @@ export class DatabaseStorage {
         }
       }
 
+      // 7. Feed the jackpot last: the shared row is locked only for the moment before commit
+      if (contribution > 0 && jackpotPool === null) {
+        const [pot] = await tx.update(jackpot).set({ amount: sql`${jackpot.amount} + ${contribution}` })
+          .where(eq(jackpot.id, 1)).returning({ amount: jackpot.amount });
+        jackpotPool = pot?.amount ?? null;
+      }
+
       return {
         ...outcome,
+        winAmount: totalWin,
+        gameWin: outcome.winAmount,
+        jackpotWin,
+        jackpotPool,
         bet,
         isFreeSpin,
         blessed,
@@ -185,6 +223,11 @@ export class DatabaseStorage {
         newAchievements,
       };
     });
+  }
+
+  async getJackpot() {
+    const [pot] = await db.select().from(jackpot).where(eq(jackpot.id, 1));
+    return pot ?? { id: 1, amount: JACKPOT_SEED, lastWinner: null, lastAmount: null, lastWonAt: null };
   }
 
   /** Returns the time the oracle can next be used, or null if the blessing was granted now. */

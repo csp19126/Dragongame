@@ -255,6 +255,61 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("Hũ Rồng jackpot", () => {
+    const pot = async () => (await new Player().req("GET", "/api/game/jackpot")).body.amount as number;
+
+    it("starts at the seed and every paid spin feeds it 1% of the bet", async () => {
+      const p = new Player();
+      await p.register();
+      await pool.query("update jackpot set amount = 1000000 where id = 1");
+      const before = await pot();
+      expect(before).toBe(1_000_000);
+      const r = await p.spin(5000);
+      expect(r.status).toBe(200);
+      expect(r.body.jackpotPool).toBe(before + 50);
+      expect(await pot()).toBe(before + 50);
+    });
+
+    it("free spins do not feed it", async () => {
+      const p = new Player();
+      const user = await p.register();
+      await pool.query("insert into game_states (user_id, slot_id, free_spins, free_spin_bet) values ($1, 'main', 1, 1000)", [user.id]);
+      const before = await pot();
+      const r = await p.spin(1000);
+      expect(r.body.isFreeSpin).toBe(true);
+      expect(await pot()).toBe(before);
+    });
+
+    it("middle-row pearls win it: a share below the full bet, and the pot never drops under the seed", async () => {
+      const { storage } = await import("../server/storage");
+      const { spin } = await import("../server/game");
+      const p = new Player();
+      const user = await p.register();
+      await pool.query("update jackpot set amount = 3000000 where id = 1");
+      const pearls = [["lotus", "pearl", "dragon"], ["drum", "pearl", "lotus"], ["dragon", "pearl", "drum"]]; // grid[col][row]
+      const noWins = () => { const seq = [3, 7, 3, 7, 3, 7]; let i = 0; return () => seq[i++ % seq.length]; };
+      const r = await storage.spin(user.id, 10000, (bet, o) => spin(bet, { ...o, startGrid: pearls, rng: noWins() }));
+      if ("error" in r) throw new Error(r.error);
+      expect(r.jackpotHit).toBe(true);
+      // 10K is a tenth of the full-pot bet, so it wins a tenth of the pot (after its own 1% contribution)
+      expect(r.jackpotWin).toBe(Math.floor((3_000_000 + 100) * 0.1));
+      expect(r.winAmount).toBe(r.gameWin + r.jackpotWin);
+      expect(r.newBalance).toBe(50000 - 10000 + r.winAmount);
+      expect(r.jackpotPool).toBe(3_000_100 - r.jackpotWin);
+      const after = (await new Player().req("GET", "/api/game/jackpot")).body;
+      expect(after.amount).toBe(r.jackpotPool);
+      expect(after.lastAmount).toBe(r.jackpotWin);
+      expect(after.lastWinner).toMatch(/\*\*/); // masked username
+      expect(r.newAchievements.map((a) => a.badgeId)).toContain("no_hu");
+
+      // A full-bet win empties the pot down to the seed
+      await setBalance(p.username, 1_000_000);
+      const big = await storage.spin(user.id, 100000, (bet, o) => spin(bet, { ...o, startGrid: pearls, rng: noWins() }));
+      if ("error" in big) throw new Error(big.error);
+      expect(big.jackpotPool).toBe(1_000_000);
+    });
+  });
+
   describe("admin and public data", () => {
     it("admin endpoints are closed to normal players and open to admins", async () => {
       const p = new Player();

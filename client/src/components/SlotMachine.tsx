@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, RotateCw, Volume2, VolumeX, Wand2, Gift, Info, Crown } from "lucide-react";
-import { BET_OPTIONS, PAYLINES, SLOT_SYMBOLS, SCATTER_PAYS, WILD_ID, SCATTER_ID } from "@shared/schema";
-import { useGameState, useSpin, useSetBalance, type SpinResponse } from "@/hooks/use-game";
+import { Loader2, RotateCw, Volume2, VolumeX, Wand2, Gift, Info, Crown, Lock } from "lucide-react";
+import {
+  BET_OPTIONS, PAYLINES, SLOT_SYMBOLS, SCATTER_PAYS, WILD_ID, SCATTER_ID, REPEATER_MULTIPLIERS,
+  JACKPOT_LINE, JACKPOT_FULL_BET,
+} from "@shared/schema";
+import { useGameState, useSpin, useSetBalance, useJackpot, JACKPOT_KEY, type SpinResponse, type JackpotResponse } from "@/hooks/use-game";
 import { useLang } from "@/lib/lang-context";
 import { soundManager } from "@/lib/sound";
 import { apiRequest, ApiError, queryClient } from "@/lib/queryClient";
@@ -29,80 +32,151 @@ const IDS = SLOT_SYMBOLS.map((s) => s.id);
 const randomSymbol = () => IDS[Math.floor(Math.random() * IDS.length)];
 
 const REEL_STOP_MS = [520, 820, 1120];
-const OVERLAY_MS: Record<WinTier, number> = { none: 0, small: 0, win: 0, big: 2600, mega: 3800, epic: 5200 };
+/** Each Repeater step: cells spin for RESPIN_MS, then the result shows until the next step */
+const STEP_MS = 1500;
+const RESPIN_MS = 750;
+const OVERLAY_MS: Record<WinTier, number> = { none: 0, small: 0, win: 0, big: 2600, mega: 3800, epic: 5200, jackpot: 7000 };
 
 function fmtBet(a: number) {
   return a >= 1_000_000 ? `${a / 1_000_000}M` : `${a / 1000}K`;
 }
 
-function CountUp({ value, ms = 1200 }: { value: number; ms?: number }) {
-  const [display, setDisplay] = useState(0);
+/** True when the phone/browser asks for less motion (Android "Remove animations", some battery savers) */
+function useReducedMotion() {
+  const query = "(prefers-reduced-motion: reduce)";
+  const [reduced, setReduced] = useState(() => typeof window !== "undefined" && window.matchMedia?.(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(query);
+    if (!m) return;
+    const onChange = () => setReduced(m.matches);
+    m.addEventListener?.("change", onChange);
+    return () => m.removeEventListener?.("change", onChange);
+  }, []);
+  return reduced;
+}
+
+/** A number that rolls smoothly from its previous value to the new one */
+function RollingNumber({ value, ms = 900 }: { value: number; ms?: number }) {
+  const [display, setDisplay] = useState(value);
+  const from = useRef(value);
   useEffect(() => {
     const start = performance.now();
+    const a = from.current;
     let raf = 0;
     const tick = (now: number) => {
       const p = Math.min(1, (now - start) / ms);
-      setDisplay(Math.round(value * (1 - (1 - p) ** 3)));
+      const v = Math.round(a + (value - a) * (1 - (1 - p) ** 3));
+      setDisplay(v);
       if (p < 1) raf = requestAnimationFrame(tick);
+      else from.current = value;
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); from.current = value; };
   }, [value, ms]);
   return <>{display.toLocaleString()}</>;
 }
 
-/** One reel column: a blurred scrolling strip while spinning, then the landed symbols with a bounce */
-function Reel({ symbols, spinning, spinId, lineCells, scatterRows, celebrate }: {
-  symbols: string[];
-  spinning: boolean;
-  spinId: number;
-  lineCells: Set<number>;
-  scatterRows: Set<number>;
-  celebrate: boolean;
-}) {
-  // A fresh random strip for every spin, repeated twice so the CSS loop is seamless
+/**
+ * A cell whose symbol flickers through random symbols. Driven by JavaScript so it works even
+ * where the browser has switched CSS animations off.
+ */
+function FlickerSymbol({ fast = true }: { fast?: boolean }) {
+  const [s, setS] = useState(randomSymbol);
+  const [jitter, setJitter] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => { setS(randomSymbol()); setJitter((j) => (j ? 0 : 1)); }, fast ? 70 : 120);
+    return () => window.clearInterval(id);
+  }, [fast]);
+  return (
+    <span
+      className="text-5xl sm:text-6xl select-none"
+      style={{ filter: fast ? "blur(2px) brightness(1.15)" : "brightness(1.1)", transform: fast ? `translateY(${jitter ? 6 : -6}px)` : undefined }}
+    >
+      {EMOJI[s]}
+    </span>
+  );
+}
+
+/** A whole reel scrolling, animated frame by frame from JavaScript (not CSS) */
+function ScrollingStrip({ spinId }: { spinId: number }) {
   const strip = useMemo(() => {
     const s = Array.from({ length: 6 }, randomSymbol);
     return [...s, ...s];
   }, [spinId]);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    let pos = 0; // 0..1 across half the strip
+    const tick = (now: number) => {
+      pos = (pos + (now - last) / 320) % 1;
+      last = now;
+      if (ref.current) ref.current.style.transform = `translate3d(0, ${-50 + pos * 50}%, 0)`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="absolute inset-0 overflow-hidden rounded-2xl bg-white/5 border border-white/10">
+      <div ref={ref} className="absolute inset-x-0 top-0 will-change-transform" style={{ height: "400%", filter: "blur(2px) brightness(1.15)" }}>
+        {strip.map((s, i) => (
+          <div key={i} className="flex items-center justify-center" style={{ height: `${100 / strip.length}%` }}>
+            <span className="text-5xl sm:text-6xl select-none">{EMOJI[s]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
+function Reel({ col, symbols, spinning, cellSpinning, spinId, lineCells, scatterRows, heldRows, reducedMotion }: {
+  col: number;
+  symbols: string[];
+  spinning: boolean;
+  cellSpinning: boolean[];
+  spinId: number;
+  lineCells: Set<number>;
+  scatterRows: Set<number>;
+  heldRows: Set<number>;
+  reducedMotion: boolean;
+}) {
   return (
     <div className="relative" data-testid="reel">
-      <div className={`flex flex-col gap-2 sm:gap-3 ${spinning ? "opacity-0" : "reel-land"}`} key={`land-${spinId}-${spinning}`}>
+      <div className={`flex flex-col gap-2 sm:gap-3 ${spinning && !reducedMotion ? "opacity-0" : spinning ? "" : "reel-land"}`} key={`land-${spinId}-${spinning}`}>
         {symbols.map((s, r) => {
-          const onLine = celebrate && lineCells.has(r);
-          const scatter = celebrate && scatterRows.has(r);
+          const onLine = lineCells.has(r);
+          const scatter = scatterRows.has(r);
+          const held = heldRows.has(r);
+          const respinning = cellSpinning[r] || (spinning && reducedMotion);
           return (
             <div
               key={r}
-              className={`flex items-center justify-center aspect-square rounded-2xl border transition-colors duration-300 ${
-                scatter ? "bg-red-500/25 border-red-400 shadow-[0_0_24px_rgba(239,68,68,0.6)]"
+              className={`relative flex items-center justify-center aspect-square rounded-2xl border transition-colors duration-300 overflow-hidden ${
+                respinning ? "bg-white/10 border-white/20"
+                  : held ? "bg-purple-500/25 border-purple-300 shadow-[0_0_22px_rgba(192,132,252,0.7)]"
+                  : scatter ? "bg-red-500/25 border-red-400 shadow-[0_0_24px_rgba(239,68,68,0.6)]"
                   : onLine ? "bg-yellow-500/20 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)]"
                   : "bg-white/5 border-white/10"
               }`}
-              data-testid="reel-cell"
+              data-testid={`cell-${col}-${r}`}
             >
-              <span
-                className={`text-5xl sm:text-6xl select-none ${scatter ? "scatter-hit" : onLine ? "symbol-winning" : ""} ${s === WILD_ID ? "wild-glow" : ""}`}
-                style={{ filter: GLOW[s] }}
-              >
-                {EMOJI[s]}
-              </span>
+              {respinning ? (
+                <FlickerSymbol fast={!reducedMotion} />
+              ) : (
+                <span
+                  className={`text-5xl sm:text-6xl select-none ${scatter ? "scatter-hit" : onLine ? "symbol-winning" : ""} ${s === WILD_ID ? "wild-glow" : ""}`}
+                  style={{ filter: GLOW[s] }}
+                >
+                  {EMOJI[s]}
+                </span>
+              )}
+              {held && !respinning && <Lock className="absolute top-1 right-1 w-3.5 h-3.5 text-purple-200" aria-hidden />}
             </div>
           );
         })}
       </div>
-      {spinning && (
-        <div className="absolute inset-0 overflow-hidden rounded-2xl bg-white/5 border border-white/10">
-          <div className="reel-strip absolute inset-x-0 top-0" style={{ height: "400%" }}>
-            {strip.map((s, i) => (
-              <div key={i} className="flex items-center justify-center" style={{ height: `${100 / strip.length}%` }}>
-                <span className="text-5xl sm:text-6xl select-none">{EMOJI[s]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {spinning && !reducedMotion && <ScrollingStrip spinId={spinId} />}
     </div>
   );
 }
@@ -117,22 +191,52 @@ function Bulbs({ mode }: { mode: "idle" | "spin" | "win" }) {
   );
 }
 
+function JackpotMeter() {
+  const { t } = useLang();
+  const { data } = useJackpot();
+  if (!data) return null;
+  return (
+    <div className="w-full rounded-2xl border-2 border-yellow-400/70 bg-gradient-to-r from-red-900 via-red-700 to-red-900 px-3 py-1.5 text-center shadow-[0_0_24px_rgba(250,204,21,0.35)]" data-testid="jackpot-meter">
+      <div className="flex items-center justify-center gap-2">
+        <span className="text-xl">🏺</span>
+        <span className="text-[11px] font-black tracking-[0.2em] text-yellow-200">{t.jackpotName}</span>
+        <span className="font-mono font-black text-xl sm:text-2xl text-yellow-300 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" data-testid="text-jackpot">
+          <RollingNumber value={data.amount} />
+        </span>
+      </div>
+      {data.lastWinner && data.lastAmount ? (
+        <div className="text-[10px] text-yellow-100/70">{t.jackpotLast}: {data.lastWinner} · {data.lastAmount.toLocaleString()}</div>
+      ) : null}
+    </div>
+  );
+}
+
+interface Chip { key: string; label: string; amount: number; color: string; mult: number }
+
 export function SlotMachine() {
   const { t, lang, toggleLang } = useLang();
   const { toast } = useToast();
   const { data: state } = useGameState();
   const spinMutation = useSpin();
   const setBalance = useSetBalance();
+  const reducedMotion = useReducedMotion();
 
   const balance = state?.balance ?? 0;
   const freeSpins = state?.freeSpins ?? 0;
 
-  const [grid, setGrid] = useState<string[][]>([["dragon", "pearl", "lotus"], ["envelope", "dragon", "lantern"], ["lotus", "drum", "dragon"]]);
-  const [reelsSpinning, setReelsSpinning] = useState([false, false, false]);
+  const [grid, setGrid] = useState<string[][]>([["dragon", "pearl", "lotus"], ["envelope", "pearl", "lantern"], ["lotus", "pearl", "dragon"]]);
+  const [colSpinning, setColSpinning] = useState([false, false, false]);
+  const [cellSpinning, setCellSpinning] = useState<boolean[][]>([[false, false, false], [false, false, false], [false, false, false]]);
   const [spinId, setSpinId] = useState(0);
   const [busy, setBusy] = useState(false);
   const [bet, setBet] = useState(BET_OPTIONS[0]);
   const [result, setResult] = useState<SpinResponse | null>(null);
+  // What is lit up while a spin plays out, step by step
+  const [shownLines, setShownLines] = useState<number[]>([]);
+  const [held, setHeld] = useState<Set<string>>(new Set());
+  const [chips, setChips] = useState<Chip[]>([]);
+  const [showScatter, setShowScatter] = useState(false);
+  const [repeaterBanner, setRepeaterBanner] = useState<number | null>(null);
   const [overlay, setOverlay] = useState<{ res: SpinResponse; tier: WinTier } | null>(null);
   const [scatterBanner, setScatterBanner] = useState<SpinResponse | null>(null);
   const [shaking, setShaking] = useState(false);
@@ -156,8 +260,11 @@ export function SlotMachine() {
     timers.current.push(window.setTimeout(fn, ms));
   };
 
-  const reveal = useCallback((res: SpinResponse) => {
+  /** End of the spin: balance, celebration by total size, free spins, achievements */
+  const finish = useCallback((res: SpinResponse) => {
     setResult(res);
+    setRepeaterBanner(null);
+    setHeld(new Set());
     setBalance(res.newBalance, {
       freeSpins: res.totalFreeSpins,
       freeSpinBet: res.isFreeSpin || res.freeSpinsAwarded ? res.bet : state?.freeSpinBet ?? 0,
@@ -167,14 +274,18 @@ export function SlotMachine() {
       gamesPlayed: res.gamesPlayed,
       blessed: false,
     });
+    if (res.jackpotPool != null) {
+      queryClient.setQueryData<JackpotResponse>(JACKPOT_KEY, (old) => (old ? { ...old, amount: res.jackpotPool! } : old));
+    }
+    if (res.jackpotWin > 0) queryClient.invalidateQueries({ queryKey: JACKPOT_KEY });
     setBusy(false);
 
     // Celebrations scale with the win. Spins that pay back less than the bet are not celebrated.
-    const tier = winTier(res.winAmount, res.bet);
+    const tier: WinTier = res.jackpotWin > 0 ? "jackpot" : winTier(res.winAmount, res.bet);
     if (tier === "win") {
       coinBurst();
       soundManager.win(false);
-    } else if (tier === "big" || tier === "mega" || tier === "epic") {
+    } else if (tier !== "none" && tier !== "small") {
       setOverlay({ res, tier });
       setShaking(true);
       later(() => setShaking(false), 1300);
@@ -183,6 +294,7 @@ export function SlotMachine() {
       if (tier === "big") fireworks(2200);
       if (tier === "mega") { fireworks(3400, 1.4); luckyRain(3200); }
       if (tier === "epic") { fireworks(4800, 1.8); cannons(2600); luckyRain(4600); }
+      if (tier === "jackpot") { fireworks(6500, 2); cannons(4500); luckyRain(6500); later(() => soundManager.bigWinFanfare(), 1800); }
       later(() => setOverlay(null), OVERLAY_MS[tier]);
     } else if (tier === "none" && res.scatterCount < 3) {
       soundManager.lossComfort();
@@ -200,6 +312,35 @@ export function SlotMachine() {
     res.newAchievements.forEach((a) => toast({ title: `🏆 ${a.badgeName}`, description: a.description }));
   }, [setBalance, state?.freeSpinBet, toast]);
 
+  /** Light up the lines (and chips) a step paid */
+  const showStep = useCallback((res: SpinResponse, i: number) => {
+    const step = res.steps[i];
+    setGrid(step.grid);
+    if (step.lineWins.length) {
+      setShownLines((l) => [...l, ...step.lineWins.map((w) => w.line)]);
+      setHeld((h) => {
+        const next = new Set(h);
+        step.lineWins.forEach((w) => PAYLINES[w.line].forEach((row, col) => next.add(`${col}-${row}`)));
+        return next;
+      });
+      setChips((c) => [
+        ...c,
+        ...step.lineWins.map((w) => ({
+          key: `${i}-${w.line}`,
+          label: `${EMOJI[w.symbol].repeat(3)}${w.withWild ? " 🔮" : ""}`,
+          amount: w.amount * (res.blessed ? 2 : 1),
+          color: LINE_COLORS[w.line],
+          mult: step.multiplier,
+        })),
+      ]);
+      if (i > 0) soundManager.multiplierHit(step.multiplier);
+    }
+    if (i === 0 && res.scatterCount >= 3) {
+      setShowScatter(true);
+      setChips((c) => [...c, { key: "scatter", label: `🧧×${res.scatterCount}`, amount: res.scatterWin, color: "#f87171", mult: 1 }]);
+    }
+  }, []);
+
   const handleSpin = useCallback(async () => {
     if (!canSpin) {
       if (state && freeSpins === 0 && balance < bet) {
@@ -213,30 +354,57 @@ export function SlotMachine() {
     setResult(null);
     setOverlay(null);
     setScatterBanner(null);
+    setRepeaterBanner(null);
+    setShownLines([]);
+    setHeld(new Set());
+    setChips([]);
+    setShowScatter(false);
     setSpinId((n) => n + 1);
-    setReelsSpinning([true, true, true]);
+    setColSpinning([true, true, true]);
     soundManager.spinStart();
     if (freeSpins === 0) setBalance(balance - bet); // show the stake leaving straight away
 
     const started = Date.now();
     try {
       const res = await spinMutation.mutateAsync(bet);
+      const first = res.steps[0];
       const wait = Math.max(0, 300 - (Date.now() - started));
       REEL_STOP_MS.forEach((ms, col) => later(() => {
-        setGrid((g) => g.map((c, i) => (i === col ? res.grid[col] : c)));
-        setReelsSpinning((r) => r.map((v, i) => (i === col ? false : v)));
+        setGrid((g) => g.map((c, i) => (i === col ? first.grid[col] : c)));
+        setColSpinning((r) => r.map((v, i) => (i === col ? false : v)));
         soundManager.reelStop();
       }, wait + ms));
-      later(() => reveal(res), wait + REEL_STOP_MS[2] + 380);
+
+      const t0 = wait + REEL_STOP_MS[2] + 380;
+      later(() => showStep(res, 0), t0);
+
+      // Repeater: each step locks the winners, re-spins the rest, then shows what it paid
+      res.steps.slice(1).forEach((step, k) => {
+        const i = k + 1;
+        const at = t0 + 700 + k * STEP_MS;
+        later(() => {
+          setRepeaterBanner(step.multiplier);
+          const heldSet = new Set(step.held);
+          setCellSpinning([0, 1, 2].map((c) => [0, 1, 2].map((r) => !heldSet.has(`${c}-${r}`))));
+          soundManager.spinStart();
+        }, at);
+        later(() => {
+          setCellSpinning([[false, false, false], [false, false, false], [false, false, false]]);
+          soundManager.reelStop();
+          showStep(res, i);
+        }, at + RESPIN_MS);
+      });
+      const end = res.steps.length > 1 ? t0 + 700 + (res.steps.length - 1) * STEP_MS - 300 : t0 + 150;
+      later(() => finish(res), end);
     } catch (e) {
-      setReelsSpinning([false, false, false]);
+      setColSpinning([false, false, false]);
       setBusy(false);
       setAutoSpin(false);
       queryClient.invalidateQueries({ queryKey: ["/api/game/state"] });
       const msg = e instanceof ApiError && e.status === 400 ? t.insufficientBalanceDesc : (e as Error).message;
       toast({ title: t.error, description: msg, variant: "destructive" });
     }
-  }, [balance, bet, canSpin, freeSpins, reveal, setBalance, spinMutation, state, t, toast]);
+  }, [balance, bet, canSpin, finish, freeSpins, setBalance, showStep, spinMutation, state, t, toast]);
 
   // Auto-spin: queue the next spin once the machine is idle and any celebration has played
   useEffect(() => {
@@ -281,19 +449,17 @@ export function SlotMachine() {
   };
 
   // Which cells to light up, per column
-  const celebrate = !busy && !!result;
   const lineCellsByCol = [new Set<number>(), new Set<number>(), new Set<number>()];
+  shownLines.forEach((l) => PAYLINES[l].forEach((row, col) => lineCellsByCol[col].add(row)));
   const scatterRowsByCol = [new Set<number>(), new Set<number>(), new Set<number>()];
-  if (celebrate && result) {
-    result.winLines.forEach((l) => PAYLINES[l].forEach((row, col) => lineCellsByCol[col].add(row)));
-    if (result.scatterCount >= 3) {
-      result.grid.forEach((col, c) => col.forEach((s, r) => { if (s === SCATTER_ID) scatterRowsByCol[c].add(r); }));
-    }
-  }
-  const shownLines = celebrate && result ? result.winLines : [];
+  if (showScatter) grid.forEach((col, c) => col.forEach((s, r) => { if (s === SCATTER_ID) scatterRowsByCol[c].add(r); }));
+  const heldByCol = [new Set<number>(), new Set<number>(), new Set<number>()];
+  if (repeaterBanner !== null) held.forEach((k) => { const [c, r] = k.split("-").map(Number); heldByCol[c].add(r); });
+
   const lockedBet = freeSpins > 0 ? state?.freeSpinBet || bet : bet;
-  const bulbMode = busy ? "spin" : overlay || scatterBanner || (result && result.winAmount > result.bet) ? "win" : "idle";
-  const tierTitle = (tier: WinTier) => (tier === "epic" ? t.megaWin : tier === "mega" ? t.hugeWin : t.bigWin);
+  const bulbMode = busy && !shownLines.length ? "spin" : overlay || scatterBanner || repeaterBanner || (result && result.winAmount > result.bet) ? "win" : busy ? "spin" : "idle";
+  const tierTitle = (tier: WinTier) => (tier === "jackpot" ? t.jackpotWin : tier === "epic" ? t.megaWin : tier === "mega" ? t.hugeWin : t.bigWin);
+  const runningTotal = chips.reduce((a, c) => a + c.amount, 0);
 
   return (
     <div className="flex flex-col items-center gap-3 w-full max-w-md mx-auto" data-testid="slot-machine">
@@ -325,6 +491,8 @@ export function SlotMachine() {
         </div>
       </div>
 
+      <JackpotMeter />
+
       {/* Cabinet */}
       <div
         className={`relative w-full bg-gradient-to-b from-[#2a0f4f] via-[#140726] to-[#0a051a] rounded-[2rem] pt-2 pb-2 px-2 sm:px-3 border-4 shadow-[0_0_60px_rgba(0,0,0,0.9)] ${
@@ -344,16 +512,19 @@ export function SlotMachine() {
           {grid.map((col, c) => (
             <Reel
               key={c}
+              col={c}
               symbols={col}
-              spinning={reelsSpinning[c]}
+              spinning={colSpinning[c]}
+              cellSpinning={cellSpinning[c]}
               spinId={spinId}
               lineCells={lineCellsByCol[c]}
               scatterRows={scatterRowsByCol[c]}
-              celebrate={celebrate}
+              heldRows={heldByCol[c]}
+              reducedMotion={reducedMotion}
             />
           ))}
 
-          {/* Payline overlay: each winning line drawn in turn */}
+          {/* Payline overlay: each winning line drawn as it pays */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 300" preserveAspectRatio="none">
             {shownLines.map((l, i) => (
               <motion.polyline
@@ -361,21 +532,41 @@ export function SlotMachine() {
                 points={PAYLINES[l].map((row, col) => `${50 + col * 100},${50 + row * 100}`).join(" ")}
                 fill="none"
                 stroke={LINE_COLORS[l]}
-                strokeWidth={6}
+                strokeWidth={l === JACKPOT_LINE ? 7 : 6}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 style={{ filter: `drop-shadow(0 0 6px ${LINE_COLORS[l]})` }}
                 initial={{ pathLength: 0, opacity: 0 }}
                 animate={{ pathLength: 1, opacity: 0.9 }}
-                transition={{ duration: 0.35, delay: i * 0.18 }}
+                transition={{ duration: 0.35, delay: (i % 4) * 0.15 }}
               />
             ))}
           </svg>
+
+          {/* Repeater banner */}
+          <AnimatePresence>
+            {repeaterBanner !== null && (
+              <motion.div
+                key={`rep-${repeaterBanner}`}
+                initial={{ opacity: 0, scale: 0.4, rotate: -8 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                exit={{ opacity: 0, scale: 1.6 }}
+                transition={{ type: "spring", stiffness: 380, damping: 16 }}
+                className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex justify-center pointer-events-none"
+                data-testid="banner-repeater"
+              >
+                <div className="px-5 py-2 rounded-2xl bg-gradient-to-r from-purple-700/95 via-fuchsia-600/95 to-purple-700/95 border-2 border-yellow-300 shadow-[0_0_30px_rgba(217,70,239,0.8)] text-center">
+                  <div className="text-[11px] font-black tracking-[0.3em] text-yellow-200">🔁 {t.repeaterGo}</div>
+                  <div className="text-4xl font-black text-white leading-none drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">×{repeaterBanner}</div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <Bulbs mode={bulbMode} />
 
-        {/* Big / mega / epic win overlay */}
+        {/* Big / mega / epic / jackpot win overlay */}
         <AnimatePresence>
           {overlay && (
             <motion.div
@@ -383,12 +574,14 @@ export function SlotMachine() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.4 }}
               transition={{ type: "spring", stiffness: 260, damping: 18 }}
-              className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/70 backdrop-blur-sm rounded-[2rem] cursor-pointer"
+              className={`absolute inset-0 flex flex-col items-center justify-center z-20 backdrop-blur-sm rounded-[2rem] cursor-pointer ${overlay.tier === "jackpot" ? "bg-red-950/85" : "bg-black/70"}`}
               onClick={() => setOverlay(null)}
               data-testid="overlay-big-win"
             >
               <motion.div animate={{ y: [-8, 8], rotate: [-6, 6] }} transition={{ repeat: Infinity, duration: 0.5, repeatType: "mirror" }}>
-                {overlay.tier === "epic" ? <span className="text-7xl">🐉</span> : <Crown className="w-16 h-16 text-yellow-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)]" />}
+                {overlay.tier === "jackpot" ? <span className="text-7xl">🏺</span>
+                  : overlay.tier === "epic" ? <span className="text-7xl">🐉</span>
+                  : <Crown className="w-16 h-16 text-yellow-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)]" />}
               </motion.div>
               <motion.h2
                 animate={{ scale: [1, 1.08, 1] }}
@@ -398,9 +591,13 @@ export function SlotMachine() {
                 {tierTitle(overlay.tier)}
               </motion.h2>
               <div className="text-4xl sm:text-6xl font-black text-white font-mono drop-shadow-[0_0_12px_rgba(250,204,21,0.6)]">
-                <CountUp value={overlay.res.winAmount} ms={OVERLAY_MS[overlay.tier] * 0.55} />
+                <RollingNumber value={overlay.res.winAmount} ms={OVERLAY_MS[overlay.tier] * 0.55} />
               </div>
-              <div className="text-yellow-200/80 font-bold mt-1">×{+(overlay.res.winAmount / overlay.res.bet).toFixed(1)}</div>
+              {overlay.tier === "jackpot" ? (
+                <div className="text-yellow-200/90 font-bold mt-1">🏺 {t.jackpotName} +{overlay.res.jackpotWin.toLocaleString()}</div>
+              ) : (
+                <div className="text-yellow-200/80 font-bold mt-1">×{+(overlay.res.winAmount / overlay.res.bet).toFixed(1)}{overlay.res.repeats > 0 ? ` · 🔁×${overlay.res.repeats}` : ""}</div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -425,43 +622,34 @@ export function SlotMachine() {
 
       {/* Result line + what paid */}
       <div className="min-h-[3.25rem] flex flex-col items-center justify-start text-center gap-1" aria-live="polite" data-testid="text-result">
-        {result && !busy && (
-          <>
-            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="font-black text-lg">
-              {result.winAmount > result.bet ? (
-                <span className="text-green-400">{t.youWon} {result.winAmount.toLocaleString()} 🪙{result.blessed ? " (×2)" : ""}</span>
-              ) : result.winAmount > 0 ? (
-                <span className="text-yellow-200/70">{t.smallWin} +{result.winAmount.toLocaleString()} · {t.bet} {result.bet.toLocaleString()}</span>
-              ) : (
-                <span className="text-white/40">{t.noWin}</span>
-              )}
-            </motion.div>
-            {(result.lineWins.length > 0 || result.scatterWin > 0) && (
-              <div className="flex flex-wrap justify-center gap-1.5" data-testid="win-breakdown">
-                {result.lineWins.slice(0, 4).map((w, i) => (
-                  <motion.span
-                    key={`${w.line}-${i}`}
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.15 + i * 0.18 }}
-                    className="text-xs font-bold px-2 py-0.5 rounded-full border bg-black/40"
-                    style={{ borderColor: LINE_COLORS[w.line], color: LINE_COLORS[w.line] }}
-                  >
-                    {EMOJI[w.symbol].repeat(3)}{w.withWild ? " 🔮" : ""} +{w.amount.toLocaleString()}
-                  </motion.span>
-                ))}
-                {result.lineWins.length > 4 && (
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-black/40 text-yellow-200/70">+{result.lineWins.length - 4}</span>
-                )}
-                {result.scatterWin > 0 && (
-                  <motion.span initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }}
-                    className="text-xs font-bold px-2 py-0.5 rounded-full border border-red-400 text-red-300 bg-black/40">
-                    🧧×{result.scatterCount} +{result.scatterWin.toLocaleString()}
-                  </motion.span>
-                )}
-              </div>
+        {result && !busy ? (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="font-black text-lg">
+            {result.winAmount > result.bet ? (
+              <span className="text-green-400">{t.youWon} {result.winAmount.toLocaleString()} 🪙{result.blessed ? " (×2)" : ""}</span>
+            ) : result.winAmount > 0 ? (
+              <span className="text-yellow-200/70">{t.smallWin} +{result.winAmount.toLocaleString()} · {t.bet} {result.bet.toLocaleString()}</span>
+            ) : (
+              <span className="text-white/40">{t.noWin}</span>
             )}
-          </>
+          </motion.div>
+        ) : busy && runningTotal > 0 ? (
+          <div className="font-black text-lg text-yellow-300 font-mono" data-testid="text-running-total">+<RollingNumber value={runningTotal} ms={400} /></div>
+        ) : null}
+        {chips.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-1.5" data-testid="win-breakdown">
+            {chips.slice(-6).map((c) => (
+              <motion.span
+                key={c.key}
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-xs font-bold px-2 py-0.5 rounded-full border bg-black/40"
+                style={{ borderColor: c.color, color: c.color }}
+              >
+                {c.label}{c.mult > 1 ? ` ×${c.mult}` : ""} +{c.amount.toLocaleString()}
+              </motion.span>
+            ))}
+            {chips.length > 6 && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-black/40 text-yellow-200/70">+{chips.length - 6}</span>}
+          </div>
         )}
       </div>
 
@@ -532,11 +720,29 @@ export function SlotMachine() {
                   {EMOJI[s.id].repeat(3)}
                   {s.kind === "wild" && <span className="ml-2 text-[10px] font-black tracking-normal text-purple-200 align-middle">{t.wild}</span>}
                 </span>
-                <span className="font-mono font-black text-yellow-400">×{s.pays}</span>
+                <span className="text-right">
+                  <span className="block font-mono font-black text-yellow-400">{Math.floor(s.pays * lockedBet).toLocaleString()}</span>
+                  <span className="block text-[10px] text-yellow-100/50">×{s.pays} · {t.bet} {fmtBet(lockedBet)}</span>
+                </span>
               </div>
             ))}
           </div>
           <p className="text-sm text-purple-200/90">{t.paytableWild}</p>
+
+          <p className="text-sm text-fuchsia-200/90 mt-1">{t.paytableRepeater}</p>
+          <div className="flex justify-center gap-1.5">
+            {REPEATER_MULTIPLIERS.map((m) => (
+              <span key={m} className="px-2.5 py-1 rounded-lg bg-fuchsia-600/30 border border-fuchsia-400/50 font-black text-yellow-200 text-sm">×{m}</span>
+            ))}
+          </div>
+
+          <p className="text-sm text-yellow-200/90 mt-1">{t.paytableJackpot}</p>
+          <div className="flex items-center justify-center gap-2 rounded-xl bg-red-800/40 border border-yellow-400/40 py-1.5">
+            <span className="text-xs text-yellow-100/70">{t.jackpotName}</span>
+            <span className="text-xl tracking-widest">🔮🔮🔮</span>
+            <span className="text-[10px] text-yellow-100/60">≥ {fmtBet(JACKPOT_FULL_BET)}</span>
+          </div>
+
           <p className="text-sm text-red-200/90 mt-1">{t.paytableScatter}</p>
           <div className="space-y-1.5">
             {[...SCATTER_PAYS].reverse().map((tier) => (

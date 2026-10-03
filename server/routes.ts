@@ -5,9 +5,9 @@ import { z } from "zod";
 import { storage } from "./storage";
 import {
   BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
-  ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, type User, type PublicUser,
+  ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, BASE_RTP, TOTAL_RTP,
+  JACKPOT_LINE, JACKPOT_CONTRIBUTION, JACKPOT_FULL_BET, JACKPOT_SEED, type User, type PublicUser,
 } from "@shared/schema";
-import { exactRtp } from "./game";
 
 declare module "express-session" {
   interface SessionData {
@@ -43,7 +43,7 @@ function rateLimit(max: number, windowMs: number) {
 }
 
 /** Real recent big wins, for the "live wins" ticker. In-memory, resets on restart. */
-const recentWins: { user: string; amount: number; multiple: number; at: number }[] = [];
+const recentWins: { user: string; amount: number; multiple: number; at: number; jackpot?: boolean }[] = [];
 function maskName(name: string) {
   return name.length <= 3 ? name[0] + "**" : name.slice(0, 3) + "***";
 }
@@ -119,9 +119,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       paylines: PAYLINES,
       scatterPays: SCATTER_PAYS,
       bets: BET_OPTIONS,
+      repeaterMultipliers: REPEATER_MULTIPLIERS,
+      jackpot: { line: JACKPOT_LINE, contribution: JACKPOT_CONTRIBUTION, fullBet: JACKPOT_FULL_BET, seed: JACKPOT_SEED },
       maxWinMultiple: MAX_WIN_MULTIPLE,
-      rtp: Number(exactRtp().rtp.toFixed(5)),
+      rtp: { base: BASE_RTP, total: TOTAL_RTP },
       oracleMultiplier: ORACLE_WIN_MULTIPLIER,
+    });
+  });
+
+  app.get("/api/game/jackpot", async (_req, res) => {
+    const pot = await storage.getJackpot();
+    res.json({
+      amount: pot.amount,
+      lastWinner: pot.lastWinner ? maskName(pot.lastWinner) : null,
+      lastAmount: pot.lastAmount,
+      lastWonAt: pot.lastWonAt,
     });
   });
 
@@ -153,8 +165,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "Insufficient balance", code: result.error });
     }
     const multiple = result.winAmount / result.bet;
-    if (multiple >= 10) {
-      recentWins.unshift({ user: maskName(user.username), amount: result.winAmount, multiple, at: Date.now() });
+    if (multiple >= 10 || result.jackpotWin > 0) {
+      recentWins.unshift({ user: maskName(user.username), amount: result.winAmount, multiple, at: Date.now(), jackpot: result.jackpotWin > 0 });
       recentWins.length = Math.min(recentWins.length, 20);
     }
     res.json(result);

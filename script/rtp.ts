@@ -1,47 +1,33 @@
 /**
- * Return-to-player report for the slot engine.
- *   npx tsx script/rtp.ts           exact (analytic) RTP + a Monte Carlo cross-check of the real engine
- *   npx tsx script/rtp.ts --brute   also enumerates every one of the 7^9 grids (about a minute)
+ * Return-to-player report for the real slot engine (Repeater, free spins and jackpot included).
+ *   npx tsx script/rtp.ts            20 million spins
+ *   npx tsx script/rtp.ts 100000000  any number of spins
  */
-import { SLOT_SYMBOLS, ORACLE_WIN_MULTIPLIER, MAX_WIN_MULTIPLE } from "../shared/schema";
-import { evaluate, spin, exactRtp } from "../server/game";
+import { BASE_RTP, JACKPOT_CONTRIBUTION, ORACLE_WIN_MULTIPLIER } from "../shared/schema";
+import { spin } from "../server/game";
 
-const pct = (x: number) => (x * 100).toFixed(3) + "%";
+const N = Number(process.argv[2] ?? 20_000_000);
 const BET = 1000;
+const pct = (x: number) => (x * 100).toFixed(3) + "%";
 
-const e = exactRtp();
-console.log(`Exact: base return ${pct(e.baseReturn)}, free spins per paid spin ${e.freeSpinsPerSpin.toFixed(4)}, ` +
-  `free spins trigger 1 in ${(1 / e.triggerChance).toFixed(1)}, RTP ${pct(e.rtp)}, max win ${MAX_WIN_MULTIPLE}x bet`);
-console.log(`Oracle-blessed spin returns ${pct(e.baseReturn * ORACLE_WIN_MULTIPLIER)} (once per hour)`);
-
-// Monte Carlo of the real engine (crypto RNG), including free spins
-let paid = 0, won = 0, pending = 0, hits = 0, profitable = 0;
-const N = 2_000_000;
+let paid = 0, won = 0, pending = 0, hits = 0, profitable = 0, big = 0, repeats = 0, jackpots = 0, maxWin = 0, sumSq = 0;
 for (let i = 0; i < N; i++) {
-  const free = pending > 0;
-  if (free) pending--; else paid += BET;
+  if (pending > 0) pending--; else paid += BET;
   const r = spin(BET);
   won += r.winAmount;
+  sumSq += (r.winAmount / BET) ** 2;
   pending += r.freeSpinsAwarded;
+  repeats += r.repeats;
   if (r.winAmount > 0) hits++;
   if (r.winAmount > BET) profitable++;
+  if (r.winAmount >= 10 * BET) big++;
+  if (r.jackpotHit) jackpots++;
+  if (r.winAmount > maxWin) maxWin = r.winAmount;
 }
-console.log(`Monte Carlo (${N.toLocaleString()} spins incl. free spins): RTP ${pct(won / paid)}, ` +
-  `any win ${pct(hits / N)}, profitable spins ${pct(profitable / N)}`);
-
-if (process.argv.includes("--brute")) {
-  const ids = SLOT_SYMBOLS.map((s) => s.id);
-  const total = SLOT_SYMBOLS.reduce((a, s) => a + s.weight, 0);
-  const p = SLOT_SYMBOLS.map((s) => s.weight / total);
-  const n = ids.length;
-  let ret = 0, fs = 0;
-  const idx = new Array(9).fill(0);
-  for (let combo = 0; combo < n ** 9; combo++) {
-    let c = combo, prob = 1;
-    for (let k = 0; k < 9; k++) { idx[k] = c % n; c = Math.floor(c / n); prob *= p[idx[k]]; }
-    const r = evaluate([0, 1, 2].map((col) => [0, 1, 2].map((row) => ids[idx[col * 3 + row]])), BET);
-    ret += (prob * r.winAmount) / BET;
-    fs += prob * r.freeSpinsAwarded;
-  }
-  console.log(`Brute force over ${(n ** 9).toLocaleString()} grids: RTP ${pct(ret / (1 - fs))}`);
-}
+const rtp = won / paid;
+const sd = Math.sqrt(sumSq / N - (won / N / BET) ** 2);
+console.log(`${N.toLocaleString()} spins: base RTP ${pct(rtp)} ± ${pct((2 * sd) / Math.sqrt(N))} (95% conf.), published ${pct(BASE_RTP)}`);
+console.log(`  + ${pct(JACKPOT_CONTRIBUTION)} of bets paid back through the jackpot = ${pct(rtp + JACKPOT_CONTRIBUTION)} total`);
+console.log(`  any win ${pct(hits / N)}, profitable ${pct(profitable / N)}, 10x+ 1 in ${(N / big).toFixed(0)}, ` +
+  `repeats per spin ${(repeats / N).toFixed(3)}, jackpot 1 in ${jackpots ? (N / jackpots).toFixed(0) : "–"}, max ${maxWin / BET}x`);
+console.log(`  oracle-blessed spin returns ${pct(rtp * ORACLE_WIN_MULTIPLIER)} (once per hour)`);

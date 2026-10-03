@@ -8,6 +8,13 @@
       "when": 1791019149785,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791029168032,
+      "tag": "0001_jackpot",
+      "breakpoints": true
     }
   ]
 }

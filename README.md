@@ -65,20 +65,27 @@ built server (`.github/workflows/ci.yml`).
 ## The game
 
 - 3×3 grid, **9 paylines**: rows, diagonals, V shapes and zigzags. Three of a kind on a line pays
-  the multiple of your bet shown in the in-game paytable (🐉 ×88.8, 🥁 ×8, 🌸 ×3, 🏮 ×1.2, 🪙 ×0.5).
-  All lines add up.
-- **🔮 Dragon Pearl (wild):** stands in for any symbol on a line; three pearls pay ×100.
-- **🧧 Red envelope (scatter):** pays anywhere on the grid, no line needed. 3 → ×1 + 5 free spins,
-  4 → ×5 + 8 free spins, 5+ → ×25 + 10 free spins. Free spins play at the bet that won them.
+  the multiple of the bet in the in-game paytable (🐉 ×18, 🥁 ×2.3, 🌸 ×0.9, 🏮 ×0.35, 🪙 ×0.125).
+- **🔮 Dragon Pearl (wild):** stands in for any symbol on a line; three pearls pay ×50.
+- **🔁 Repeater (Rồng Lặp):** after a line win the winning symbols lock and every other cell re-spins
+  for free. Each new winning line pays ×2, then ×3, ×5, ×8, ×12; the chain continues while each
+  repeat wins something new.
+- **🏺 Hũ Rồng progressive jackpot:** 1% of every paid bet feeds a shared pot (starts at 1,000,000).
+  Three 🔮 on the middle row, on the spin or any repeat, wins it: the whole pot at a bet of 100K or
+  more, a proportional share below that.
+- **🧧 Red envelope (scatter):** pays anywhere on the grid. 3 → ×1 + 5 free spins, 4 → ×5 + 8,
+  5+ → ×25 + 10. Free spins play at the bet that won them.
 - The Dragon Oracle doubles your next spin's winnings, once an hour.
 - 50,000 coins on sign-up, 50,000 more every 20 hours, plus admin-created promo codes.
 - Every cell is drawn independently with Node's `crypto.randomInt`. No near-miss forcing, no
-  per-player tuning. **RTP is exactly 96.02%** including free spins (max win 900× the bet),
-  confirmed three ways: closed-form maths, a brute-force count of all 40,353,607 grids
-  (`npm run rtp -- --brute`), and a Monte Carlo run of the real engine. Tests enforce it.
-- Celebrations scale with the win (coin pop → BIG WIN fireworks → MEGA WIN with raining lì xì →
-  DRAGON FORTUNE with cannons). Spins that pay back less than the bet are labelled honestly as
-  small wins and are not celebrated.
+  per-player tuning.
+- **Return to player: 95.0% from the game + 1% through the jackpot = 96%.** Measured over 200M
+  simulated spins and re-checked against the real engine (`npm run rtp`); a test enforces it.
+  About 45% of spins pay something, 23% are a profit, 1 in 117 pays 10× or more, max seen 1,200×.
+- Celebrations scale with the win (coin pop → BIG WIN fireworks → MEGA WIN → DRAGON FORTUNE →
+  NỔ HŨ for the jackpot). Spins that pay back less than the bet are labelled honestly as small
+  wins and are not celebrated. Reels are animated from JavaScript, so they spin even on phones
+  or browsers that switch CSS animations off.
 
 ## Code map
 
