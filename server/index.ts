@@ -10,7 +10,7 @@ const app = express();
 app.set("trust proxy", 1); // CRITICAL: Tells Express to trust the Railway headers
 
 // Standard middleware for reading JSON data from the Login/Spin buttons
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: false }));
 
 // Initialize the session engine (The "Handshake")
@@ -34,18 +34,12 @@ app.get("/api/ping", (_req, res) => {
   const httpServer = createServer(app);
   await registerRoutes(httpServer, app);
 
-  // 2. Seed the database with VIP profiles and gift cards on every startup
+  // 2. Grant admin to the usernames in ADMIN_USERNAMES (comma separated)
+  const adminNames = (process.env.ADMIN_USERNAMES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   try {
-    await (storage as any).seedVIPBalances();
-    console.log("[Startup] VIP balances seeded");
+    await storage.syncAdmins(adminNames);
   } catch (err) {
-    console.error("[Startup] seedVIPBalances failed:", err);
-  }
-  try {
-    await (storage as any).seedGiftCards();
-    console.log("[Startup] Gift cards seeded");
-  } catch (err) {
-    console.error("[Startup] seedGiftCards failed:", err);
+    console.error("[startup] could not sync admins (has `npm run db:push` been run?):", err);
   }
 
   // 3. Global Error Handler
@@ -54,7 +48,8 @@ app.get("/api/ping", (_req, res) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
     console.error("SERVER ERROR:", err);
-    res.status(status).json({ message });
+    if (res.headersSent) return;
+    res.status(status).json({ message: status >= 500 ? "Something went wrong" : message });
   });
 
   // 4. Serve the Game Frontend

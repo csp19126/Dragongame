@@ -1,247 +1,164 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 
-type Language = "en" | "vi";
+export type Language = "en" | "vi";
 
-interface Translations {
-  welcome: string;
-  login: string;
-  register: string;
-  username: string;
-  password: string;
-  spin: string;
-  bet: string;
-  balance: string;
-  win: string;
-  jackpot: string;
-  logout: string;
-  leaderboard: string;
-  playNow: string;
-  loading: string;
-  aiPredict: string;
-  aiAdviceTitle: string;
-  streak: string;
-  achievement: string;
-  tokens: string;
-  topUp: string;
-  autoSpin: string;
-  statistics: string;
-  totalWins: string;
-  maxWin: string;
-  gamesPlayed: string;
-  deposit: string;
-  about: string;
-  terms: string;
-  privacy: string;
-  support: string;
-  beginQuest: string;
-  subtitle: string;
-  description: string;
-  descriptionDragon: string;
-  descriptionEnd: string;
-  maxWinStat: string;
-  freeSpins: string;
-  bonusRounds: string;
-  repeaterWins: string;
-  repeaterWinsDesc: string;
-  wildMultipliers: string;
-  wildMultipliersDesc: string;
-  dragonJackpot: string;
-  dragonJackpotDesc: string;
-  achievements: string;
-  topPlayers: string;
-  won: string;
-  noPlayersYet: string;
-  games: string;
-  wins: string;
-  withdraw: string;
-  profile: string;
-  contactAgent: string;
-  insufficientBalance: string;
-  insufficientBalanceDesc: string;
-  soClose: string;
-  repeater: string;
-  reSpinning: string;
-  shareWin: string;
-  bigWin: string;
-  lines: string;
-  free: string;
-  freeButton: string;
-  paylines: string;
-  grid3x3: string;
-  diagonals: string;
-  error: string;
-  encouragement1: string;
-  encouragement2: string;
-  copyright: string;
-  live: string;
-  firstName: string;
-  lastName: string;
-  saveChanges: string;
-  memberSince: string;
-  editProfile: string;
-  profileUpdated: string;
-}
-
-const translations: Record<Language, Translations> = {
-  en: {
-    welcome: "Welcome to VnSlot",
-    login: "Enter Realm",
-    register: "Join Dynasty",
-    username: "Imperial Name",
-    password: "Secret Key",
-    spin: "STRIKE",
-    bet: "Tribute",
-    balance: "Treasury",
-    win: "GLORY!",
-    jackpot: "DRAGON'S FORTUNE!!!",
-    logout: "Depart",
-    leaderboard: "Hall of Legends",
-    playNow: "Claim Fortune",
-    loading: "Summoning Luck...",
-    aiPredict: "Seek Oracle",
-    aiAdviceTitle: "The Oracle Speaks",
-    streak: "Streak",
-    achievement: "Achievement",
-    tokens: "Tokens",
-    topUp: "Top Up",
-    autoSpin: "Auto Spin",
-    statistics: "Statistics",
-    totalWins: "Total Wins",
-    maxWin: "Max Win",
-    gamesPlayed: "Games Played",
-    deposit: "Deposit",
-    about: "About Us",
-    terms: "Terms of Service",
-    privacy: "Privacy Policy",
-    support: "Support",
-    beginQuest: "Begin Your Quest",
-    subtitle: "888 Dragon Fortune",
-    description: "Experience the legendary power of the",
-    descriptionDragon: "Dragon",
-    descriptionEnd: ". Win massive rewards, unlock bonus rounds, and claim your fortune in the ultimate Oriental slot experience.",
-    maxWinStat: "MAX WIN",
-    freeSpins: "FREE SPINS",
-    bonusRounds: "BONUS ROUNDS",
-    repeaterWins: "REPEATER WINS",
-    repeaterWinsDesc: "Chain matching symbols for exponential rewards",
-    wildMultipliers: "WILD MULTIPLIERS",
-    wildMultipliersDesc: "Unlock 2x, 5x, 10x bonus multipliers",
-    dragonJackpot: "DRAGON JACKPOT",
-    dragonJackpotDesc: "Hit the legendary jackpot for ultimate glory",
-    achievements: "Achievements",
-    topPlayers: "Top Players",
-    won: "won",
-    noPlayersYet: "No players yet",
-    games: "Games",
-    wins: "Wins",
-    withdraw: "Withdraw",
-    profile: "Profile",
-    contactAgent: "Contact agent to withdraw",
-    insufficientBalance: "Insufficient Balance",
-    insufficientBalanceDesc: "Please top up to continue playing!",
-    soClose: "SO CLOSE!",
-    repeater: "REPEATER!",
-    reSpinning: "Re-spinning for bonus...",
-    shareWin: "Share Win",
-    bigWin: "BIG WIN",
-    lines: "LINES!",
-    free: "FREE",
-    freeButton: "Free",
-    paylines: "5 PAYLINES",
-    grid3x3: "3×3 GRID",
-    diagonals: "DIAGONALS",
-    error: "Error",
-    encouragement1: "The Dragon stirs... BIG WIN incoming!",
-    encouragement2: "Almost there! Keep spinning!",
-    copyright: "© 2024 Dragon Fortune Entertainment Ltd.",
-    live: "LIVE",
-    firstName: "First Name",
-    lastName: "Last Name",
-    saveChanges: "Save Changes",
-    memberSince: "Member Since",
-    editProfile: "Edit Profile",
-    profileUpdated: "Profile updated successfully",
-  },
-  vi: {
-    welcome: "Chào mừng đến VnSlot",
-    login: "Vào Cung",
-    register: "Gia Nhập",
-    username: "Danh Tính",
-    password: "Mật Mã",
-    spin: "KHAI VẬN",
-    bet: "Mức Cược",
-    balance: "Ngân Khố",
-    win: "ĐẠI CÁT!",
-    jackpot: "LONG HŨ NỔ!!!",
-    logout: "Rời Cung",
-    leaderboard: "Bảng Phong Thần",
-    playNow: "Chơi Ngay",
-    loading: "Đang Triệu Hồi...",
-    aiPredict: "Hỏi Thần Tài",
-    aiAdviceTitle: "Lời Sấm Truyền",
-    streak: "Chuỗi Thắng",
-    achievement: "Thành Tựu",
-    tokens: "Xu",
-    topUp: "Nạp Thêm",
-    autoSpin: "Tự Động Quay",
-    statistics: "Thống Kê",
-    totalWins: "Tổng Thắng",
-    maxWin: "Thắng Lớn Nhất",
-    gamesPlayed: "Lượt Chơi",
-    deposit: "Nạp Tiền",
-    about: "Về Chúng Tôi",
-    terms: "Điều Khoản",
-    privacy: "Bảo Mật",
-    support: "Hỗ Trợ",
-    beginQuest: "Bắt Đầu Hành Trình",
-    subtitle: "888 Long Phát Tài",
-    description: "Trải nghiệm sức mạnh huyền thoại của",
-    descriptionDragon: "Rồng",
-    descriptionEnd: ". Giành phần thưởng lớn, mở khóa vòng thưởng, và chinh phục vận may trong trò chơi slot Phương Đông đỉnh cao.",
-    maxWinStat: "THẮNG TỐI ĐA",
-    freeSpins: "LƯỢT QUAY MIỄN PHÍ",
-    bonusRounds: "VÒNG THƯỞNG",
-    repeaterWins: "THẮNG LIÊN TIẾP",
-    repeaterWinsDesc: "Kết chuỗi biểu tượng để nhận thưởng cấp số nhân",
-    wildMultipliers: "NHÂN BỘI HOANG DÃ",
-    wildMultipliersDesc: "Mở khóa nhân bội 2x, 5x, 10x",
-    dragonJackpot: "HŨ RỒNG",
-    dragonJackpotDesc: "Trúng hũ huyền thoại để đạt vinh quang tối thượng",
-    achievements: "Thành Tựu",
-    topPlayers: "Người Chơi Hàng Đầu",
-    won: "thắng",
-    noPlayersYet: "Chưa có người chơi",
-    games: "Ván",
-    wins: "Thắng",
-    withdraw: "Rút Tiền",
-    profile: "Hồ Sơ",
-    contactAgent: "Liên hệ đại lý để rút tiền",
-    insufficientBalance: "Không Đủ Số Dư",
-    insufficientBalanceDesc: "Vui lòng nạp thêm để tiếp tục chơi!",
-    soClose: "SẮP TRÚNG!",
-    repeater: "QUAY LẠI!",
-    reSpinning: "Đang quay thưởng...",
-    shareWin: "Chia Sẻ",
-    bigWin: "THẮNG LỚN",
-    lines: "HÀNG!",
-    free: "MIỄN PHÍ",
-    freeButton: "Miễn Phí",
-    paylines: "5 HÀNG THƯỞNG",
-    grid3x3: "LƯỚI 3×3",
-    diagonals: "ĐƯỜNG CHÉO",
-    error: "Lỗi",
-    encouragement1: "Rồng thức giấc... THẮNG LỚN sắp đến!",
-    encouragement2: "Sắp trúng rồi! Tiếp tục quay!",
-    copyright: "© 2024 Dragon Fortune Entertainment Ltd.",
-    live: "TRỰC TIẾP",
-    firstName: "Tên",
-    lastName: "Họ",
-    saveChanges: "Lưu Thay Đổi",
-    memberSince: "Thành Viên Từ",
-    editProfile: "Chỉnh Sửa Hồ Sơ",
-    profileUpdated: "Cập nhật hồ sơ thành công",
-  },
+const en = {
+  login: "Enter Realm",
+  register: "Join Dynasty",
+  username: "Username",
+  password: "Password",
+  spin: "SPIN",
+  bet: "Bet",
+  balance: "Treasury",
+  logout: "Log out",
+  leaderboard: "Hall of Legends",
+  loading: "Summoning luck...",
+  streak: "Win Streak",
+  topUp: "Free Coins",
+  autoSpin: "Auto",
+  totalWins: "Total Wins",
+  maxWin: "Biggest Win",
+  gamesPlayed: "Games Played",
+  deposit: "Free Coins",
+  about: "About",
+  terms: "Terms",
+  support: "Support",
+  beginQuest: "Play Free",
+  subtitle: "888 Dragon Fortune",
+  description: "A free-to-play Vietnamese-style slot. Spin the reels, line up the",
+  descriptionDragon: "Dragon",
+  descriptionEnd: " and climb the Hall of Legends. Play money only — no real money in, no real money out.",
+  maxWinStat: "TOP PAYOUT",
+  freeSpins: "FREE SPINS",
+  dailyCoins: "DAILY COINS",
+  feature1: "5 PAYLINES",
+  feature1Desc: "3 rows and 2 diagonals on a 3×3 grid",
+  feature2: "DRAGON ORACLE",
+  feature2Desc: "Once an hour the Oracle doubles your next spin's winnings",
+  feature3: "FAIR & OPEN",
+  feature3Desc: "96% return-to-player, published paytable, no rigged near-misses",
+  achievements: "Achievements",
+  topPlayers: "Top Players",
+  won: "won",
+  noPlayersYet: "No players yet",
+  noWinsYet: "No big wins yet — be the first!",
+  games: "Games",
+  wins: "Wins",
+  profile: "Profile",
+  insufficientBalance: "Not enough coins",
+  insufficientBalanceDesc: "Lower your bet or grab your free daily coins.",
+  bigWin: "BIG WIN!",
+  megaWin: "DRAGON FORTUNE!",
+  youWon: "You won",
+  returned: "Stake returned",
+  noWin: "No win this time",
+  freeSpinsLeft: "free spins",
+  freeSpinsWon: "free spins won!",
+  oracle: "Oracle",
+  oracleBlessed: "The Oracle blesses your next spin: winnings ×2",
+  oracleCooldown: "The Oracle is resting. Back at",
+  blessedBadge: "×2 NEXT SPIN",
+  paytable: "Paytable",
+  paytableIntro: "Three matching symbols on any of the 5 lines pays the multiple below, times your bet. All lines add up.",
+  paytableFree: "Any spin paying 10× your bet or more also awards 3 free spins at the same bet.",
+  rtpNote: "Return to player: 96.0% (exact). Every symbol is drawn independently by a cryptographic RNG.",
+  error: "Error",
+  copyright: "© VnSlot 888 · Free-to-play entertainment · 18+",
+  live: "BIG WINS",
+  firstName: "First Name",
+  lastName: "Last Name",
+  saveChanges: "Save Changes",
+  memberSince: "Member Since",
+  editProfile: "Edit Profile",
+  profileUpdated: "Profile updated",
+  changePassword: "Change Password",
+  currentPassword: "Current password",
+  newPassword: "New password",
+  passwordChanged: "Password changed",
+  playMoneyNote: "Coins are play money. They can't be bought for cash or exchanged for money or prizes.",
+  sound: "Sound",
 };
+
+export type Translations = typeof en;
+
+const vi: Translations = {
+  login: "Vào Cung",
+  register: "Gia Nhập",
+  username: "Tên đăng nhập",
+  password: "Mật khẩu",
+  spin: "QUAY",
+  bet: "Mức Cược",
+  balance: "Ngân Khố",
+  logout: "Đăng xuất",
+  leaderboard: "Bảng Phong Thần",
+  loading: "Đang triệu hồi...",
+  streak: "Chuỗi Thắng",
+  topUp: "Xu Miễn Phí",
+  autoSpin: "Tự động",
+  totalWins: "Tổng Thắng",
+  maxWin: "Thắng Lớn Nhất",
+  gamesPlayed: "Lượt Chơi",
+  deposit: "Xu Miễn Phí",
+  about: "Giới Thiệu",
+  terms: "Điều Khoản",
+  support: "Hỗ Trợ",
+  beginQuest: "Chơi Miễn Phí",
+  subtitle: "888 Long Phát Tài",
+  description: "Trò chơi slot phong cách Việt, hoàn toàn miễn phí. Quay, xếp hàng",
+  descriptionDragon: "Rồng",
+  descriptionEnd: " và leo Bảng Phong Thần. Chỉ dùng xu ảo — không nạp tiền thật, không rút tiền thật.",
+  maxWinStat: "THƯỞNG CAO NHẤT",
+  freeSpins: "LƯỢT QUAY MIỄN PHÍ",
+  dailyCoins: "XU MỖI NGÀY",
+  feature1: "5 HÀNG THƯỞNG",
+  feature1Desc: "3 hàng ngang và 2 đường chéo trên lưới 3×3",
+  feature2: "THẦN RỒNG",
+  feature2Desc: "Mỗi giờ một lần, Thần Rồng nhân đôi tiền thắng lượt quay tiếp theo",
+  feature3: "CÔNG BẰNG",
+  feature3Desc: "Tỷ lệ hoàn trả 96%, bảng thưởng công khai, không gài \"suýt trúng\"",
+  achievements: "Thành Tựu",
+  topPlayers: "Người Chơi Hàng Đầu",
+  won: "thắng",
+  noPlayersYet: "Chưa có người chơi",
+  noWinsYet: "Chưa có thắng lớn — hãy là người đầu tiên!",
+  games: "Ván",
+  wins: "Thắng",
+  profile: "Hồ Sơ",
+  insufficientBalance: "Không đủ xu",
+  insufficientBalanceDesc: "Giảm mức cược hoặc nhận xu miễn phí hằng ngày.",
+  bigWin: "THẮNG LỚN!",
+  megaWin: "LONG PHÁT TÀI!",
+  youWon: "Bạn thắng",
+  returned: "Hoàn lại tiền cược",
+  noWin: "Chưa trúng lần này",
+  freeSpinsLeft: "lượt miễn phí",
+  freeSpinsWon: "lượt quay miễn phí!",
+  oracle: "Thần Rồng",
+  oracleBlessed: "Thần Rồng ban phước: lượt quay tiếp theo thắng ×2",
+  oracleCooldown: "Thần Rồng đang nghỉ. Quay lại lúc",
+  blessedBadge: "×2 LƯỢT TỚI",
+  paytable: "Bảng Thưởng",
+  paytableIntro: "Ba biểu tượng giống nhau trên bất kỳ hàng nào trong 5 hàng sẽ trả bội số dưới đây nhân với mức cược. Các hàng được cộng dồn.",
+  paytableFree: "Lượt quay thắng từ 10× mức cược trở lên được thêm 3 lượt quay miễn phí cùng mức cược.",
+  rtpNote: "Tỷ lệ hoàn trả: 96,0% (chính xác). Mỗi biểu tượng được chọn độc lập bằng bộ sinh số ngẫu nhiên mật mã.",
+  error: "Lỗi",
+  copyright: "© VnSlot 888 · Giải trí miễn phí · 18+",
+  live: "THẮNG LỚN",
+  firstName: "Tên",
+  lastName: "Họ",
+  saveChanges: "Lưu Thay Đổi",
+  memberSince: "Thành Viên Từ",
+  editProfile: "Chỉnh Sửa Hồ Sơ",
+  profileUpdated: "Đã cập nhật hồ sơ",
+  changePassword: "Đổi Mật Khẩu",
+  currentPassword: "Mật khẩu hiện tại",
+  newPassword: "Mật khẩu mới",
+  passwordChanged: "Đã đổi mật khẩu",
+  playMoneyNote: "Xu chỉ dùng để chơi. Không thể mua bằng tiền thật hay đổi ra tiền hoặc giải thưởng.",
+  sound: "Âm thanh",
+};
+
+const translations: Record<Language, Translations> = { en, vi };
 
 const LanguageContext = createContext<{
   lang: Language;
@@ -249,10 +166,23 @@ const LanguageContext = createContext<{
   t: Translations;
 } | null>(null);
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Language>("vi");
+function initialLang(): Language {
+  try {
+    const saved = localStorage.getItem("lang");
+    if (saved === "en" || saved === "vi") return saved;
+  } catch {}
+  return "vi";
+}
 
-  const toggleLang = () => setLang((prev) => (prev === "en" ? "vi" : "en"));
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [lang, setLang] = useState<Language>(initialLang);
+
+  const toggleLang = () => setLang((prev) => {
+    const next = prev === "en" ? "vi" : "en";
+    try { localStorage.setItem("lang", next); } catch {}
+    document.documentElement.lang = next;
+    return next;
+  });
 
   return (
     <LanguageContext.Provider value={{ lang, toggleLang, t: translations[lang] }}>

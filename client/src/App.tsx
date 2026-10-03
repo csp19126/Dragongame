@@ -9,7 +9,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Auth from "@/pages/Auth";
 import Leaderboard from "@/pages/Leaderboard";
-import Deposit from "@/pages/Deposit";
+import Coins from "@/pages/Coins";
 import About from "@/pages/About";
 import Terms from "@/pages/Terms";
 import Profile from "@/pages/Profile";
@@ -21,7 +21,8 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/auth" component={Auth} />
       <Route path="/leaderboard" component={Leaderboard} />
-      <Route path="/deposit" component={Deposit} />
+      <Route path="/coins" component={Coins} />
+      <Route path="/deposit" component={Coins} />
       <Route path="/about" component={About} />
       <Route path="/terms" component={Terms} />
       <Route path="/profile" component={Profile} />

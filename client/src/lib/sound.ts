@@ -1,14 +1,27 @@
 class SoundManager {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private muted = false;
+  private static VOLUME = 0.35;
 
   constructor() {
+    try { this.muted = localStorage.getItem('muted') === '1'; } catch {}
     if (typeof window !== 'undefined' && 'AudioContext' in window) {
       this.audioContext = new AudioContext();
       this.masterGain = this.audioContext.createGain();
       this.masterGain.connect(this.audioContext.destination);
-      this.masterGain.gain.value = 0.35;
+      this.masterGain.gain.value = this.muted ? 0 : SoundManager.VOLUME;
     }
+  }
+
+  isMuted() {
+    return this.muted;
+  }
+
+  setMuted(muted: boolean) {
+    this.muted = muted;
+    try { localStorage.setItem('muted', muted ? '1' : '0'); } catch {}
+    if (this.masterGain) this.masterGain.gain.value = muted ? 0 : SoundManager.VOLUME;
   }
 
   private ensureContext() {

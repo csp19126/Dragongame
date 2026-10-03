@@ -8,11 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { FaGoogle, FaFacebook, FaApple } from "react-icons/fa";
 
 export default function Auth() {
   const { login, register, user } = useAuth();
-  const { lang } = useLang();
+  const { lang, t } = useLang();
+  const vi = lang === "vi";
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -34,10 +34,10 @@ export default function Auth() {
     e.preventDefault();
     try {
       await login.mutateAsync({ username, password });
-      toast({ title: "Welcome back!", className: "bg-yellow-500 text-purple-900 font-bold" });
+      toast({ title: vi ? "Chào mừng trở lại!" : "Welcome back!", className: "bg-yellow-500 text-purple-900 font-bold" });
     } catch (error) {
       toast({ 
-        title: "Login failed", 
+        title: vi ? "Đăng nhập thất bại" : "Login failed", 
         description: (error as Error).message, 
         variant: "destructive" 
       });
@@ -48,10 +48,10 @@ export default function Auth() {
     e.preventDefault();
     try {
       await register.mutateAsync({ username, password });
-      toast({ title: "Account created!", className: "bg-yellow-500 text-purple-900 font-bold" });
+      toast({ title: vi ? "Đã tạo tài khoản! +50,000 🪙" : "Account created! +50,000 🪙", className: "bg-yellow-500 text-purple-900 font-bold" });
     } catch (error) {
       toast({ 
-        title: "Registration failed", 
+        title: vi ? "Đăng ký thất bại" : "Registration failed", 
         description: (error as Error).message, 
         variant: "destructive" 
       });
@@ -59,14 +59,6 @@ export default function Auth() {
   };
 
   const isLoading = login.isPending || register.isPending;
-  const handleSocialAuth = (provider: "google" | "facebook" | "apple") => {
-    toast({
-      title: `${provider[0].toUpperCase()}${provider.slice(1)} login`,
-      description: "OAuth credentials are required to enable this provider locally.",
-      variant: "destructive",
-    });
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] relative overflow-hidden">
       {/* Animated globs */}
@@ -98,56 +90,18 @@ export default function Auth() {
           >
             VnSlot
           </motion.h1>
-          <p className="text-yellow-500/70 font-bold uppercase tracking-[0.2em] text-sm">Step Into Fortune</p>
+          <p className="text-yellow-500/70 font-bold uppercase tracking-[0.2em] text-sm">{t.subtitle}</p>
         </div>
 
         {/* Main Card */}
         <Card className="border-2 border-yellow-500/30 bg-gradient-to-b from-purple-950/80 to-purple-900/60 backdrop-blur-2xl rounded-[3rem] overflow-hidden shadow-[0_0_60px_rgba(139,92,246,0.3)]">
           <CardHeader className="pt-8 pb-6">
             <CardTitle className="text-center text-2xl font-black uppercase tracking-wider bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-              {activeTab === "login" ? "RETURN TO FORTUNE" : "JOIN THE DRAGON"}
+              {activeTab === "login" ? t.login : t.register}
             </CardTitle>
           </CardHeader>
 
           <CardContent className="pb-8 px-8 space-y-6">
-            <div className="space-y-3">
-              <Button
-                type="button"
-                onClick={() => handleSocialAuth("google")}
-                className="w-full h-12 font-black bg-white text-black hover:bg-white/90 rounded-2xl"
-              >
-                <FaGoogle className="mr-2 h-4 w-4" />
-                {lang === "en" ? "Continue with Google" : "Tiếp tục với Google"}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleSocialAuth("facebook")}
-                className="w-full h-12 font-black bg-[#1877F2] text-white hover:bg-[#1877F2]/90 rounded-2xl"
-              >
-                <FaFacebook className="mr-2 h-4 w-4" />
-                {lang === "en" ? "Continue with Facebook" : "Tiếp tục với Facebook"}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleSocialAuth("apple")}
-                className="w-full h-12 font-black bg-black text-white hover:bg-black/90 rounded-2xl"
-              >
-                <FaApple className="mr-2 h-4 w-4" />
-                {lang === "en" ? "Continue with Apple" : "Tiếp tục với Apple"}
-              </Button>
-            </div>
-
-            <div className="relative py-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-yellow-500/20" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] px-3 text-yellow-500/50 font-black tracking-[0.15em]">
-                  {lang === "en" ? "OR USE USERNAME/PASSWORD" : "HOẶC DÙNG TÊN/PASSWORD"}
-                </span>
-              </div>
-            </div>
-
             {/* Tabs */}
             <div className="flex gap-2 bg-purple-900/30 p-1 rounded-2xl">
               {["login", "register"].map((tab) => (
@@ -160,7 +114,7 @@ export default function Auth() {
                       : "text-yellow-400/60 hover:text-yellow-400"
                   }`}
                 >
-                  {tab === "login" ? "Login" : "Register"}
+                  {tab === "login" ? (vi ? "Đăng nhập" : "Login") : (vi ? "Đăng ký" : "Register")}
                 </button>
               ))}
             </div>
@@ -170,51 +124,55 @@ export default function Auth() {
               {activeTab === "login" ? (
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 block mb-2">Username</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 block mb-2">{t.username}</label>
                     <Input 
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
+                      autoComplete="username"
                       required
                       className="rounded-2xl h-12 bg-purple-900/40 border-yellow-500/20 text-yellow-100 placeholder:text-yellow-100/30 focus:border-yellow-500/50 focus:ring-yellow-500/20"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 block mb-2">Password</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 block mb-2">{t.password}</label>
                     <Input 
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      autoComplete={activeTab === "login" ? "current-password" : "new-password"}
                       required
                       className="rounded-2xl h-12 bg-purple-900/40 border-yellow-500/20 text-yellow-100 placeholder:text-yellow-100/30 focus:border-yellow-500/50 focus:ring-yellow-500/20"
                     />
                   </div>
                   <Button type="submit" className="w-full h-12 font-black text-lg bg-gradient-to-r from-yellow-500 to-orange-500 text-purple-900 rounded-2xl shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_40px_rgba(234,179,8,0.5)]" disabled={isLoading}>
-                    {isLoading ? <Loader2 className="animate-spin w-6 h-6" /> : "SPIN"}
+                    {isLoading ? <Loader2 className="animate-spin w-6 h-6" /> : t.login}
                   </Button>
                 </form>
               ) : (
                 <form onSubmit={handleRegister} className="space-y-4">
                   <div>
-                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 block mb-2">Username</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 block mb-2">{t.username}</label>
                     <Input 
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
+                      autoComplete="username"
                       required
                       className="rounded-2xl h-12 bg-purple-900/40 border-yellow-500/20 text-yellow-100 placeholder:text-yellow-100/30 focus:border-yellow-500/50 focus:ring-yellow-500/20"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 block mb-2">Password</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70 block mb-2">{t.password}</label>
                     <Input 
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      autoComplete={activeTab === "login" ? "current-password" : "new-password"}
                       required
                       className="rounded-2xl h-12 bg-purple-900/40 border-yellow-500/20 text-yellow-100 placeholder:text-yellow-100/30 focus:border-yellow-500/50 focus:ring-yellow-500/20"
                     />
                   </div>
                   <Button type="submit" className="w-full h-12 font-black text-lg bg-gradient-to-r from-yellow-500 to-orange-500 text-purple-900 rounded-2xl shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_40px_rgba(234,179,8,0.5)]" disabled={isLoading}>
-                    {isLoading ? <Loader2 className="animate-spin w-6 h-6" /> : "JOIN"}
+                    {isLoading ? <Loader2 className="animate-spin w-6 h-6" /> : t.register}
                   </Button>
                 </form>
               )}
@@ -227,9 +185,9 @@ export default function Auth() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8 }}
-          className="text-center text-yellow-500/40 text-xs uppercase tracking-widest font-black mt-8"
+          className="text-center text-yellow-500/50 text-xs mt-8"
         >
-          🐉 Enter the realm of the Dragon 🐉
+          {t.playMoneyNote} 18+
         </motion.p>
       </motion.div>
     </div>

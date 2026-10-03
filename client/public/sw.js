@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vnslot-888-v1';
+const CACHE_NAME = 'vnslot-888-v2';
 const PRECACHE_URLS = [
   '/',
   '/favicon.png'
