@@ -35,7 +35,7 @@ export const gameStates = pgTable("game_states", {
   lastOracleAt: timestamp("last_oracle_at"),
   consecutiveWins: integer("consecutive_wins").default(0),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (t) => [index("idx_game_states_user").on(t.userId, t.slotId)]);
 
 export const achievements = pgTable("achievements", {
   id: serial("id").primaryKey(),
@@ -45,7 +45,7 @@ export const achievements = pgTable("achievements", {
   description: text("description").notNull(),
   icon: text("icon").notNull(),
   unlockedAt: timestamp("unlocked_at").defaultNow(),
-});
+}, (t) => [index("idx_achievements_user").on(t.userId)]);
 
 // Coin credits: promo codes and daily bonuses. Coins are play money only.
 export const deposits = pgTable("deposits", {
@@ -56,7 +56,7 @@ export const deposits = pgTable("deposits", {
   cardCode: text("card_code"),
   status: text("status").default("completed").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (t) => [index("idx_deposits_user").on(t.userId)]);
 
 // Promo codes (table name kept so existing data survives `db:push`)
 export const giftCards = pgTable("gift_cards", {
@@ -77,6 +77,13 @@ export const withdrawals = pgTable("withdrawals", {
   status: text("status").default("pending").notNull(),
   note: text("note"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Server-managed settings, e.g. the auto-generated session secret
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

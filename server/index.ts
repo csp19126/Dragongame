@@ -1,69 +1,48 @@
 import "dotenv/config";
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes.js";
-import { serveStatic } from "./static.js";
-import { createServer } from "http";
-import { getSessionMiddleware } from "./session.js";
-import { storage } from "./storage.js";
+import { createApp } from "./app";
+import { runMigrations } from "./migrate";
+import { getSessionSecret } from "./settings";
+import { serveStatic } from "./static";
+import { storage } from "./storage";
+import { pool } from "./db";
 
-const app = express();
-app.set("trust proxy", 1); // CRITICAL: Tells Express to trust the Railway headers
+async function main() {
+  // 1. Database schema: created or upgraded automatically, nothing to run by hand
+  await runMigrations();
+  console.log("[startup] database ready");
 
-// Standard middleware for reading JSON data from the Login/Spin buttons
-app.use(express.json({ limit: "100kb" }));
-app.use(express.urlencoded({ extended: false }));
+  // 2. Session secret: from SESSION_SECRET, or generated once and stored in the database
+  const { app, httpServer } = await createApp(await getSessionSecret());
 
-// Initialize the session engine (The "Handshake")
-app.use(getSessionMiddleware());
-
-// --- THE "ANTI-HTML" GUARD ---
-// This ensures that any request starting with /api ONLY speaks JSON.
-// This is the direct fix for the "JSON.parse line 1" error.
-app.use("/api", (req, res, next) => {
-  res.setHeader('Content-Type', 'application/json');
-  next();
-});
-
-// Test route to verify the server is alive
-app.get("/api/ping", (_req, res) => {
-  res.json({ status: "alive", timestamp: new Date().toISOString() });
-});
-
-(async () => {
-  // 1. Load your game routes (Login, Spin, Oracle)
-  const httpServer = createServer(app);
-  await registerRoutes(httpServer, app);
-
-  // 2. Grant admin to the usernames in ADMIN_USERNAMES (comma separated)
+  // 3. Admins listed in ADMIN_USERNAMES (comma separated)
   const adminNames = (process.env.ADMIN_USERNAMES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  try {
-    await storage.syncAdmins(adminNames);
-  } catch (err) {
-    console.error("[startup] could not sync admins (has `npm run db:push` been run?):", err);
-  }
+  await storage.syncAdmins(adminNames);
 
-  // 3. Global Error Handler
-  // If the code crashes, this catches it and sends a JSON error instead of an HTML page.
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-    console.error("SERVER ERROR:", err);
-    if (res.headersSent) return;
-    res.status(status).json({ message: status >= 500 ? "Something went wrong" : message });
-  });
-
-  // 4. Serve the Game Frontend
+  // 4. Frontend
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
-    // Development mode (Vite)
-    const { setupVite } = await import("./vite.js");
+    // Non-literal path keeps Vite (a dev-only package) out of the production bundle
+    const devServer = "./vite";
+    const { setupVite } = await import(/* @vite-ignore */ devServer);
     await setupVite(httpServer, app);
   }
 
-  // 5. Start the Engine
+  // 5. Listen
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen({ port, host: "0.0.0.0" }, () => {
-    console.log(`Dragon Engine active on port ${port}`);
-  });
-})();
+  httpServer.listen({ port, host: "0.0.0.0" }, () => console.log(`Dragon Engine active on port ${port}`));
+
+  // Hosts send SIGTERM on redeploy: finish in-flight spins, then close the database cleanly
+  const shutdown = (signal: string) => {
+    console.log(`[shutdown] ${signal} received, closing`);
+    httpServer.close(() => pool.end().finally(() => process.exit(0)));
+    setTimeout(() => process.exit(0), 10_000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+main().catch((err) => {
+  console.error("[startup] failed:", err);
+  process.exit(1);
+});

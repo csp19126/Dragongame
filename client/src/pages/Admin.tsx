@@ -30,9 +30,9 @@ function StatCard({ icon, label, value, color }: { icon: any; label: string; val
       <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${color}22` }}>
         <Icon className="w-6 h-6" style={{ color }} />
       </div>
-      <div>
+      <div className="min-w-0">
         <div className="text-xs text-yellow-500/60 uppercase tracking-widest font-bold">{label}</div>
-        <div className="text-2xl font-black text-white">{typeof value === "number" ? fmt(value) : value}</div>
+        <div className="text-xl xl:text-2xl font-black text-white [overflow-wrap:anywhere]">{typeof value === "number" ? fmt(value) : value}</div>
       </div>
     </motion.div>
   );

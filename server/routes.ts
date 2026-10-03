@@ -27,6 +27,7 @@ function firstError(err: z.ZodError) {
 function rateLimit(max: number, windowMs: number) {
   const hits = new Map<string, { n: number; reset: number }>();
   return (req: Request, res: Response, next: NextFunction) => {
+    if (process.env.NODE_ENV === "test" && !req.headers["x-test-rate-limit"]) return next();
     const key = req.ip ?? "unknown";
     const now = Date.now();
     const h = hits.get(key);

@@ -77,6 +77,13 @@ const en = {
   passwordChanged: "Password changed",
   playMoneyNote: "Coins are play money. They can't be bought for cash or exchanged for money or prizes.",
   sound: "Sound",
+  max: "Best",
+  onFire: "On Fire!",
+  unstoppable: "Unstoppable!",
+  dragonMode: "Dragon Mode!",
+  rank: "Rank",
+  legendsTagline: "Legends of the Dragon",
+  emptyLeaderboard: "The arena is silent. Be the first to claim your throne!",
 };
 
 export type Translations = typeof en;
@@ -156,6 +163,13 @@ const vi: Translations = {
   passwordChanged: "Đã đổi mật khẩu",
   playMoneyNote: "Xu chỉ dùng để chơi. Không thể mua bằng tiền thật hay đổi ra tiền hoặc giải thưởng.",
   sound: "Âm thanh",
+  max: "Cao nhất",
+  onFire: "Đang Bốc Lửa!",
+  unstoppable: "Không Thể Cản!",
+  dragonMode: "Chế Độ Rồng!",
+  rank: "Hạng",
+  legendsTagline: "Huyền Thoại Của Rồng",
+  emptyLeaderboard: "Đấu trường còn trống. Hãy là người đầu tiên lên ngôi!",
 };
 
 const translations: Record<Language, Translations> = { en, vi };

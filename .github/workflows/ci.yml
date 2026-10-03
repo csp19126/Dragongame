@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dragon_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dragon_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run check
+      - name: Tests (engine + API against Postgres)
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Smoke test the built server (no node_modules)
+        run: |
+          mkdir /tmp/smoke && cp -r dist migrations /tmp/smoke/
+          cd /tmp/smoke
+          NODE_ENV=production DATABASE_URL=$TEST_DATABASE_URL PORT=5050 node dist/index.js &
+          for i in $(seq 1 30); do curl -sf localhost:5050/api/health && exit 0; sleep 1; done
+          exit 1
