@@ -160,22 +160,37 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(s.gamesPlayed).toBe(40);
     });
 
-    it("never double-spends under 20 simultaneous spins", async () => {
+    it("refuses every spin from an empty balance, even 20 at once", async () => {
       const p = new Player();
       await p.register();
-      await setBalance(p.username, 3 * BET);
+      await setBalance(p.username, 0);
       const results = await Promise.all(Array.from({ length: 20 }, () => p.spin(BET)));
+      expect(results.map((r) => r.status)).toEqual(Array(20).fill(400));
+      const s = await p.state();
+      expect(s.balance).toBe(0);
+      expect(s.gamesPlayed).toBe(0);
+    });
+
+    it("handles 20 simultaneous spins mixing free and paid spins without deadlocks or double-spends", async () => {
+      const p = new Player();
+      const user = await p.register();
+      await setBalance(p.username, 3 * BET);
+      // Free spins waiting is exactly the case that used to deadlock
+      await pool.query(
+        "insert into game_states (user_id, slot_id, free_spins, free_spin_bet) values ($1, 'main', 5, $2)",
+        [user.id, BET],
+      );
+      const results = await Promise.all(Array.from({ length: 20 }, () => p.spin(BET)));
+      results.forEach((r) => expect([200, 400]).toContain(r.status));
       const ok = results.filter((r) => r.status === 200).map((r) => r.body);
-      // Spins are serialised on the user's row, so each stake must have come out of a non-negative balance
+      // Spins are serialised per player, so each stake must have come out of a non-negative balance
       ok.forEach((r) => expect(r.newBalance - r.winAmount).toBeGreaterThanOrEqual(0));
-      expect(results.some((r) => r.status === 400)).toBe(true); // 3K can't fund 20 spins
+      expect(ok.filter((r) => r.isFreeSpin).length).toBeGreaterThanOrEqual(5);
       const paid = ok.filter((r) => !r.isFreeSpin).reduce((a, r) => a + r.bet, 0);
       const won = ok.reduce((a, r) => a + r.winAmount, 0);
       const s = await p.state();
       expect(s.balance).toBe(3 * BET - paid + won);
-      expect(s.balance).toBeGreaterThanOrEqual(0);
       expect(s.gamesPlayed).toBe(ok.length);
-      results.filter((r) => r.status !== 200).forEach((r) => expect(r.status).toBe(400));
     });
 
     it("plays free spins at the bet that won them, without charging", async () => {

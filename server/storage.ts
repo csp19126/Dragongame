@@ -89,6 +89,11 @@ export class DatabaseStorage {
     const state = await this.ensureGameState(userId);
 
     return db.transaction(async (tx) => {
+      // 0. Lock this player's rows in a fixed order (user, then game state). Concurrent
+      //    spins for the same player then queue up instead of deadlocking each other.
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update");
+      await tx.select({ id: gameStates.id }).from(gameStates).where(eq(gameStates.id, state.id)).for("update");
+
       // 1. Pay for the spin: free spin first, otherwise stake from balance
       let isFreeSpin = false;
       let bet = requestedBet;
