@@ -3,7 +3,7 @@ import {
   users, gameStates, achievements, deposits, giftCards, jackpot,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
-  JACKPOT_CONTRIBUTION, JACKPOT_FULL_BET, JACKPOT_SEED,
+  JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare,
 } from "@shared/schema";
 import { eq, desc, sql, and, or, isNull, lt, count, sum } from "drizzle-orm";
 import { spin as runSpin, type SpinOutcome } from "./game";
@@ -141,7 +141,7 @@ export class DatabaseStorage {
       if (outcome.jackpotHit) {
         const [pot] = await tx.select().from(jackpot).where(eq(jackpot.id, 1)).for("update");
         const amount = (pot?.amount ?? JACKPOT_SEED) + contribution;
-        jackpotWin = Math.floor(amount * Math.min(1, bet / JACKPOT_FULL_BET));
+        jackpotWin = jackpotShare(amount, bet);
         jackpotPool = Math.max(JACKPOT_SEED, amount - jackpotWin);
         await tx.insert(jackpot)
           .values({ id: 1, amount: jackpotPool, lastWinner: me.username, lastAmount: jackpotWin, lastWonAt: new Date() })

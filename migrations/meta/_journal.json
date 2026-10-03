@@ -15,6 +15,13 @@
       "when": 1791029168032,
       "tag": "0001_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791032990957,
+      "tag": "0002_bigger_jackpot",
+      "breakpoints": true
     }
   ]
 }
