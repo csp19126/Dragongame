@@ -39,5 +39,8 @@ jobs:
           mkdir /tmp/smoke && cp -r dist migrations /tmp/smoke/
           cd /tmp/smoke
           NODE_ENV=production DATABASE_URL=$TEST_DATABASE_URL PORT=5050 node dist/index.js &
-          for i in $(seq 1 30); do curl -sf localhost:5050/api/health && exit 0; sleep 1; done
-          exit 1
+          for i in $(seq 1 30); do curl -sf localhost:5050/api/health && break; sleep 1; done
+          curl -sf localhost:5050/api/health
+          # A missing asset must be a real 404, never the HTML app shell
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:5050/assets/missing-file.js)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:5050/coins)" = "200"

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, Component, type ComponentType, type ReactNode } from "react";
 import { Switch, Route } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -9,15 +9,69 @@ import { LanguageProvider } from "@/lib/lang-context";
 import { AuthProvider } from "@/hooks/use-auth";
 import Home from "@/pages/Home";
 
+const RELOAD_FLAG = "chunk-reload-at";
+
+/**
+ * Loads a page on demand. If its file can't be fetched (a dropped connection, or the
+ * game was redeployed while the tab was open so the old file is gone), reload once to
+ * pick up the current version; if that also fails, the ErrorBoundary below takes over.
+ * (Retrying the import in place is pointless: browsers cache a failed module import.)
+ */
+function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
+  return lazy(async () => {
+    try {
+      const mod = await load();
+      try { sessionStorage.removeItem(RELOAD_FLAG); } catch {}
+      return mod;
+    } catch (err) {
+      let last = 0;
+      try { last = Number(sessionStorage.getItem(RELOAD_FLAG) ?? 0); } catch {}
+      if (Date.now() - last > 30_000) {
+        try { sessionStorage.setItem(RELOAD_FLAG, String(Date.now())); } catch {}
+        window.location.reload();
+        await new Promise(() => {}); // keep showing the loader until the reload happens
+      }
+      throw err;
+    }
+  });
+}
+
 // Everything except the game itself loads on demand, so the first screen is fast
-const Auth = lazy(() => import("@/pages/Auth"));
-const Leaderboard = lazy(() => import("@/pages/Leaderboard"));
-const Coins = lazy(() => import("@/pages/Coins"));
-const About = lazy(() => import("@/pages/About"));
-const Terms = lazy(() => import("@/pages/Terms"));
-const Profile = lazy(() => import("@/pages/Profile"));
-const Admin = lazy(() => import("@/pages/Admin"));
-const NotFound = lazy(() => import("@/pages/not-found"));
+const Auth = lazyPage(() => import("@/pages/Auth"));
+const Leaderboard = lazyPage(() => import("@/pages/Leaderboard"));
+const Coins = lazyPage(() => import("@/pages/Coins"));
+const About = lazyPage(() => import("@/pages/About"));
+const Terms = lazyPage(() => import("@/pages/Terms"));
+const Profile = lazyPage(() => import("@/pages/Profile"));
+const Admin = lazyPage(() => import("@/pages/Admin"));
+const NotFound = lazyPage(() => import("@/pages/not-found"));
+
+/** Last line of defence: never leave the player on a blank screen */
+class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(err: unknown) {
+    console.error("[app] crashed:", err);
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center bg-[#0a0515] text-yellow-100">
+        <div className="text-6xl">🐉</div>
+        <p className="text-lg font-bold">Có lỗi xảy ra · Something went wrong</p>
+        <p className="text-sm text-yellow-100/60">Kiểm tra kết nối mạng rồi tải lại · Check your connection and reload</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-purple-950 font-black"
+        >
+          Tải lại · Reload
+        </button>
+      </div>
+    );
+  }
+}
 
 function PageLoader() {
   return (
@@ -53,7 +107,9 @@ export default function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <Router />
+            <ErrorBoundary>
+              <Router />
+            </ErrorBoundary>
           </TooltipProvider>
         </AuthProvider>
       </LanguageProvider>
