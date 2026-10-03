@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Trophy, Zap, Gift, Gem, Flame, Crown, Gamepad2, TrendingUp, Star } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
+import { MAX_WIN_MULTIPLE } from "@shared/schema";
 
 const FLOATING_SYMBOLS = [
   { icon: Flame, delay: 0, duration: 18, x: "10%" },
@@ -120,6 +121,8 @@ const ALL_ACHIEVEMENTS = [
   { id: "millionaire", name: "Millionaire", description: "Reach 1M balance", icon: "trophy" },
   { id: "jackpot_hunter", name: "Jackpot Hunter", description: "Win 50x your bet", icon: "target" },
   { id: "lucky_seven", name: "Lucky Seven", description: "Win 7 times", icon: "gift" },
+  { id: "lucky_envelope", name: "Lucky Envelope", description: "Land 3 red envelopes", icon: "mail" },
+  { id: "pearl_power", name: "Pearl Power", description: "Win a line with a wild", icon: "sparkles" },
 ];
 
 function Landing() {
@@ -147,8 +150,8 @@ function Landing() {
 
           <div className="grid grid-cols-3 gap-2 sm:gap-6 mt-6">
             {[
-              { label: t.maxWinStat, value: "444×", Icon: Trophy },
-              { label: t.freeSpins, value: "3", Icon: Zap },
+              { label: t.maxWinStat, value: `${MAX_WIN_MULTIPLE}×`, Icon: Trophy },
+              { label: t.freeSpins, value: "10", Icon: Zap },
               { label: t.dailyCoins, value: "50K", Icon: Gift },
             ].map((stat, i) => (
               <div key={i} data-testid={`stat-card-${i}`} className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-yellow-500/30 rounded-md p-3 sm:p-6 backdrop-blur-xl">

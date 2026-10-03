@@ -116,27 +116,52 @@ export type Credentials = z.infer<typeof credentialsSchema>;
 export interface SlotSymbol {
   id: string;
   name: string;
-  /** Payout for three on a line, as a multiple of the TOTAL bet */
+  /**
+   * regular: pays when three line up on a payline
+   * wild:    stands in for any regular symbol on a line; three wilds pay `pays`
+   * scatter: pays by count anywhere on the grid (see SCATTER_PAYS), never on lines
+   */
+  kind: "regular" | "wild" | "scatter";
+  /** Payout for three on a line, as a multiple of the TOTAL bet (0 for the scatter) */
   pays: number;
   weight: number;
 }
 
 export const SLOT_SYMBOLS: SlotSymbol[] = [
-  { id: "dragon", name: "Imperial Dragon", pays: 88.8, weight: 2 },
-  { id: "drum", name: "Bronze Drum", pays: 10, weight: 8 },
-  { id: "lotus", name: "Golden Lotus", pays: 6, weight: 15 },
-  { id: "lantern", name: "Jade Lantern", pays: 2.5, weight: 25 },
-  { id: "coin", name: "Lucky Coin", pays: 1, weight: 50 },
+  { id: "pearl", name: "Dragon Pearl (Wild)", kind: "wild", pays: 100, weight: 2 },
+  { id: "dragon", name: "Imperial Dragon", kind: "regular", pays: 88.8, weight: 2 },
+  { id: "drum", name: "Bronze Drum", kind: "regular", pays: 8, weight: 8 },
+  { id: "lotus", name: "Golden Lotus", kind: "regular", pays: 3, weight: 15 },
+  { id: "lantern", name: "Jade Lantern", kind: "regular", pays: 1.2, weight: 25 },
+  { id: "coin", name: "Lucky Coin", kind: "regular", pays: 0.5, weight: 50 },
+  { id: "envelope", name: "Lucky Red Envelope (Scatter)", kind: "scatter", pays: 0, weight: 7 },
 ];
 
+export const WILD_ID = "pearl";
+export const SCATTER_ID = "envelope";
+
 /** Each payline is [row in col 0, row in col 1, row in col 2] */
-export const PAYLINES = [[0, 0, 0], [1, 1, 1], [2, 2, 2], [0, 1, 2], [2, 1, 0]];
+export const PAYLINES = [
+  [0, 0, 0], [1, 1, 1], [2, 2, 2], // rows
+  [0, 1, 2], [2, 1, 0],            // diagonals
+  [0, 1, 0], [2, 1, 2],            // V shapes
+  [1, 0, 1], [1, 2, 1],            // zigzags
+];
+
+/**
+ * Red envelopes anywhere on the grid. Highest matching count wins:
+ * pays is a multiple of the TOTAL bet; freeSpins are played at the same bet.
+ */
+export const SCATTER_PAYS = [
+  { count: 5, pays: 25, freeSpins: 10 },
+  { count: 4, pays: 5, freeSpins: 8 },
+  { count: 3, pays: 1, freeSpins: 5 },
+];
 
 export const BET_OPTIONS = [1000, 5000, 10000, 50000, 100000, 500000, 1000000];
 
-export const FREE_SPINS_AWARD = 3;
-/** A spin that pays at least this multiple of the bet awards free spins */
-export const FREE_SPINS_TRIGGER_MULTIPLE = 10;
+/** Most a single spin can pay: every cell wild, so all paylines pay the wild prize */
+export const MAX_WIN_MULTIPLE = PAYLINES.length * SLOT_SYMBOLS.find((s) => s.kind === "wild")!.pays;
 /** Oracle blessing multiplies the winnings of the player's next spin */
 export const ORACLE_WIN_MULTIPLIER = 2;
 export const ORACLE_COOLDOWN_MS = 60 * 60 * 1000;

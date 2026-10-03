@@ -64,13 +64,21 @@ built server (`.github/workflows/ci.yml`).
 
 ## The game
 
-- 5 symbols, 5 paylines (3 rows + 2 diagonals). Three in a line pays the multiple of your bet
-  shown in the in-game paytable (🐉 ×88.8, 🥁 ×10, 🌸 ×6, 🏮 ×2.5, 🪙 ×1). All lines add up.
-- A spin paying 10× the bet or more awards 3 free spins at that same bet.
+- 3×3 grid, **9 paylines**: rows, diagonals, V shapes and zigzags. Three of a kind on a line pays
+  the multiple of your bet shown in the in-game paytable (🐉 ×88.8, 🥁 ×8, 🌸 ×3, 🏮 ×1.2, 🪙 ×0.5).
+  All lines add up.
+- **🔮 Dragon Pearl (wild):** stands in for any symbol on a line; three pearls pay ×100.
+- **🧧 Red envelope (scatter):** pays anywhere on the grid, no line needed. 3 → ×1 + 5 free spins,
+  4 → ×5 + 8 free spins, 5+ → ×25 + 10 free spins. Free spins play at the bet that won them.
 - The Dragon Oracle doubles your next spin's winnings, once an hour.
 - 50,000 coins on sign-up, 50,000 more every 20 hours, plus admin-created promo codes.
 - Every cell is drawn independently with Node's `crypto.randomInt`. No near-miss forcing, no
-  per-player tuning. **RTP is exactly 95.98%** including free spins; a test enforces it.
+  per-player tuning. **RTP is exactly 96.02%** including free spins (max win 900× the bet),
+  confirmed three ways: closed-form maths, a brute-force count of all 40,353,607 grids
+  (`npm run rtp -- --brute`), and a Monte Carlo run of the real engine. Tests enforce it.
+- Celebrations scale with the win (coin pop → BIG WIN fireworks → MEGA WIN with raining lì xì →
+  DRAGON FORTUNE with cannons). Spins that pay back less than the bet are labelled honestly as
+  small wins and are not celebrated.
 
 ## Code map
 
