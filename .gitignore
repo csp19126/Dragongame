@@ -4,3 +4,10 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# secrets and database dumps never go in git
+.env
+.env.*
+!.env.example
+*.sql
+!migrations/*.sql

@@ -1,28 +1,30 @@
 import session from "express-session";
 import pgSession from "connect-pg-simple";
-import { pool } from "./db.js";
+import { pool } from "./db";
 
 const PostgresStore = pgSession(session);
 
-export function getSessionMiddleware() {
+export function getSessionMiddleware(secret: string) {
+  const isProd = process.env.NODE_ENV === "production";
   return session({
     store: new PostgresStore({
-      pool: pool,
+      pool,
       tableName: "session",
-      createTableIfMissing: true,
-      pruneSessionInterval: 60 * 15, // Only check for old sessions every 15 mins
+      createTableIfMissing: false, // created by the migrations
+      pruneSessionInterval: 60 * 15,
     }),
     name: "dragon_session",
-    secret: process.env.SESSION_SECRET || "dragon_gold_888_secret",
-    resave: true,                // Force resave to keep it alive during DB writes
+    secret,
+    resave: false,
     saveUninitialized: false,
     proxy: true,
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      secure: false, 
+      // HTTPS-only in production. Set COOKIE_SECURE=false to run production over plain http.
+      secure: isProd && process.env.COOKIE_SECURE !== "false",
       sameSite: "lax",
       httpOnly: true,
-      path: "/" 
+      path: "/",
     },
   });
 }

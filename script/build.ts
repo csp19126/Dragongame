@@ -1,88 +1,53 @@
+/**
+ * Production build:
+ *   dist/public/   the frontend (Vite)
+ *   dist/index.js  the server, with every runtime dependency bundled in, so
+ *                  running it needs only Node and the migrations folder:
+ *                  no node_modules, no npm install on the server.
+ */
 import { build as esbuildBuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm } from "fs/promises";
 
-const forcedExternal = [
-  "esbuild",
-  "vite",
-  "@babel/core",
-  "@babel/preset-typescript",
-  "lightningcss"
-];
-
-const allowlist = [
-  "@google/generative-ai",
-  "axios",
-  "connect-pg-simple",
-  "cors",
-  "date-fns",
-  "drizzle-orm",
-  "drizzle-zod",
-  "express",
-  "express-rate-limit",
-  "express-session",
-  "jsonwebtoken",
-  "memorystore",
-  "multer",
-  "nanoid",
-  "nodemailer",
-  "openai",
-  "passport",
-  "passport-local",
-  "pg",
-  "stripe",
-  "uuid",
-  "ws",
-  "xlsx",
-  "zod",
-  "zod-validation-error",
-];
+// Optional native add-ons that the bundled libraries try to load but fall back without
+const OPTIONAL_NATIVE = ["pg-native", "bufferutil", "utf-8-validate"];
 
 async function buildAll() {
-  try {
-    console.log("🧹 Cleaning dist...");
-    await rm("dist", { recursive: true, force: true });
+  console.log("🧹 Cleaning dist...");
+  await rm("dist", { recursive: true, force: true });
 
-    console.log("📦 Building client (Vite)...");
-    await viteBuild();
+  console.log("📦 Building client (Vite)...");
+  await viteBuild();
 
-    console.log("⚙️ Building server (esbuild)...");
-    const pkg = JSON.parse(await readFile("package.json", "utf-8"));
-    
-    const externals = [
-      ...Object.keys(pkg.dependencies || {}),
-      ...Object.keys(pkg.devDependencies || {}),
-      ...forcedExternal
-    ].filter(
-      (dep) => !allowlist.includes(dep) && !dep.startsWith("./") && !dep.startsWith("../")
-    );
+  console.log("⚙️  Building server (esbuild)...");
+  await esbuildBuild({
+    entryPoints: ["server/index.ts"],
+    outfile: "dist/index.js",
+    bundle: true,
+    platform: "node",
+    target: "node20",
+    format: "esm",
+    external: OPTIONAL_NATIVE,
+    alias: { "@shared": "./shared" },
+    banner: {
+      // Bundled CommonJS packages expect these. Aliased imports can't clash with app code.
+      js: [
+        "import { createRequire as __bannerCreateRequire } from 'module';",
+        "import { fileURLToPath as __bannerFileURLToPath } from 'url';",
+        "import { dirname as __bannerDirname } from 'path';",
+        "const require = __bannerCreateRequire(import.meta.url);",
+        "const __filename = __bannerFileURLToPath(import.meta.url);",
+        "const __dirname = __bannerDirname(__filename);",
+      ].join("\n"),
+    },
+    sourcemap: true,
+    logLevel: "warning",
+  });
 
-    await esbuildBuild({
-      entryPoints: ["server/index.ts"],
-      outfile: "dist/index.js",
-      bundle: true,
-      platform: "node",
-      target: "node20",
-      external: externals,
-      format: "esm",
-      banner: {
-        js: `
-import { createRequire } from 'module';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-const require = createRequire(import.meta.url);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-        `,
-      },
-      sourcemap: true,
-    });
-    
-    console.log("✅ Build complete: dist/index.js created.");
-  } catch (err) {
-    console.error("❌ BUILD CRITICAL ERROR:", err);
-    process.exit(1);
-  }
+  console.log("✅ Build complete: dist/index.js + dist/public");
 }
 
-buildAll();
+buildAll().catch((err) => {
+  console.error("❌ Build failed:", err);
+  process.exit(1);
+});

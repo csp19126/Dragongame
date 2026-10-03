@@ -27,7 +27,7 @@ export default function Leaderboard() {
         <Card className="border-0 shadow-2xl bg-black/40 backdrop-blur-2xl rounded-[2.5rem] overflow-hidden">
           <CardHeader className="text-center pt-10 pb-6 border-b border-white/5">
             <CardTitle className="text-5xl font-display gold-gradient-text tracking-tight uppercase">{t.leaderboard}</CardTitle>
-            <p className="text-white/40 font-black text-xs tracking-[0.4em] mt-2 uppercase">Legends of the Dragon</p>
+            <p className="text-white/40 font-black text-xs tracking-[0.4em] mt-2 uppercase">{t.legendsTagline}</p>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
@@ -38,7 +38,7 @@ export default function Leaderboard() {
               <Table>
                 <TableHeader className="bg-white/5">
                   <TableRow className="hover:bg-transparent border-white/5 h-16">
-                    <TableHead className="w-[120px] text-center font-black uppercase text-[10px] tracking-widest text-primary/70">Rank</TableHead>
+                    <TableHead className="w-[120px] text-center font-black uppercase text-[10px] tracking-widest text-primary/70">{t.rank}</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/70">{t.username}</TableHead>
                     <TableHead className="text-right pr-10 font-black uppercase text-[10px] tracking-widest text-primary/70">{t.balance}</TableHead>
                   </TableRow>
@@ -58,7 +58,7 @@ export default function Leaderboard() {
                   {leaderboard?.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center py-20 text-white/30 font-bold italic">
-                        The arena is silent. Be the first to claim your throne!
+                        {t.emptyLeaderboard}
                       </TableCell>
                     </TableRow>
                   )}

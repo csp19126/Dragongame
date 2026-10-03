@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/lang-context";
 import { Button } from "@/components/ui/button";
-import { LogOut, Globe, Trophy, User, Bell, Plus, Coins, Crown } from "lucide-react";
+import { LogOut, Globe, Trophy, User, Plus, Coins, Crown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -57,7 +57,6 @@ function AnimatedBalance({ value }: { value: number }) {
 export function Header() {
   const { user, logout } = useAuth();
   const { t, toggleLang } = useLang();
-  const [hasNewAchievement, setHasNewAchievement] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-yellow-500/20 bg-gradient-to-r from-[#120625]/90 via-[#1a0b35]/80 to-[#120625]/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40">
@@ -95,7 +94,7 @@ export function Header() {
                 <Coins className="w-4 h-4 text-yellow-500" />
               </motion.div>
 
-              <Link href="/deposit">
+              <Link href="/coins">
                 <Button
                   variant="outline"
                   size="sm"
@@ -106,20 +105,6 @@ export function Header() {
                   <span className="font-bold text-xs">{t.topUp}</span>
                 </Button>
               </Link>
-
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="hover:bg-white/10"
-                  data-testid="button-notifications"
-                >
-                  <Bell className="w-5 h-5" />
-                </Button>
-                {hasNewAchievement && (
-                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" data-testid="indicator-new-achievement" />
-                )}
-              </div>
 
               <Link href="/leaderboard">
                 <Button 
@@ -163,7 +148,7 @@ export function Header() {
                         </div>
                       </div>
                       <div className="p-3 border-b border-yellow-500/5 mb-1 md:hidden">
-                        <Link href="/deposit">
+                        <Link href="/coins">
                           <Button
                             variant="outline"
                             size="sm"
@@ -181,7 +166,7 @@ export function Header() {
                           <span className="font-bold">{t.profile}</span>
                         </Link>
                       </DropdownMenuItem>
-                      {user.id === "55109529" && (
+                      {user.isAdmin && (
                         <DropdownMenuItem asChild className="rounded-md p-3 cursor-pointer transition-colors" style={{ background: "rgba(251,191,36,0.08)" }}>
                           <Link href="/admin" data-testid="link-admin">
                             <Crown className="w-5 h-5 mr-3 text-yellow-400" />

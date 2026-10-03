@@ -62,7 +62,7 @@ export default function Profile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       toast({ title: t.profileUpdated });
     },
     onError: (err: Error) => {
@@ -183,7 +183,7 @@ export default function Profile() {
 
           <Card className="bg-purple-950/60 border-yellow-500/20 p-6" data-testid="card-profile-stats">
             <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-4">
-              {t.statistics}
+              {t.gamesPlayed} / {t.totalWins}
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="text-center p-3 bg-purple-800/20 rounded-md border border-yellow-500/10">
@@ -204,7 +204,7 @@ export default function Profile() {
                 <Trophy className="w-5 h-5 text-yellow-500/70 mx-auto mb-1" />
                 <div className="text-xs text-yellow-100/50 uppercase font-bold">{t.maxWin}</div>
                 <div className="text-xl font-black text-yellow-400" data-testid="text-profile-max-win">
-                  {profile.maxWin.toLocaleString()}d
+                  {profile.maxWin.toLocaleString()}
                 </div>
               </div>
               <div className="text-center p-3 bg-purple-800/20 rounded-md border border-yellow-500/10">
@@ -225,13 +225,54 @@ export default function Profile() {
                 <Trophy className="w-5 h-5 text-yellow-500/70 mx-auto mb-1" />
                 <div className="text-xs text-yellow-100/50 uppercase font-bold">{t.balance}</div>
                 <div className="text-xl font-black text-yellow-400" data-testid="text-profile-balance">
-                  {profile.balance.toLocaleString()}d
+                  {profile.balance.toLocaleString()} 🪙
                 </div>
               </div>
             </div>
           </Card>
+
+          <PasswordCard />
         </div>
       </main>
     </div>
+  );
+}
+
+function PasswordCard() {
+  const { t } = useLang();
+  const { toast } = useToast();
+  const [currentPassword, setCurrent] = useState("");
+  const [newPassword, setNew] = useState("");
+
+  const change = useMutation({
+    mutationFn: async () => (await apiRequest("POST", "/api/user/password", { currentPassword, newPassword })).json(),
+    onSuccess: () => {
+      toast({ title: t.passwordChanged });
+      setCurrent("");
+      setNew("");
+    },
+    onError: (err: Error) => toast({ title: err.message, variant: "destructive" }),
+  });
+
+  return (
+    <Card className="bg-purple-950/60 border-yellow-500/20 p-6" data-testid="card-change-password">
+      <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-4">{t.changePassword}</h3>
+      <form onSubmit={(e) => { e.preventDefault(); change.mutate(); }} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="current-password" className="text-yellow-100/70">{t.currentPassword}</Label>
+          <Input id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrent(e.target.value)}
+            className="bg-purple-900/40 border-yellow-500/20 text-yellow-100" data-testid="input-current-password" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="new-password" className="text-yellow-100/70">{t.newPassword}</Label>
+          <Input id="new-password" type="password" autoComplete="new-password" minLength={6} value={newPassword} onChange={(e) => setNew(e.target.value)}
+            className="bg-purple-900/40 border-yellow-500/20 text-yellow-100" data-testid="input-new-password" />
+        </div>
+        <Button type="submit" disabled={!currentPassword || newPassword.length < 6 || change.isPending}
+          className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-purple-950 font-black" data-testid="button-change-password">
+          {change.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : t.changePassword}
+        </Button>
+      </form>
+    </Card>
   );
 }

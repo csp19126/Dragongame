@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useGameState } from "@/hooks/use-game";
+import { useGameState, useAchievements, useLeaderboard, useRecentWins } from "@/hooks/use-game";
 import { SlotMachine } from "@/components/SlotMachine";
 import { Header } from "@/components/Header";
 import { StreakDisplay } from "@/components/StreakDisplay";
@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Trophy, Zap, Gift, Gem, Flame, Crown, Gamepad2, TrendingUp, Star } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 
 const FLOATING_SYMBOLS = [
@@ -20,24 +19,17 @@ const FLOATING_SYMBOLS = [
   { icon: Gem, delay: 1, duration: 24, x: "55%" },
   { icon: Flame, delay: 8, duration: 19, x: "70%" },
   { icon: Star, delay: 4, duration: 21, x: "85%" },
-  { icon: Crown, delay: 10, duration: 17, x: "15%" },
-  { icon: Gem, delay: 7, duration: 23, x: "60%" },
 ];
 
 function FloatingSymbols() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 motion-reduce:hidden">
       {FLOATING_SYMBOLS.map((item, i) => (
         <motion.div
           key={i}
           initial={{ y: "110vh", opacity: 0 }}
           animate={{ y: "-10vh", opacity: [0, 0.15, 0.15, 0] }}
-          transition={{
-            duration: item.duration,
-            delay: item.delay,
-            repeat: Infinity,
-            ease: "linear",
-          }}
+          transition={{ duration: item.duration, delay: item.delay, repeat: Infinity, ease: "linear" }}
           className="absolute"
           style={{ left: item.x }}
         >
@@ -48,67 +40,46 @@ function FloatingSymbols() {
   );
 }
 
-const FAKE_WINS = [
-  { user: "Dragon***", amount: 2500000, type: "JACKPOT" },
-  { user: "Lucky***", amount: 500000, type: "" },
-  { user: "Pho***", amount: 125000, type: "" },
-  { user: "Viet***", amount: 5000000, type: "JACKPOT" },
-  { user: "Gold***", amount: 750000, type: "REPEATER" },
-  { user: "King***", amount: 350000, type: "" },
-  { user: "Star***", amount: 8500000, type: "JACKPOT" },
-  { user: "Fire***", amount: 420000, type: "" },
-  { user: "Hoàng***", amount: 1200000, type: "BONUS" },
-  { user: "Minh***", amount: 680000, type: "" },
-  { user: "Phúc***", amount: 3200000, type: "JACKPOT" },
-  { user: "Lan***", amount: 950000, type: "REPEATER" },
-];
-
-function LiveWinsTicker() {
+/** Real big wins (10x bet or more) from the server, newest first */
+function RecentWinsTicker() {
   const { t } = useLang();
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const { data: wins = [] } = useRecentWins();
+  const [i, setI] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % FAKE_WINS.length);
-    }, 1800);
-    return () => clearInterval(interval);
-  }, []);
+    if (wins.length < 2) return;
+    const id = setInterval(() => setI((p) => (p + 1) % wins.length), 3000);
+    return () => clearInterval(id);
+  }, [wins.length]);
+
+  const w = wins[i % Math.max(wins.length, 1)];
 
   return (
-    <div
-      data-testid="live-wins-ticker"
-      className="w-full max-w-2xl mx-auto bg-gradient-to-r from-red-900/40 via-orange-900/40 to-red-900/40 border border-yellow-500/30 rounded-md px-3 sm:px-4 py-2 overflow-hidden"
-    >
+    <div data-testid="recent-wins-ticker" className="w-full bg-gradient-to-r from-red-900/40 via-orange-900/40 to-red-900/40 border border-yellow-500/30 rounded-md px-3 py-2 overflow-hidden">
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="flex items-center gap-1 shrink-0">
           <Zap className="w-4 h-4 text-yellow-400" />
           <span className="text-xs font-black uppercase tracking-wider text-yellow-400">{t.live}</span>
         </div>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentIndex}
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -20, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="flex items-center gap-2 text-sm"
-          >
-            <span className="text-yellow-100 font-bold">{FAKE_WINS[currentIndex].user}</span>
-            <span className="text-yellow-100/60">{t.won}</span>
-            <span className="text-yellow-400 font-black">
-              {FAKE_WINS[currentIndex].amount.toLocaleString()}đ
-            </span>
-            {FAKE_WINS[currentIndex].type && (
-              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-                FAKE_WINS[currentIndex].type === 'JACKPOT' ? 'bg-red-500/80 text-white' :
-                FAKE_WINS[currentIndex].type === 'REPEATER' ? 'bg-cyan-500/80 text-white' :
-                'bg-purple-500/80 text-white'
-              }`}>
-                {FAKE_WINS[currentIndex].type}
-              </span>
-            )}
-          </motion.div>
-        </AnimatePresence>
+        {w ? (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${w.at}-${i}`}
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -20, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex items-center gap-2 text-sm truncate"
+            >
+              <span className="text-yellow-100 font-bold">{w.user}</span>
+              <span className="text-yellow-100/60">{t.won}</span>
+              <span className="text-yellow-400 font-black">{w.amount.toLocaleString()} 🪙</span>
+              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-red-500/80 text-white">×{+w.multiple.toFixed(1)}</span>
+            </motion.div>
+          </AnimatePresence>
+        ) : (
+          <span className="text-sm text-yellow-100/50 truncate">{t.noWinsYet}</span>
+        )}
       </div>
     </div>
   );
@@ -119,65 +90,116 @@ function SlotPreview() {
   const [reel, setReel] = useState([0, 1, 2]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setReel((prev) => prev.map(() => Math.floor(Math.random() * symbols.length)));
-    }, 1200);
-    return () => clearInterval(interval);
+    const id = setInterval(() => setReel((prev) => prev.map(() => Math.floor(Math.random() * symbols.length))), 1200);
+    return () => clearInterval(id);
   }, []);
 
-  const symbolColors = ["text-yellow-400", "text-amber-300", "text-pink-300", "text-orange-300", "text-violet-300"];
-
   return (
-    <motion.div
-      data-testid="slot-preview"
-      className="flex gap-2 justify-center my-6"
-      animate={{ scale: [1, 1.03, 1] }}
-      transition={{ duration: 2, repeat: Infinity }}
-    >
+    <div data-testid="slot-preview" className="flex gap-2 justify-center my-6">
       {reel.map((s, i) => (
         <motion.div
-          key={i}
-          animate={{ rotateX: [0, 360], y: [0, -2, 0] }}
-          transition={{ duration: 0.6, delay: i * 0.12 }}
+          key={`${i}-${s}`}
+          initial={{ rotateX: 90, opacity: 0.4 }}
+          animate={{ rotateX: 0, opacity: 1 }}
+          transition={{ duration: 0.4, delay: i * 0.12 }}
           className="w-16 h-16 bg-gradient-to-b from-purple-800/70 to-purple-950/80 border-2 border-yellow-500/40 rounded-md flex items-center justify-center shadow-[0_0_18px_rgba(251,191,36,0.22)]"
         >
-          <span className={`text-2xl font-black ${symbolColors[s]}`}>{symbols[s]}</span>
+          <span className="text-3xl">{symbols[s]}</span>
         </motion.div>
       ))}
-    </motion.div>
+    </div>
   );
 }
 
-const DEFAULT_ACHIEVEMENTS = [
-  { id: "first_win", name: "First Win", description: "Win your first spin", icon: "star", unlocked: false },
-  { id: "hot_streak_3", name: "Hot Streak", description: "3 wins in a row", icon: "flame", unlocked: false },
-  { id: "hot_streak_5", name: "On Fire", description: "5 wins in a row", icon: "zap", unlocked: false },
-  { id: "dragon_master", name: "Dragon Master", description: "3 dragons in a row", icon: "crown", unlocked: false },
-  { id: "high_roller", name: "High Roller", description: "Bet 100,000+", icon: "gem", unlocked: false },
-  { id: "millionaire", name: "Millionaire", description: "Reach 1M balance", icon: "trophy", unlocked: false },
+const ALL_ACHIEVEMENTS = [
+  { id: "first_win", name: "First Win", description: "Win your first spin", icon: "star" },
+  { id: "hot_streak_3", name: "Hot Streak", description: "3 wins in a row", icon: "flame" },
+  { id: "hot_streak_5", name: "On Fire", description: "5 wins in a row", icon: "zap" },
+  { id: "dragon_master", name: "Dragon Master", description: "3 dragons on a line", icon: "crown" },
+  { id: "high_roller", name: "High Roller", description: "Bet 100,000+", icon: "gem" },
+  { id: "millionaire", name: "Millionaire", description: "Reach 1M balance", icon: "trophy" },
+  { id: "jackpot_hunter", name: "Jackpot Hunter", description: "Win 50x your bet", icon: "target" },
+  { id: "lucky_seven", name: "Lucky Seven", description: "Win 7 times", icon: "gift" },
 ];
+
+function Landing() {
+  const { t } = useLang();
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] flex flex-col relative overflow-hidden">
+      <FloatingSymbols />
+      <Header />
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-6 md:p-8 relative z-10">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} className="text-center space-y-6 max-w-4xl w-full">
+          <div>
+            <h1 data-testid="text-landing-title" className="text-6xl sm:text-8xl lg:text-9xl font-display font-black bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-500 bg-clip-text text-transparent leading-tight">
+              VnSlot
+            </h1>
+            <p className="text-lg sm:text-3xl text-yellow-500/80 font-bold tracking-[0.2em] uppercase mt-2">{t.subtitle}</p>
+          </div>
+
+          <p className="text-base sm:text-xl text-yellow-100/70 max-w-2xl mx-auto leading-relaxed">
+            {t.description} <span className="text-yellow-400 font-bold">{t.descriptionDragon}</span>{t.descriptionEnd}
+          </p>
+
+          <SlotPreview />
+
+          <div className="max-w-2xl mx-auto"><RecentWinsTicker /></div>
+
+          <div className="grid grid-cols-3 gap-2 sm:gap-6 mt-6">
+            {[
+              { label: t.maxWinStat, value: "444×", Icon: Trophy },
+              { label: t.freeSpins, value: "3", Icon: Zap },
+              { label: t.dailyCoins, value: "50K", Icon: Gift },
+            ].map((stat, i) => (
+              <div key={i} data-testid={`stat-card-${i}`} className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-yellow-500/30 rounded-md p-3 sm:p-6 backdrop-blur-xl">
+                <stat.Icon className="w-6 h-6 sm:w-9 sm:h-9 text-yellow-500 mx-auto mb-1" />
+                <div className="text-yellow-500/70 text-[10px] sm:text-xs uppercase tracking-widest font-black">{stat.label}</div>
+                <div className="text-yellow-400 text-xl sm:text-3xl font-display font-black mt-1">{stat.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <Link href="/auth">
+            <Button
+              data-testid="button-begin-quest"
+              size="lg"
+              className="mt-4 text-lg sm:text-2xl px-10 sm:px-20 py-8 sm:py-10 rounded-md font-display font-black uppercase tracking-[0.15em] bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white border-4 border-yellow-300 shadow-[0_0_50px_rgba(234,179,8,0.6)] pulse-glow"
+            >
+              <Gem className="w-6 h-6 mr-2" />
+              {t.beginQuest}
+              <Gem className="w-6 h-6 ml-2" />
+            </Button>
+          </Link>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 pt-8 border-t border-yellow-500/20">
+            {[
+              { title: t.feature1, desc: t.feature1Desc },
+              { title: t.feature2, desc: t.feature2Desc },
+              { title: t.feature3, desc: t.feature3Desc },
+            ].map((f, i) => (
+              <div key={i} className="text-center" data-testid={`feature-card-${i}`}>
+                <h3 className="text-lg md:text-xl font-black text-yellow-400 uppercase tracking-widest mb-2">{f.title}</h3>
+                <p className="text-yellow-100/60 text-sm md:text-base">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-yellow-100/40">{t.playMoneyNote}</p>
+        </motion.div>
+      </main>
+      <AppFooter />
+    </div>
+  );
+}
 
 export default function Home() {
   const { user, isLoading: isAuthLoading } = useAuth();
-  const { data: gameState, isLoading: isGameLoading } = useGameState();
+  const { data: gameState } = useGameState(!!user);
+  const { data: achievements = [] } = useAchievements(user?.id);
   const { t } = useLang();
 
-  const { data: achievements = [] } = useQuery<any[]>({
-    queryKey: ["/api/achievements", user?.id],
-    queryFn: async () => {
-      const res = await fetch(`/api/achievements/${user?.id}`);
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!user?.id,
-  });
-
   const mergedAchievements = useMemo(() => {
-    const unlockedIds = new Set(achievements.map((a: any) => a.badgeId));
-    return DEFAULT_ACHIEVEMENTS.map((badge) => ({
-      ...badge,
-      unlocked: unlockedIds.has(badge.id),
-    }));
+    const unlocked = new Set(achievements.map((a) => a.badgeId));
+    return ALL_ACHIEVEMENTS.map((b) => ({ ...b, unlocked: unlocked.has(b.id) }));
   }, [achievements]);
 
   if (isAuthLoading) {
@@ -188,312 +210,63 @@ export default function Home() {
     );
   }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] flex flex-col selection:bg-yellow-500 selection:text-purple-900 relative overflow-hidden">
-        <FloatingSymbols />
+  if (!user) return <Landing />;
 
-        <motion.div
-          animate={{
-            x: [0, 100, -100, 0],
-            y: [0, -50, 50, 0],
-            scale: [1, 1.2, 0.9, 1],
-          }}
-          transition={{ duration: 20, repeat: Infinity }}
-          className="absolute top-10 left-10 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none"
-        />
-        <motion.div
-          animate={{
-            x: [0, -100, 100, 0],
-            y: [0, 50, -50, 0],
-            scale: [1, 0.9, 1.2, 1],
-          }}
-          transition={{ duration: 25, repeat: Infinity, delay: 2 }}
-          className="absolute bottom-10 right-10 w-96 h-96 bg-yellow-500/15 rounded-full blur-3xl pointer-events-none"
-        />
-
-        <Header />
-
-        <main className="flex-1 flex flex-col items-center justify-center px-3 py-4 sm:p-4 md:p-8 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1 }}
-            className="text-center space-y-8 max-w-4xl"
-          >
-            <motion.div
-              animate={{
-                textShadow: [
-                  "0 0 20px rgba(234,179,8,0.3)",
-                  "0 0 60px rgba(234,179,8,0.6)",
-                  "0 0 20px rgba(234,179,8,0.3)",
-                ],
-              }}
-              transition={{ duration: 3, repeat: Infinity }}
-              className="relative"
-            >
-              <h1
-                data-testid="text-landing-title"
-                className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-display font-black bg-gradient-to-r from-yellow-300 via-yellow-500 to-orange-500 bg-clip-text text-transparent leading-tight"
-              >
-                VnSlot
-              </h1>
-              <p className="text-lg sm:text-2xl md:text-4xl text-yellow-500/80 font-bold tracking-[0.2em] sm:tracking-[0.3em] uppercase mt-3 sm:mt-4">
-                {t.subtitle}
-              </p>
-            </motion.div>
-
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3, duration: 0.8 }}
-              className="text-base sm:text-xl md:text-2xl text-yellow-100/70 max-w-2xl mx-auto leading-relaxed font-light px-2"
-            >
-              {t.description}{" "}
-              <span className="text-yellow-400 font-bold">{t.descriptionDragon}</span>{t.descriptionEnd}
-            </motion.p>
-
-            <SlotPreview />
-
-            <LiveWinsTicker />
-
-            <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-8 mt-8 sm:mt-12 mb-6 sm:mb-8">
-              {[
-                { label: t.maxWinStat, value: "1M+", Icon: Trophy },
-                { label: t.freeSpins, value: "\u221E", Icon: Zap },
-                { label: t.bonusRounds, value: "5+", Icon: Gift },
-              ].map((stat, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.5 + i * 0.1 }}
-                  data-testid={`stat-card-${i}`}
-                  className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-yellow-500/30 rounded-md p-3 sm:p-4 md:p-6 backdrop-blur-xl"
-                >
-                  <stat.Icon className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 text-yellow-500 mx-auto mb-1 sm:mb-2" />
-                  <div className="text-yellow-500/70 text-[10px] sm:text-xs uppercase tracking-widest font-black">
-                    {stat.label}
-                  </div>
-                  <div className="text-yellow-400 text-xl sm:text-2xl md:text-3xl font-display font-black mt-1">
-                    {stat.value}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.8 }}
-            >
-              <Link href="/auth">
-                <Button
-                  data-testid="button-begin-quest"
-                  size="lg"
-                  className="text-lg sm:text-2xl px-10 sm:px-20 py-8 sm:py-12 rounded-md font-display font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white border-4 border-yellow-300 shadow-[0_0_50px_rgba(234,179,8,0.6)] pulse-glow"
-                >
-                  <Gem className="w-6 h-6 mr-2" />
-                  {t.beginQuest}
-                  <Gem className="w-6 h-6 ml-2" />
-                </Button>
-              </Link>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1 }}
-              className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 pt-8 border-t border-yellow-500/20"
-            >
-              {[
-                { title: t.repeaterWins, desc: t.repeaterWinsDesc },
-                { title: t.wildMultipliers, desc: t.wildMultipliersDesc },
-                { title: t.dragonJackpot, desc: t.dragonJackpotDesc },
-              ].map((feature, i) => (
-                <div key={i} className="text-center" data-testid={`feature-card-${i}`}>
-                  <h3 className="text-lg md:text-xl font-black text-yellow-400 uppercase tracking-widest mb-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-yellow-100/60 text-sm md:text-base">{feature.desc}</p>
-                </div>
-              ))}
-            </motion.div>
-          </motion.div>
-        </main>
-      </div>
-    );
-  }
-
-  const streak = (gameState as any)?.streak ?? 0;
-  const maxStreak = (gameState as any)?.maxStreak ?? 0;
-  const totalWins = (gameState as any)?.totalWins ?? 0;
-  const maxWin = (gameState as any)?.maxWin ?? 0;
-  const gamesPlayed = (gameState as any)?.gamesPlayed ?? 0;
+  const stats = [
+    { label: t.gamesPlayed, value: (gameState?.gamesPlayed ?? 0).toLocaleString(), Icon: Gamepad2, id: "games-played" },
+    { label: t.totalWins, value: (gameState?.totalWins ?? 0).toLocaleString(), Icon: TrendingUp, id: "total-wins" },
+    { label: t.maxWin, value: (gameState?.maxWin ?? 0).toLocaleString(), Icon: Trophy, id: "max-win" },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] flex flex-col selection:bg-primary selection:text-white relative">
+    <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] flex flex-col relative">
       <FloatingSymbols />
       <Header />
 
-      <main className="flex-1 relative z-10 overflow-auto">
-        <div className="hidden lg:grid lg:grid-cols-[280px_1fr_280px] gap-4 p-4 h-full">
-          <aside className="space-y-4" data-testid="sidebar-achievements">
+      <main className="flex-1 relative z-10">
+        {/* One layout for all sizes, so there is only ever one slot machine mounted */}
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_260px] gap-4 p-3 sm:p-4 max-w-[1400px] mx-auto">
+          <section className="order-1 lg:order-2 flex flex-col items-center gap-4 min-w-0">
+            <div className="w-full max-w-md lg:hidden"><RecentWinsTicker /></div>
+            {gameState ? (
+              <SlotMachine />
+            ) : (
+              <div className="flex justify-center p-20"><Loader2 className="w-12 h-12 animate-spin text-primary" data-testid="loading-game" /></div>
+            )}
+            <div data-testid="stats-bar" className="grid grid-cols-3 gap-2 sm:gap-3 w-full max-w-md">
+              {stats.map((s) => (
+                <Card key={s.id} className="bg-purple-950/60 border-yellow-500/20 p-3 text-center">
+                  <s.Icon className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500/70 mx-auto mb-1" />
+                  <div className="text-[10px] sm:text-xs text-yellow-100/50 uppercase font-bold tracking-wider">{s.label}</div>
+                  <div data-testid={`text-${s.id}`} className="text-lg sm:text-2xl font-display font-black text-yellow-400 truncate">{s.value}</div>
+                </Card>
+              ))}
+            </div>
+          </section>
+
+          <aside className="order-3 lg:order-1 space-y-4" data-testid="sidebar-achievements">
             <Card className="bg-purple-950/60 border-yellow-500/20 p-4">
               <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-4 flex items-center gap-2">
-                <Star className="w-4 h-4" />
-                {t.achievements}
+                <Star className="w-4 h-4" /> {t.achievements}
               </h3>
-              <div className="grid grid-cols-2 gap-3">
-                {mergedAchievements.map((badge) => (
-                  <AchievementBadge key={badge.id} badge={badge} />
-                ))}
+              <div className="grid grid-cols-4 lg:grid-cols-2 gap-3">
+                {mergedAchievements.map((badge) => <AchievementBadge key={badge.id} badge={badge} />)}
               </div>
             </Card>
           </aside>
 
-          <div className="flex flex-col items-center justify-start">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="w-full max-w-4xl mx-auto space-y-4 py-4"
-            >
-              {isGameLoading ? (
-                <div className="flex justify-center p-20">
-                  <Loader2 className="w-12 h-12 animate-spin text-primary" data-testid="loading-game" />
-                </div>
-              ) : (
-                <SlotMachine balance={gameState?.balance ?? (user as any).balance} />
-              )}
-
-              <div
-                data-testid="stats-bar"
-                className="grid grid-cols-3 gap-3"
-              >
-                <Card className="bg-purple-950/60 border-yellow-500/20 p-4 text-center">
-                  <Gamepad2 className="w-5 h-5 text-yellow-500/70 mx-auto mb-1" />
-                  <div className="text-xs text-yellow-100/50 uppercase font-bold tracking-wider">
-                    {t.gamesPlayed}
-                  </div>
-                  <div
-                    data-testid="text-games-played"
-                    className="text-2xl font-display font-black text-yellow-400"
-                  >
-                    {gamesPlayed.toLocaleString()}
-                  </div>
-                </Card>
-                <Card className="bg-purple-950/60 border-yellow-500/20 p-4 text-center">
-                  <TrendingUp className="w-5 h-5 text-yellow-500/70 mx-auto mb-1" />
-                  <div className="text-xs text-yellow-100/50 uppercase font-bold tracking-wider">
-                    {t.totalWins}
-                  </div>
-                  <div
-                    data-testid="text-total-wins"
-                    className="text-2xl font-display font-black text-yellow-400"
-                  >
-                    {totalWins.toLocaleString()}
-                  </div>
-                </Card>
-                <Card className="bg-purple-950/60 border-yellow-500/20 p-4 text-center">
-                  <Trophy className="w-5 h-5 text-yellow-500/70 mx-auto mb-1" />
-                  <div className="text-xs text-yellow-100/50 uppercase font-bold tracking-wider">
-                    {t.maxWin}
-                  </div>
-                  <div
-                    data-testid="text-max-win"
-                    className="text-2xl font-display font-black text-yellow-400"
-                  >
-                    {maxWin.toLocaleString()}đ
-                  </div>
-                </Card>
-              </div>
-            </motion.div>
-          </div>
-
-          <aside className="space-y-4" data-testid="sidebar-right">
+          <aside className="order-2 lg:order-3 space-y-4" data-testid="sidebar-right">
+            <div className="hidden lg:block"><RecentWinsTicker /></div>
             <Card className="bg-purple-950/60 border-yellow-500/20 p-4">
-              <StreakDisplay streak={streak} maxStreak={maxStreak} />
+              <StreakDisplay streak={gameState?.streak ?? 0} maxStreak={gameState?.maxStreak ?? 0} />
             </Card>
-
             <Card className="bg-purple-950/60 border-yellow-500/20 p-4">
               <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-3 flex items-center gap-2">
-                <Trophy className="w-4 h-4" />
-                {t.topPlayers}
+                <Trophy className="w-4 h-4" /> {t.topPlayers}
               </h3>
               <MiniLeaderboard />
             </Card>
           </aside>
-        </div>
-
-        <div className="hidden lg:block">
-          <AppFooter />
-        </div>
-
-        <div className="lg:hidden flex flex-col items-center px-2 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="w-full max-w-lg"
-          >
-            {isGameLoading ? (
-              <div className="flex justify-center p-20">
-                <Loader2 className="w-12 h-12 animate-spin text-primary" data-testid="loading-game-mobile" />
-              </div>
-            ) : (
-              <SlotMachine balance={gameState?.balance ?? (user as any).balance} />
-            )}
-          </motion.div>
-
-          <div
-            data-testid="stats-bar-mobile"
-            className="grid grid-cols-3 gap-2 w-full max-w-lg"
-          >
-            <Card className="bg-purple-950/60 border-yellow-500/20 p-3 text-center">
-              <Gamepad2 className="w-4 h-4 text-yellow-500/70 mx-auto mb-1" />
-              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">{t.games}</div>
-              <div data-testid="text-games-played-mobile" className="text-lg font-black text-yellow-400">
-                {gamesPlayed.toLocaleString()}
-              </div>
-            </Card>
-            <Card className="bg-purple-950/60 border-yellow-500/20 p-3 text-center">
-              <TrendingUp className="w-4 h-4 text-yellow-500/70 mx-auto mb-1" />
-              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">{t.wins}</div>
-              <div data-testid="text-total-wins-mobile" className="text-lg font-black text-yellow-400">
-                {totalWins.toLocaleString()}
-              </div>
-            </Card>
-            <Card className="bg-purple-950/60 border-yellow-500/20 p-3 text-center">
-              <Trophy className="w-4 h-4 text-yellow-500/70 mx-auto mb-1" />
-              <div className="text-[10px] text-yellow-100/50 uppercase font-bold">{t.maxWin}</div>
-              <div data-testid="text-max-win-mobile" className="text-lg font-black text-yellow-400">
-                {maxWin.toLocaleString()}đ
-              </div>
-            </Card>
-          </div>
-
-          <Card className="bg-purple-950/60 border-yellow-500/20 p-4 w-full max-w-lg">
-            <StreakDisplay streak={streak} maxStreak={maxStreak} />
-          </Card>
-
-          <Card className="bg-purple-950/60 border-yellow-500/20 p-4 w-full max-w-lg" data-testid="achievements-mobile">
-            <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-4 flex items-center gap-2">
-              <Star className="w-4 h-4" />
-              {t.achievements}
-            </h3>
-            <div className="grid grid-cols-3 gap-3">
-              {mergedAchievements.map((badge) => (
-                <AchievementBadge key={badge.id} badge={badge} />
-              ))}
-            </div>
-          </Card>
-
-          <Card className="bg-purple-950/60 border-yellow-500/20 p-4 w-full max-w-lg" data-testid="leaderboard-mobile">
-            <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-3 flex items-center gap-2">
-              <Trophy className="w-4 h-4" />
-              {t.topPlayers}
-            </h3>
-            <MiniLeaderboard />
-          </Card>
         </div>
       </main>
 
@@ -504,83 +277,43 @@ export default function Home() {
 
 function MiniLeaderboard() {
   const { t } = useLang();
-  const { data: entries = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/game/leaderboard"],
-    queryFn: async () => {
-      const res = await fetch("/api/game/leaderboard");
-      if (!res.ok) return [];
-      return res.json();
-    },
-    refetchInterval: 10000,
-  });
-
+  const { data: entries = [], isLoading } = useLeaderboard();
   const top5 = entries.slice(0, 5);
 
-  const getRankIcon = (rank: number) => {
+  const rankIcon = (rank: number) => {
     if (rank === 1) return <Crown className="w-4 h-4 text-yellow-400" />;
     if (rank === 2) return <Crown className="w-4 h-4 text-gray-300" />;
     if (rank === 3) return <Crown className="w-4 h-4 text-orange-400" />;
     return <span className="text-xs text-yellow-100/50 font-bold">#{rank}</span>;
   };
 
-  if (isLoading) {
-    return <div className="text-center text-yellow-100/40 text-sm py-4">{t.loading}</div>;
-  }
-
-  if (top5.length === 0) {
-    return <div className="text-center text-yellow-100/40 text-sm py-4">{t.noPlayersYet}</div>;
-  }
+  if (isLoading) return <div className="text-center text-yellow-100/40 text-sm py-4">{t.loading}</div>;
+  if (top5.length === 0) return <div className="text-center text-yellow-100/40 text-sm py-4">{t.noPlayersYet}</div>;
 
   return (
     <div className="space-y-2" data-testid="mini-leaderboard">
-      {top5.map((entry: any, i: number) => (
-        <motion.div
-          key={entry.rank ?? i}
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.05 }}
-          className="flex items-center gap-2 p-2 rounded-md bg-purple-800/20 border border-yellow-500/10"
-        >
-          <div className="w-6 flex justify-center">{getRankIcon(i + 1)}</div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-yellow-100 truncate">
-              {entry.username}
-            </div>
-          </div>
-          <div className="text-sm font-black text-yellow-400 shrink-0">
-            {(entry.balance ?? 0).toLocaleString()}đ
-          </div>
-        </motion.div>
+      {top5.map((e) => (
+        <div key={e.rank} className="flex items-center gap-2 p-2 rounded-md bg-purple-800/20 border border-yellow-500/10">
+          <div className="w-6 flex justify-center">{rankIcon(e.rank)}</div>
+          <div className="flex-1 min-w-0 text-sm font-bold text-yellow-100 truncate">{e.username}</div>
+          <div className="text-sm font-black text-yellow-400 shrink-0">{e.balance.toLocaleString()}</div>
+        </div>
       ))}
     </div>
   );
 }
 
-function AppFooter() {
+export function AppFooter() {
   const { t } = useLang();
-
   return (
     <footer className="relative z-10 border-t border-yellow-500/10 bg-[#080315]/80 backdrop-blur-sm mt-8" data-testid="app-footer">
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-6 text-xs text-yellow-100/40">
-            <Link href="/about" className="hover:text-yellow-400 transition-colors" data-testid="link-about">
-              {t.about}
-            </Link>
-            <Link href="/terms" className="hover:text-yellow-400 transition-colors" data-testid="link-terms">
-              {t.terms}
-            </Link>
-            <Link href="/deposit" className="hover:text-yellow-400 transition-colors" data-testid="link-deposit">
-              {t.deposit}
-            </Link>
-            <a href="mailto:support@vnslot888.com" className="hover:text-yellow-400 transition-colors" data-testid="link-support">
-              {t.support}
-            </a>
-          </div>
-          <div className="text-xs text-yellow-100/25">
-            {t.copyright}
-          </div>
+      <div className="container mx-auto px-4 py-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-6 text-xs text-yellow-100/50">
+          <Link href="/about" className="hover:text-yellow-400 transition-colors" data-testid="link-about">{t.about}</Link>
+          <Link href="/terms" className="hover:text-yellow-400 transition-colors" data-testid="link-terms">{t.terms}</Link>
+          <Link href="/coins" className="hover:text-yellow-400 transition-colors" data-testid="link-coins">{t.deposit}</Link>
         </div>
+        <div className="text-xs text-yellow-100/30 text-center">{t.copyright}</div>
       </div>
     </footer>
   );

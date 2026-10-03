@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Flame, Zap, Crown, Target } from "lucide-react";
+import { useLang } from "@/lib/lang-context";
 
 interface StreakDisplayProps {
   streak: number;
@@ -7,19 +8,21 @@ interface StreakDisplayProps {
 }
 
 export function StreakDisplay({ streak, maxStreak }: StreakDisplayProps) {
+  const { t } = useLang();
   return (
     <motion.div
       data-testid="streak-display"
-      animate={streak > 0 ? { scale: [1, 1.05, 1] } : {}}
-      transition={{ duration: 0.5, repeat: streak > 0 ? Infinity : 0 }}
+      key={streak}
+      animate={streak > 0 ? { scale: [1, 1.06, 1] } : {}}
+      transition={{ duration: 0.5 }}
       className="bg-gradient-to-r from-orange-600 to-red-600 rounded-2xl px-6 py-4 border-2 border-orange-300 shadow-[0_0_20px_rgba(234,88,12,0.4)]"
     >
       <div className="text-center">
         <div className="text-xs font-black uppercase tracking-wider text-white/80 flex items-center justify-center gap-1">
-          <Flame className="w-3 h-3" /> Streak
+          <Flame className="w-3 h-3" /> {t.streak}
         </div>
         <div data-testid="streak-count" className="text-4xl font-display font-black text-yellow-300">{streak}</div>
-        <div data-testid="streak-max" className="text-xs text-orange-100/60 mt-1">Max: {maxStreak}</div>
+        <div data-testid="streak-max" className="text-xs text-orange-100/60 mt-1">{t.max}: {maxStreak}</div>
       </div>
 
       {streak > 0 && (
@@ -30,17 +33,17 @@ export function StreakDisplay({ streak, maxStreak }: StreakDisplayProps) {
         >
           {streak > 2 && (
             <div data-testid="streak-status-fire" className="text-center text-sm font-bold text-yellow-200 flex items-center justify-center gap-1">
-              <Target className="w-4 h-4" /> On Fire!
+              <Target className="w-4 h-4" /> {t.onFire}
             </div>
           )}
           {streak > 5 && (
             <div data-testid="streak-status-unstoppable" className="text-center text-sm font-bold text-red-200 flex items-center justify-center gap-1">
-              <Zap className="w-4 h-4" /> Unstoppable!
+              <Zap className="w-4 h-4" /> {t.unstoppable}
             </div>
           )}
           {streak > 10 && (
             <div data-testid="streak-status-dragon" className="text-center text-sm font-bold text-white flex items-center justify-center gap-1">
-              <Crown className="w-4 h-4" /> Dragon Mode!
+              <Crown className="w-4 h-4" /> {t.dragonMode}
             </div>
           )}
         </motion.div>

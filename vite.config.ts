@@ -17,6 +17,15 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Long-lived vendor chunks: a game update doesn't make players re-download React
+        manualChunks: {
+          react: ["react", "react-dom", "wouter", "@tanstack/react-query"],
+          motion: ["framer-motion"],
+        },
+      },
+    },
   },
   server: {
     proxy: {

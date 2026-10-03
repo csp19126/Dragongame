@@ -1,0 +1,33 @@
+# Run the whole thing (game + database) on any machine with Docker:
+#   docker compose up -d        then open http://localhost:5000
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dragon
+      POSTGRES_PASSWORD: dragon
+      POSTGRES_DB: dragongame
+    volumes:
+      - dragon-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dragon -d dragongame"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://dragon:dragon@db:5432/dragongame
+      # Plain http on localhost; put HTTPS in front and remove this line when going public
+      COOKIE_SECURE: "false"
+      ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
+    ports:
+      - "5000:5000"
+
+volumes:
+  dragon-db:

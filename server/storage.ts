@@ -1,378 +1,305 @@
 import { db } from "./db";
-import { users, gameStates, achievements, deposits, giftCards, withdrawals, type InsertUser, type User, type InsertGameState, type GameState, type Achievement, type Deposit, type GiftCard, type Withdrawal } from "@shared/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
-import bcrypt from "bcryptjs";
+import {
+  users, gameStates, achievements, deposits, giftCards,
+  type User, type GameState, type Achievement, type Deposit, type GiftCard,
+  STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS,
+} from "@shared/schema";
+import { eq, desc, sql, and, or, isNull, lt, count, sum } from "drizzle-orm";
+import { spin as runSpin, type SpinOutcome } from "./game";
 
-export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateProfile(userId: string, data: { username?: string; firstName?: string; lastName?: string }): Promise<User>;
-  updatePassword(userId: string, hashedPassword: string): Promise<void>;
-  updateBalance(userId: string, newBalance: number): Promise<User>;
-  deductBalanceAtomic(userId: string, amount: number): Promise<User | null>;
-  creditBalanceAtomic(userId: string, amount: number): Promise<User>;
-  updateStreak(userId: string, streak: number, maxStreak: number, totalWins: number, maxWin: number): Promise<User>;
-  getGameState(userId: string, slotId: string): Promise<GameState | undefined>;
-  updateGameState(userId: string, slotId: string, state: Partial<InsertGameState>): Promise<GameState>;
-  getLeaderboard(): Promise<User[]>;
-  getAchievements(userId: string): Promise<Achievement[]>;
-  unlockAchievement(userId: string, badgeId: string, badgeName: string, description: string, icon: string): Promise<Achievement | null>;
-  createDeposit(userId: string, amount: number, method: string, cardCode?: string): Promise<Deposit>;
-  getDeposits(userId: string): Promise<Deposit[]>;
-  getGiftCard(code: string): Promise<GiftCard | undefined>;
-  redeemGiftCard(code: string, userId: string): Promise<GiftCard>;
-  redeemGiftCardAtomic(code: string, userId: string): Promise<{ amount: number; newBalance: number } | null>;
-  createGiftCard(code: string, denomination: number): Promise<GiftCard>;
-  createWithdrawal(userId: string, amount: number, note?: string): Promise<Withdrawal>;
-  getWithdrawals(userId: string): Promise<Withdrawal[]>;
-  getAllUsers(): Promise<User[]>;
-  updateActiveModifier(userId: string, modifier: number): Promise<void>;
-  consultOracle(userId: string): Promise<{ message: string; type: "good" | "bad" | "neutral" }>;
-  adminUpdateUser(userId: string, data: { balance?: number; username?: string; firstName?: string; lastName?: string; password?: string }): Promise<User>;
-  adminDeleteUser(userId: string): Promise<void>;
-  getAllGiftCards(): Promise<GiftCard[]>;
-  adminDeleteGiftCard(id: number): Promise<void>;
-  getAllWithdrawals(): Promise<Withdrawal[]>;
-  updateWithdrawalStatus(id: number, status: string): Promise<Withdrawal>;
+export const SLOT_ID = "main";
+
+const ACHIEVEMENTS = {
+  first_win: { name: "First Win", description: "Won your first spin!", icon: "star" },
+  hot_streak_3: { name: "Hot Streak", description: "3 wins in a row!", icon: "flame" },
+  hot_streak_5: { name: "On Fire", description: "5 wins in a row!", icon: "zap" },
+  dragon_master: { name: "Dragon Master", description: "Three dragons on a line!", icon: "crown" },
+  high_roller: { name: "High Roller", description: "Bet 100,000 or more!", icon: "gem" },
+  millionaire: { name: "Millionaire", description: "Balance reached 1,000,000!", icon: "trophy" },
+  jackpot_hunter: { name: "Jackpot Hunter", description: "Won 50x your bet in one spin!", icon: "target" },
+  lucky_seven: { name: "Lucky Seven", description: "Won 7 times!", icon: "gift" },
+} as const;
+type BadgeId = keyof typeof ACHIEVEMENTS;
+
+export interface SpinResult extends SpinOutcome {
+  bet: number;
+  isFreeSpin: boolean;
+  blessed: boolean;
+  newBalance: number;
+  totalFreeSpins: number;
+  streak: number;
+  totalWins: number;
+  maxWin: number;
+  gamesPlayed: number;
+  newAchievements: Achievement[];
 }
 
-export class DatabaseStorage implements IStorage {
+export type SpinError = { error: "insufficient_balance" | "no_user" };
+
+export class DatabaseStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
     return user;
   }
 
-  async createUser(insertUser: any): Promise<User> {
+  async createUser(data: { username: string; password: string }): Promise<User> {
     const [user] = await db.insert(users).values({
-      username: insertUser.username,
-      password: insertUser.password,
-      firstName: insertUser.firstName || "",
-      lastName: insertUser.lastName || "",
-      email: insertUser.email || `${insertUser.username}@vns888.com`,
-      balance: insertUser.balance ?? 50000,
+      username: data.username,
+      password: data.password,
+      balance: STARTING_BALANCE,
     }).returning();
     return user;
   }
 
   async updatePassword(userId: string, hashedPassword: string): Promise<void> {
-    await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
+    await db.update(users).set({ password: hashedPassword, updatedAt: new Date() }).where(eq(users.id, userId));
   }
 
   async updateProfile(userId: string, data: { username?: string; firstName?: string; lastName?: string }): Promise<User> {
-    const updateData: Record<string, any> = { updatedAt: new Date() };
-    if (data.username !== undefined) updateData.username = data.username;
-    if (data.firstName !== undefined) updateData.firstName = data.firstName;
-    if (data.lastName !== undefined) updateData.lastName = data.lastName;
-    const [user] = await db.update(users).set(updateData).where(eq(users.id, userId)).returning();
+    const [user] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, userId)).returning();
     return user;
   }
 
-  async updateBalance(userId: string, newBalance: number): Promise<User> {
-    const [user] = await db.update(users).set({ balance: newBalance }).where(eq(users.id, userId)).returning();
-    return user;
-  }
-
-  async deductBalanceAtomic(userId: string, amount: number): Promise<User | null> {
-    const [user] = await db.update(users).set({
-      balance: sql`${users.balance} - ${amount}`,
-    }).where(
-      and(eq(users.id, userId), sql`${users.balance} >= ${amount}`)
-    ).returning();
-    return user || null;
-  }
-
-  async creditBalanceAtomic(userId: string, amount: number): Promise<User> {
-    const [user] = await db.update(users).set({
-      balance: sql`${users.balance} + ${amount}`,
-    }).where(eq(users.id, userId)).returning();
-    return user;
-  }
-
-  async getGameState(userId: string, slotId: string): Promise<GameState | undefined> {
-    const [state] = await db.select().from(gameStates).where(
-      sql`${gameStates.userId} = ${userId} AND ${gameStates.slotId} = ${slotId}`
-    );
+  async getGameState(userId: string): Promise<GameState | undefined> {
+    const [state] = await db.select().from(gameStates)
+      .where(and(eq(gameStates.userId, userId), eq(gameStates.slotId, SLOT_ID)))
+      .orderBy(gameStates.id).limit(1);
     return state;
   }
 
-  async updateActiveModifier(userId: string, modifier: number): Promise<void> {
-    await db.update(gameStates)
-      .set({ activeModifier: modifier, updatedAt: new Date() })
-      .where(eq(gameStates.userId, userId));
+  private async ensureGameState(userId: string): Promise<GameState> {
+    const existing = await this.getGameState(userId);
+    if (existing) return existing;
+    const [created] = await db.insert(gameStates).values({ userId, slotId: SLOT_ID }).returning();
+    return created;
   }
 
-  async consultOracle(userId: string): Promise<{ message: string; type: "good" | "bad" | "neutral" }> {
-    const outcomes = [
-      { text: "The Great Dragon breathes fire! (2x Multiplier)", mod: 200, type: "good" },
-      { text: "A Golden Lotus blooms. (1.5x Multiplier)", mod: 150, type: "good" },
-      { text: "The spirits are silent. (No change)", mod: 100, type: "neutral" },
-      { text: "A storm approaches. (0.5x Multiplier)", mod: 50, type: "bad" },
-      { text: "The Dragon is sleeping. (0.2x Multiplier)", mod: 20, type: "bad" }
-    ];
+  /**
+   * One spin, all-or-nothing. The stake is taken (or a free spin consumed) with a
+   * conditional UPDATE so two simultaneous requests can never both spend the same
+   * balance, and the whole thing runs in a transaction so a crash can't take a
+   * stake without paying the win.
+   */
+  async spin(userId: string, requestedBet: number): Promise<SpinResult | SpinError> {
+    const state = await this.ensureGameState(userId);
 
-    // Pick a random outcome
-    const result = outcomes[Math.floor(Math.random() * outcomes.length)];
+    return db.transaction(async (tx) => {
+      // 0. Lock this player's rows in a fixed order (user, then game state). Concurrent
+      //    spins for the same player then queue up instead of deadlocking each other.
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update");
+      await tx.select({ id: gameStates.id }).from(gameStates).where(eq(gameStates.id, state.id)).for("update");
 
-    // We check if the user has a game state record first
-    const existing = await db.select().from(gameStates).where(eq(gameStates.userId, userId));
-    
-    if (existing.length > 0) {
-      await db.update(gameStates)
-        .set({ activeModifier: result.mod, updatedAt: new Date() })
-        .where(eq(gameStates.userId, userId));
-    } else {
-      // If they've never played, create a basic state for them with the modifier
-      await db.insert(gameStates).values({
-        userId,
-        slotId: "default",
-        activeModifier: result.mod
-      } as any);
-    }
+      // 1. Pay for the spin: free spin first, otherwise stake from balance
+      let isFreeSpin = false;
+      let bet = requestedBet;
+      const [usedFree] = await tx.update(gameStates)
+        .set({ freeSpins: sql`${gameStates.freeSpins} - 1` })
+        .where(and(eq(gameStates.id, state.id), sql`${gameStates.freeSpins} > 0`))
+        .returning();
+      if (usedFree) {
+        isFreeSpin = true;
+        bet = usedFree.freeSpinBet || requestedBet;
+      } else {
+        const [paid] = await tx.update(users)
+          .set({ balance: sql`${users.balance} - ${bet}` })
+          .where(and(eq(users.id, userId), sql`${users.balance} >= ${bet}`))
+          .returning({ id: users.id });
+        if (!paid) return { error: "insufficient_balance" } as SpinError;
+      }
 
-    return { message: result.text, type: result.type as "good" | "bad" | "neutral" };
+      // 2. Consume the oracle blessing, if one is waiting
+      const [blessing] = await tx.update(gameStates)
+        .set({ activeModifier: 100 })
+        .where(and(eq(gameStates.id, state.id), sql`${gameStates.activeModifier} > 100`))
+        .returning({ id: gameStates.id });
+      const blessed = !!blessing;
+
+      // 3. Spin
+      const outcome = runSpin(bet, { blessed });
+      // A "win" means the spin actually made a profit; getting your stake back isn't a win
+      const won = outcome.winAmount > bet;
+
+      // 4. Free spins: awarded spins are locked to the bet that won them
+      const [gs] = await tx.update(gameStates).set({
+        freeSpins: sql`${gameStates.freeSpins} + ${outcome.freeSpinsAwarded}`,
+        ...(outcome.freeSpinsAwarded > 0 ? { freeSpinBet: bet } : {}),
+        consecutiveWins: won ? sql`${gameStates.consecutiveWins} + 1` : 0,
+        updatedAt: new Date(),
+      }).where(eq(gameStates.id, state.id)).returning();
+
+      // 5. Pay out and update stats in one statement
+      const [user] = await tx.update(users).set({
+        balance: sql`${users.balance} + ${outcome.winAmount}`,
+        gamesPlayed: sql`${users.gamesPlayed} + 1`,
+        totalWins: won ? sql`${users.totalWins} + 1` : users.totalWins,
+        streak: won ? sql`${users.streak} + 1` : 0,
+        maxStreak: won ? sql`greatest(${users.maxStreak}, ${users.streak} + 1)` : users.maxStreak,
+        maxWin: sql`greatest(${users.maxWin}, ${outcome.winAmount})`,
+      }).where(eq(users.id, userId)).returning();
+      if (!user) throw new Error("User vanished mid-spin");
+
+      // 6. Achievements
+      const earned: BadgeId[] = [];
+      if (won) earned.push("first_win");
+      if (user.streak >= 3) earned.push("hot_streak_3");
+      if (user.streak >= 5) earned.push("hot_streak_5");
+      if (outcome.dragonLine) earned.push("dragon_master");
+      if (bet >= 100000 && !isFreeSpin) earned.push("high_roller");
+      if (user.balance >= 1_000_000) earned.push("millionaire");
+      if (outcome.winAmount >= bet * 50) earned.push("jackpot_hunter");
+      if (user.totalWins >= 7) earned.push("lucky_seven");
+
+      const newAchievements: Achievement[] = [];
+      if (earned.length) {
+        const have = new Set((await tx.select({ b: achievements.badgeId }).from(achievements)
+          .where(eq(achievements.userId, userId))).map((r) => r.b));
+        for (const id of earned.filter((b) => !have.has(b))) {
+          const def = ACHIEVEMENTS[id];
+          const [a] = await tx.insert(achievements).values({
+            userId, badgeId: id, badgeName: def.name, description: def.description, icon: def.icon,
+          }).returning();
+          newAchievements.push(a);
+        }
+      }
+
+      return {
+        ...outcome,
+        bet,
+        isFreeSpin,
+        blessed,
+        newBalance: user.balance,
+        totalFreeSpins: gs.freeSpins ?? 0,
+        streak: user.streak,
+        totalWins: user.totalWins,
+        maxWin: user.maxWin,
+        gamesPlayed: user.gamesPlayed,
+        newAchievements,
+      };
+    });
   }
 
-  async updateGameState(userId: string, slotId: string, state: Partial<InsertGameState>): Promise<GameState> {
-    const existing = await this.getGameState(userId, slotId);
-    if (existing) {
-      const [updated] = await db.update(gameStates).set(state).where(eq(gameStates.id, existing.id)).returning();
-      return updated;
-    } else {
-      const [created] = await db.insert(gameStates).values({ userId, slotId, ...state } as any).returning();
-      return created;
-    }
+  /** Returns the time the oracle can next be used, or null if the blessing was granted now. */
+  async consultOracle(userId: string): Promise<{ granted: boolean; nextAvailableAt: Date }> {
+    const state = await this.ensureGameState(userId);
+    const cutoff = new Date(Date.now() - ORACLE_COOLDOWN_MS);
+    const [updated] = await db.update(gameStates)
+      .set({ activeModifier: 200, lastOracleAt: new Date() })
+      .where(and(eq(gameStates.id, state.id), or(isNull(gameStates.lastOracleAt), lt(gameStates.lastOracleAt, cutoff))))
+      .returning();
+    const last = updated?.lastOracleAt ?? state.lastOracleAt ?? new Date();
+    return { granted: !!updated, nextAvailableAt: new Date(last.getTime() + ORACLE_COOLDOWN_MS) };
   }
 
-  async getLeaderboard(): Promise<User[]> {
-    return await db.select().from(users).orderBy(desc(users.balance)).limit(10);
+  async claimDailyBonus(userId: string): Promise<{ granted: boolean; balance: number; nextAvailableAt: Date }> {
+    const cutoff = new Date(Date.now() - DAILY_BONUS_COOLDOWN_MS);
+    return db.transaction(async (tx) => {
+      const [u] = await tx.update(users).set({
+        balance: sql`${users.balance} + ${DAILY_BONUS_AMOUNT}`,
+        lastDailyBonusAt: new Date(),
+      }).where(and(eq(users.id, userId), or(isNull(users.lastDailyBonusAt), lt(users.lastDailyBonusAt, cutoff))))
+        .returning();
+      if (u) {
+        await tx.insert(deposits).values({ userId, amount: DAILY_BONUS_AMOUNT, method: "daily_bonus" });
+        return { granted: true, balance: u.balance, nextAvailableAt: new Date(Date.now() + DAILY_BONUS_COOLDOWN_MS) };
+      }
+      const [cur] = await tx.select().from(users).where(eq(users.id, userId));
+      const last = cur?.lastDailyBonusAt ?? new Date();
+      return { granted: false, balance: cur?.balance ?? 0, nextAvailableAt: new Date(last.getTime() + DAILY_BONUS_COOLDOWN_MS) };
+    });
   }
 
-  async updateStreak(userId: string, streak: number, maxStreak: number, totalWins: number, maxWin: number): Promise<User> {
-    const [user] = await db.update(users).set({ 
-      streak,
-      maxStreak: Math.max(maxStreak, streak),
-      totalWins,
-      maxWin,
-      gamesPlayed: sql`${users.gamesPlayed} + 1`
-    }).where(eq(users.id, userId)).returning();
-    return user;
+  async getLeaderboard(limit = 10): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.balance)).limit(limit);
   }
 
   async getAchievements(userId: string): Promise<Achievement[]> {
-    return await db.select().from(achievements).where(eq(achievements.userId, userId));
+    return db.select().from(achievements).where(eq(achievements.userId, userId));
   }
 
-  async unlockAchievement(userId: string, badgeId: string, badgeName: string, description: string, icon: string): Promise<Achievement | null> {
-    const [existing] = await db.select().from(achievements).where(
-      and(eq(achievements.userId, userId), eq(achievements.badgeId, badgeId))
-    );
-    if (existing) return null;
-    const [achievement] = await db.insert(achievements).values({
-      userId,
-      badgeId,
-      badgeName,
-      description,
-      icon,
-    }).returning();
-    return achievement;
+  async getCredits(userId: string): Promise<Deposit[]> {
+    return db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt)).limit(50);
   }
 
-  async createDeposit(userId: string, amount: number, method: string, cardCode?: string): Promise<Deposit> {
-    const [deposit] = await db.insert(deposits).values({ userId, amount, method, cardCode, status: "completed" }).returning();
-    return deposit;
-  }
-
-  async getDeposits(userId: string): Promise<Deposit[]> {
-    return await db.select().from(deposits).where(eq(deposits.userId, userId)).orderBy(desc(deposits.createdAt));
-  }
-
-  async getGiftCard(code: string): Promise<GiftCard | undefined> {
-    const [card] = await db.select().from(giftCards).where(eq(giftCards.code, code));
-    return card;
-  }
-
-  async redeemGiftCard(code: string, userId: string): Promise<GiftCard> {
-    const [card] = await db.update(giftCards).set({
-      isRedeemed: true,
-      redeemedBy: userId,
-      redeemedAt: new Date(),
-    }).where(eq(giftCards.code, code)).returning();
-    return card;
-  }
-
-  async redeemGiftCardAtomic(code: string, userId: string): Promise<{ amount: number; newBalance: number } | null> {
-    const [claimed] = await db.update(giftCards).set({
-      isRedeemed: true,
-      redeemedBy: userId,
-      redeemedAt: new Date(),
-    }).where(
-      and(eq(giftCards.code, code), eq(giftCards.isRedeemed, false))
-    ).returning();
-
-    if (!claimed) return null;
-
-    const [updatedUser] = await db.update(users).set({
-      balance: sql`${users.balance} + ${claimed.denomination}`,
-    }).where(eq(users.id, userId)).returning();
-
-    await db.insert(deposits).values({
-      userId,
-      amount: claimed.denomination,
-      method: "gift_card",
-      cardCode: code,
-      status: "completed",
+  async redeemPromoCode(code: string, userId: string): Promise<{ amount: number; newBalance: number } | null> {
+    return db.transaction(async (tx) => {
+      const [claimed] = await tx.update(giftCards)
+        .set({ isRedeemed: true, redeemedBy: userId, redeemedAt: new Date() })
+        .where(and(eq(giftCards.code, code), eq(giftCards.isRedeemed, false)))
+        .returning();
+      if (!claimed) return null;
+      const [u] = await tx.update(users).set({ balance: sql`${users.balance} + ${claimed.denomination}` })
+        .where(eq(users.id, userId)).returning();
+      await tx.insert(deposits).values({ userId, amount: claimed.denomination, method: "promo_code", cardCode: code });
+      return { amount: claimed.denomination, newBalance: u.balance };
     });
-
-    return { amount: claimed.denomination, newBalance: updatedUser.balance };
   }
 
-  async createGiftCard(code: string, denomination: number): Promise<GiftCard> {
-    const [card] = await db.insert(giftCards).values({ code, denomination }).returning();
-    return card;
-  }
-
-  async createWithdrawal(userId: string, amount: number, note?: string): Promise<Withdrawal> {
-    const [withdrawal] = await db.insert(withdrawals).values({
-      userId,
-      amount,
-      status: "pending",
-      note: note || null,
-    }).returning();
-    return withdrawal;
-  }
-
-  async getWithdrawals(userId: string): Promise<Withdrawal[]> {
-    return await db.select().from(withdrawals).where(eq(withdrawals.userId, userId)).orderBy(desc(withdrawals.createdAt));
-  }
+  // ---- Admin ----
 
   async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(desc(users.balance));
+    return db.select().from(users).orderBy(desc(users.balance));
   }
 
-  async adminUpdateUser(userId: string, data: { balance?: number; username?: string; firstName?: string; lastName?: string; password?: string }): Promise<User> {
+  async adminUpdateUser(userId: string, data: Partial<Pick<User, "balance" | "username" | "firstName" | "lastName" | "password">>): Promise<User | undefined> {
     const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, userId)).returning();
     return updated;
   }
 
   async adminDeleteUser(userId: string): Promise<void> {
-    await db.delete(achievements).where(eq(achievements.userId, userId));
-    await db.delete(gameStates).where(eq(gameStates.userId, userId));
-    await db.delete(deposits).where(eq(deposits.userId, userId));
-    await db.delete(withdrawals).where(eq(withdrawals.userId, userId));
-    await db.delete(users).where(eq(users.id, userId));
-  }
-  async getTopUsers(limit: number = 10) {
-    // Sort users by balance descending
-    return await db
-      .select()
-      .from(users)
-      .orderBy(desc(users.balance))
-      .limit(limit);
+    await db.transaction(async (tx) => {
+      await tx.delete(achievements).where(eq(achievements.userId, userId));
+      await tx.delete(gameStates).where(eq(gameStates.userId, userId));
+      await tx.delete(deposits).where(eq(deposits.userId, userId));
+      await tx.delete(users).where(eq(users.id, userId));
+    });
   }
 
-  async getAllGiftCards(): Promise<GiftCard[]> {
-    return await db.select().from(giftCards).orderBy(desc(giftCards.createdAt));
+  async getAllPromoCodes(): Promise<GiftCard[]> {
+    return db.select().from(giftCards).orderBy(desc(giftCards.createdAt));
   }
 
-  async adminDeleteGiftCard(id: number): Promise<void> {
+  async createPromoCode(code: string, denomination: number): Promise<GiftCard> {
+    const [card] = await db.insert(giftCards).values({ code, denomination }).returning();
+    return card;
+  }
+
+  async deletePromoCode(id: number): Promise<void> {
     await db.delete(giftCards).where(eq(giftCards.id, id));
   }
 
-  async getAllWithdrawals(): Promise<Withdrawal[]> {
-    return await db.select().from(withdrawals).orderBy(desc(withdrawals.createdAt));
+  async getAdminStats() {
+    const [u] = await db.select({
+      totalUsers: count(),
+      totalBalance: sum(users.balance),
+      totalWins: sum(users.totalWins),
+      totalGamesPlayed: sum(users.gamesPlayed),
+    }).from(users);
+    const [active] = await db.select({ n: count() }).from(giftCards).where(eq(giftCards.isRedeemed, false));
+    const [redeemed] = await db.select({ n: count() }).from(giftCards).where(eq(giftCards.isRedeemed, true));
+    return {
+      totalUsers: u.totalUsers,
+      totalBalance: Number(u.totalBalance ?? 0),
+      totalWins: Number(u.totalWins ?? 0),
+      totalGamesPlayed: Number(u.totalGamesPlayed ?? 0),
+      activePromoCodes: active.n,
+      redeemedPromoCodes: redeemed.n,
+    };
   }
 
-  async updateWithdrawalStatus(id: number, status: string): Promise<Withdrawal> {
-    const [updated] = await db.update(withdrawals).set({ status, updatedAt: new Date() }).where(eq(withdrawals.id, id)).returning();
-    return updated;
-  }
-
-  async seedVIPBalances(): Promise<void> {
-    const adminPasswordHash = await bcrypt.hash("4444", 10);
-
-    const vipProfiles = [
-      {
-        userId: "55109529",
-        profile: {
-          username: "The Boss",
-          firstName: "Chris",
-          lastName: "hannah",
-          email: "csp19126@gmail.com",
-          balance: 432966077,
-          totalWins: 218,
-          maxWin: 100000000,
-          maxStreak: 4,
-          gamesPlayed: 1054,
-        },
-        minBalance: 300000000,
-        achievements: [
-          { badgeId: "high_roller", badgeName: "High Roller", description: "Bet 100,000 or more!", icon: "gem" },
-          { badgeId: "millionaire", badgeName: "Millionaire", description: "Balance reached 1,000,000!", icon: "crown" },
-          { badgeId: "first_win", badgeName: "First Win", description: "Won your first spin!", icon: "trophy" },
-          { badgeId: "hot_streak_3", badgeName: "Hot Streak x3", description: "3 consecutive wins!", icon: "flame" },
-          { badgeId: "lucky_seven", badgeName: "Lucky Seven", description: "Won 7 times!", icon: "clover" },
-          { badgeId: "jackpot_hunter", badgeName: "Jackpot Hunter", description: "Hit a jackpot!", icon: "star" },
-          { badgeId: "dragon_master", badgeName: "Dragon Master", description: "Win with 3 dragons!", icon: "dragon" },
-        ],
-      },
-    ];
-
-    for (const vip of vipProfiles) {
-      const existing = await db.select().from(users).where(eq(users.id, vip.userId));
-      if (existing.length === 0) {
-        await db.insert(users).values({ id: vip.userId, password: adminPasswordHash, isAdmin: true, ...vip.profile });
-        console.log(`[VIP Seed] Created profile for ${vip.userId}`);
-      } else {
-        const updates: Record<string, any> = {
-          totalWins: vip.profile.totalWins,
-          maxWin: vip.profile.maxWin,
-          maxStreak: vip.profile.maxStreak,
-          gamesPlayed: vip.profile.gamesPlayed,
-          password: adminPasswordHash,
-          isAdmin: true,
-        };
-        if ((existing[0].balance ?? 0) < vip.minBalance) {
-          updates.balance = vip.profile.balance;
-          console.log(`[VIP Seed] Topped up balance for ${vip.userId} to ${vip.profile.balance}`);
-        }
-        await db.update(users).set(updates).where(eq(users.id, vip.userId));
-        console.log(`[VIP Seed] Restored game stats for ${vip.userId}`);
-      }
-
-      for (const ach of vip.achievements) {
-        const existingAch = await db.select().from(achievements)
-          .where(and(eq(achievements.userId, vip.userId), eq(achievements.badgeId, ach.badgeId)));
-        if (existingAch.length === 0) {
-          await db.insert(achievements).values({ userId: vip.userId, ...ach });
-          console.log(`[VIP Seed] Unlocked achievement ${ach.badgeId} for ${vip.userId}`);
-        }
-      }
-    }
-  }
-
-  async seedGiftCards(): Promise<void> {
-    const defaultCards = [
-      { code: "DRAGON-50K-2024", denomination: 50000 },
-      { code: "FORTUNE-100K-888", denomination: 100000 },
-      { code: "LUCKY-500K-VIP", denomination: 500000 },
-      { code: "PHOENIX-1M-GOLD", denomination: 1000000 },
-      { code: "EMPEROR-5M-PLAT", denomination: 5000000 },
-      { code: "DRAGON-10M-ULTRA", denomination: 10000000 },
-      { code: "WELCOME-50K-NEW", denomination: 50000 },
-      { code: "VIP-100K-2024", denomination: 100000 },
-      { code: "SUSU-10M-VIP", denomination: 10000000 },
-      { code: "SUSU-85M-DRAGON", denomination: 85000000 },
-    ];
-    for (const card of defaultCards) {
-      const existing = await db.select().from(giftCards).where(eq(giftCards.code, card.code));
-      if (existing.length === 0) {
-        await db.insert(giftCards).values(card);
+  /** Grants admin to the usernames listed in the ADMIN_USERNAMES env var (comma separated). */
+  async syncAdmins(usernames: string[]): Promise<void> {
+    for (const name of usernames) {
+      const u = await this.getUserByUsername(name);
+      if (u && !u.isAdmin) {
+        await db.update(users).set({ isAdmin: true }).where(eq(users.id, u.id));
+        console.log(`[startup] granted admin to "${u.username}"`);
+      } else if (!u) {
+        console.warn(`[startup] ADMIN_USERNAMES lists "${name}" but no such user exists yet`);
       }
     }
   }

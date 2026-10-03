@@ -7,79 +7,21 @@ export default function Terms() {
   const { lang } = useLang();
 
   const sections = lang === "vi" ? [
-    {
-      title: "1. Giới Thiệu",
-      content: "Chào mừng quý khách đến với VnSlot 888 Dragon Fortune (\"Nền tảng\"), được vận hành bởi Dragon Fortune Entertainment Ltd. Bằng việc truy cập và sử dụng Nền tảng, quý khách đồng ý tuân thủ các điều khoản và điều kiện dưới đây. Vui lòng đọc kỹ trước khi sử dụng dịch vụ."
-    },
-    {
-      title: "2. Điều Kiện Sử Dụng",
-      content: "Người dùng phải từ 18 tuổi trở lên để đăng ký và sử dụng dịch vụ. Mỗi người dùng chỉ được phép sở hữu một tài khoản. Việc tạo nhiều tài khoản có thể dẫn đến đình chỉ tất cả các tài khoản liên quan. Quý khách có trách nhiệm bảo mật thông tin đăng nhập của mình."
-    },
-    {
-      title: "3. Tài Khoản & Số Dư",
-      content: "Số dư tài khoản đại diện cho điểm giải trí trên nền tảng. Người dùng có thể nạp thêm điểm thông qua các phương thức nạp được hỗ trợ bao gồm thẻ quà tặng. Tất cả giao dịch nạp đều được xử lý tức thì và không thể hoàn lại sau khi hoàn tất."
-    },
-    {
-      title: "4. Hệ Thống Game",
-      content: "VnSlot 888 sử dụng hệ thống RNG (Random Number Generator) được chứng nhận để đảm bảo kết quả hoàn toàn ngẫu nhiên và công bằng. Tỷ lệ hoàn trả (RTP) được thiết lập minh bạch. Mọi kết quả quay đều độc lập và không bị ảnh hưởng bởi các lượt quay trước đó."
-    },
-    {
-      title: "5. Thẻ Quà Tặng & Nạp Tiền",
-      content: "Thẻ quà tặng VnSlot 888 là phương tiện nạp điểm chính thức. Mỗi thẻ chỉ sử dụng được một lần. Mã thẻ phải được giữ bảo mật - chúng tôi không chịu trách nhiệm nếu mã thẻ bị lộ do sơ suất của người dùng. Thẻ không có thời hạn sử dụng nhưng không thể hoàn tiền hoặc đổi sang tiền mặt."
-    },
-    {
-      title: "6. Chương Trình Khuyến Mãi",
-      content: "VnSlot 888 thường xuyên cung cấp các chương trình khuyến mãi bao gồm bonus nạp tiền, free spin và thưởng streak. Các điều khoản cụ thể của từng chương trình sẽ được thông báo riêng. Ban quản trị có quyền thay đổi hoặc hủy chương trình khuyến mãi bất kỳ lúc nào."
-    },
-    {
-      title: "7. Bảo Mật Thông Tin",
-      content: "Chúng tôi cam kết bảo vệ thông tin cá nhân của người dùng. Dữ liệu được mã hóa bằng công nghệ SSL 256-bit. Thông tin cá nhân không được chia sẻ với bên thứ ba trừ khi có yêu cầu pháp lý. Người dùng có quyền yêu cầu xóa dữ liệu cá nhân bất kỳ lúc nào."
-    },
-    {
-      title: "8. Giới Hạn Trách Nhiệm",
-      content: "VnSlot 888 cung cấp dịch vụ giải trí \"nguyên trạng\". Chúng tôi nỗ lực duy trì nền tảng hoạt động liên tục nhưng không đảm bảo không có gián đoạn. Trong trường hợp lỗi kỹ thuật, chúng tôi sẽ cố gắng khôi phục trạng thái tài khoản chính xác nhất có thể."
-    },
-    {
-      title: "9. Liên Hệ",
-      content: "Mọi thắc mắc vui lòng liên hệ: Email: support@vnslot888.com | Zalo: 0888-888-888 | Telegram: @VnSlot888. Đội ngũ hỗ trợ hoạt động 24/7 để phục vụ quý khách."
-    }
+    { title: "1. Giới thiệu", content: "VnSlot 888 là trò chơi slot giải trí miễn phí. Khi sử dụng trò chơi, bạn đồng ý với các điều khoản dưới đây." },
+    { title: "2. Độ tuổi", content: "Bạn phải từ 18 tuổi trở lên. Mỗi người chỉ được có một tài khoản." },
+    { title: "3. Xu ảo", content: "Xu trong trò chơi chỉ là điểm giải trí. Xu không thể mua bằng tiền thật, không thể đổi ra tiền, hàng hoá hay bất kỳ giá trị nào, và không thể chuyển nhượng. Bất kỳ ai đề nghị bán hoặc mua xu đều không liên quan đến chúng tôi." },
+    { title: "4. Cách trò chơi hoạt động", content: "Mỗi ô trên lưới được chọn độc lập bằng bộ sinh số ngẫu nhiên mật mã. Bảng thưởng và tỷ lệ hoàn trả (96,0%) được công bố trong trò chơi. Kết quả không bị điều chỉnh theo người chơi." },
+    { title: "5. Mã khuyến mãi", content: "Mã khuyến mãi cho thêm xu ảo miễn phí, mỗi mã dùng một lần. Mã không có giá trị bằng tiền." },
+    { title: "6. Quyền riêng tư", content: "Chúng tôi chỉ lưu tên đăng nhập, mật khẩu đã mã hoá và thống kê chơi game. Bạn có thể yêu cầu xoá tài khoản bất cứ lúc nào." },
+    { title: "7. Giới hạn trách nhiệm", content: "Trò chơi được cung cấp \"nguyên trạng\". Chúng tôi có thể đặt lại số dư xu hoặc tạm dừng tài khoản vi phạm điều khoản." },
   ] : [
-    {
-      title: "1. Introduction",
-      content: "Welcome to VnSlot 888 Dragon Fortune (the \"Platform\"), operated by Dragon Fortune Entertainment Ltd. By accessing and using the Platform, you agree to comply with the following terms and conditions. Please read carefully before using our services."
-    },
-    {
-      title: "2. Eligibility",
-      content: "Users must be 18 years of age or older to register and use the service. Each user is permitted to own only one account. Creating multiple accounts may result in suspension of all related accounts. You are responsible for maintaining the confidentiality of your login information."
-    },
-    {
-      title: "3. Account & Balance",
-      content: "Account balance represents entertainment credits on the platform. Users can top up credits through supported deposit methods including gift cards. All deposit transactions are processed instantly and are non-refundable once completed."
-    },
-    {
-      title: "4. Game System",
-      content: "VnSlot 888 uses a certified RNG (Random Number Generator) system to ensure completely random and fair results. Return-to-Player (RTP) rates are transparently configured. All spin results are independent and unaffected by previous spins."
-    },
-    {
-      title: "5. Gift Cards & Deposits",
-      content: "VnSlot 888 gift cards are the official credit deposit method. Each card is single-use only. Card codes must be kept confidential — we are not responsible for code exposure due to user negligence. Cards have no expiration date but cannot be refunded or exchanged for cash."
-    },
-    {
-      title: "6. Promotions",
-      content: "VnSlot 888 regularly offers promotional programs including deposit bonuses, free spins, and streak rewards. Specific terms for each program will be communicated separately. Management reserves the right to modify or cancel any promotional program at any time."
-    },
-    {
-      title: "7. Data Privacy",
-      content: "We are committed to protecting user personal information. Data is encrypted using 256-bit SSL technology. Personal information is not shared with third parties unless legally required. Users may request deletion of their personal data at any time."
-    },
-    {
-      title: "8. Limitation of Liability",
-      content: "VnSlot 888 provides entertainment services \"as is\". We strive to maintain continuous platform operation but do not guarantee uninterrupted service. In case of technical errors, we will attempt to restore account status as accurately as possible."
-    },
-    {
-      title: "9. Contact",
-      content: "For any inquiries, please contact: Email: support@vnslot888.com | Zalo: 0888-888-888 | Telegram: @VnSlot888. Our support team operates 24/7 to serve you."
-    }
+    { title: "1. Introduction", content: "VnSlot 888 is a free-to-play slot game for entertainment. By using it you agree to these terms." },
+    { title: "2. Eligibility", content: "You must be 18 or older. One account per person." },
+    { title: "3. Play money", content: "Coins are entertainment points only. They cannot be bought with real money, cannot be exchanged for money, goods or anything of value, and cannot be transferred. Anyone offering to buy or sell coins has nothing to do with us." },
+    { title: "4. How the game works", content: "Each cell on the grid is drawn independently by a cryptographic random number generator. The paytable and the return to player (96.0%) are published in the game. Results are never adjusted per player." },
+    { title: "5. Promo codes", content: "Promo codes add free play coins and can be used once. They have no cash value." },
+    { title: "6. Privacy", content: "We store your username, a hashed password and your game statistics, nothing else. You can ask for your account to be deleted at any time." },
+    { title: "7. Liability", content: "The game is provided \"as is\". We may reset coin balances or suspend accounts that break these terms." },
   ];
 
   return (
@@ -97,7 +39,7 @@ export default function Terms() {
               {lang === "vi" ? "Điều Khoản Sử Dụng" : "Terms of Service"}
             </h1>
             <p className="text-sm text-yellow-100/40">
-              {lang === "vi" ? "Cập nhật lần cuối: Tháng 3, 2024" : "Last updated: March 2024"}
+              {lang === "vi" ? "Cập nhật: Tháng 10, 2026" : "Last updated: October 2026"}
             </p>
           </motion.div>
 
@@ -116,7 +58,7 @@ export default function Terms() {
           ))}
 
           <div className="text-center pt-4 pb-8">
-            <p className="text-xs text-yellow-100/30">© 2024 Dragon Fortune Entertainment Ltd. All rights reserved.</p>
+            <p className="text-xs text-yellow-100/30">© VnSlot 888</p>
           </div>
         </div>
       </main>
