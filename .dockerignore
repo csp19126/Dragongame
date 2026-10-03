@@ -6,3 +6,4 @@ dist
 *.sql
 attached_assets
 tests
+!migrations/*.sql

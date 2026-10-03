@@ -10,3 +10,4 @@ vite.config.ts.*
 .env.*
 !.env.example
 *.sql
+!migrations/*.sql
