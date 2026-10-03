@@ -137,12 +137,13 @@ export interface SlotSymbol {
 }
 
 export const SLOT_SYMBOLS: SlotSymbol[] = [
-  { id: "pearl", name: "Dragon Pearl (Wild)", kind: "wild", pays: 50, weight: 2 },
-  { id: "dragon", name: "Imperial Dragon", kind: "regular", pays: 18, weight: 4 },
-  { id: "drum", name: "Bronze Drum", kind: "regular", pays: 2.3, weight: 10 },
-  { id: "lotus", name: "Golden Lotus", kind: "regular", pays: 0.9, weight: 16 },
-  { id: "lantern", name: "Jade Lantern", kind: "regular", pays: 0.35, weight: 24 },
-  { id: "coin", name: "Lucky Coin", kind: "regular", pays: 0.125, weight: 34 },
+  { id: "pearl", name: "Dragon Pearl (Wild)", kind: "wild", pays: 120, weight: 2 },
+  { id: "dragon", name: "Imperial Dragon", kind: "regular", pays: 30, weight: 4 },
+  { id: "drum", name: "Bronze Drum", kind: "regular", pays: 3, weight: 9 },
+  { id: "lotus", name: "Golden Lotus", kind: "regular", pays: 1.3, weight: 14 },
+  { id: "lantern", name: "Jade Lantern", kind: "regular", pays: 0.7, weight: 22 },
+  { id: "koi", name: "Lucky Koi", kind: "regular", pays: 0.4, weight: 28 },
+  { id: "coin", name: "Lucky Coin", kind: "regular", pays: 0.4, weight: 28 },
   { id: "envelope", name: "Lucky Red Envelope (Scatter)", kind: "scatter", pays: 0, weight: 6 },
 ];
 
@@ -178,25 +179,31 @@ export const REPEATER_MULTIPLIERS = [2, 3, 5, 8, 12];
 
 /**
  * Hũ Rồng progressive jackpot: every paid spin adds JACKPOT_CONTRIBUTION of its bet to a
- * shared pot. Three Dragon Pearls on the MIDDLE row (on the spin or any repeat) win it:
- * the whole pot at a bet of JACKPOT_FULL_BET or more, a proportional share below that.
+ * shared pot. Three Dragon Pearls on the MIDDLE row (on the spin or any repeat) win a
+ * share of it that scales with the bet: bet / JACKPOT_FULL_BET of the pot, so the top bet
+ * takes the whole pot and every bet wins at least about 100x itself (JACKPOT_SEED / FULL_BET).
  * The pot never drops below JACKPOT_SEED.
  */
 export const JACKPOT_LINE = 1;
 export const JACKPOT_CONTRIBUTION = 0.01;
-export const JACKPOT_FULL_BET = 100000;
-export const JACKPOT_SEED = 1_000_000;
+export const JACKPOT_FULL_BET = 1_000_000;
+export const JACKPOT_SEED = 100_000_000;
+
+/** What a jackpot pays at this bet out of a pot of this size */
+export function jackpotShare(pot: number, bet: number) {
+  return Math.floor(pot * Math.min(1, bet / JACKPOT_FULL_BET));
+}
 
 /**
  * Return to player, measured: the base game including repeaters and free spins returns
- * 95.03% (200M-spin simulation; the engine tests re-check it), and the 1% jackpot
+ * 95.8% (60M-spin simulation, ±0.1%; the engine tests re-check it), and the 1% jackpot
  * contribution is all paid back to players through the jackpot.
  */
-export const BASE_RTP = 0.9503;
+export const BASE_RTP = 0.958;
 export const TOTAL_RTP = BASE_RTP + JACKPOT_CONTRIBUTION;
 
-/** Largest win seen in 200M simulated spins, as a multiple of the bet (excluding the jackpot) */
-export const MAX_WIN_MULTIPLE = 1200;
+/** Largest win seen in 60M simulated spins, as a multiple of the bet (excluding the jackpot) */
+export const MAX_WIN_MULTIPLE = 1900;
 /** Oracle blessing multiplies the winnings of the player's next spin */
 export const ORACLE_WIN_MULTIPLIER = 2;
 export const ORACLE_COOLDOWN_MS = 60 * 60 * 1000;

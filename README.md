@@ -55,7 +55,7 @@ npm run dev               # http://localhost:5000, migrations run automatically
 |---|---|
 | `npm run check` | TypeScript typecheck |
 | `npm test` | Engine tests; API tests too when `TEST_DATABASE_URL` points at a throwaway database |
-| `npm run rtp` | Exact return-to-player calculation over all 1,953,125 grids |
+| `npm run rtp` | Return-to-player simulation of the real engine (20M spins by default) |
 | `npm run build` | Production build into `dist/` |
 | `npm run db:generate` | After changing `shared/schema.ts`, writes the next migration into `migrations/` |
 
@@ -65,23 +65,25 @@ built server (`.github/workflows/ci.yml`).
 ## The game
 
 - 3×3 grid, **9 paylines**: rows, diagonals, V shapes and zigzags. Three of a kind on a line pays
-  the multiple of the bet in the in-game paytable (🐉 ×18, 🥁 ×2.3, 🌸 ×0.9, 🏮 ×0.35, 🪙 ×0.125).
-- **🔮 Dragon Pearl (wild):** stands in for any symbol on a line; three pearls pay ×50.
+  the multiple of the bet in the in-game paytable (🐉 ×30, 🥁 ×3, 🌸 ×1.3, 🏮 ×0.7, 🐟 ×0.4, 🪙 ×0.4).
+  Every amount is a multiple of the bet, so a 1M bet pays 1,000 times what a 1K bet pays.
+- **🔮 Dragon Pearl (wild):** stands in for any symbol on a line; three pearls pay ×120.
 - **🔁 Repeater (Rồng Lặp):** after a line win the winning symbols lock and every other cell re-spins
   for free. Each new winning line pays ×2, then ×3, ×5, ×8, ×12; the chain continues while each
   repeat wins something new.
-- **🏺 Hũ Rồng progressive jackpot:** 1% of every paid bet feeds a shared pot (starts at 1,000,000).
-  Three 🔮 on the middle row, on the spin or any repeat, wins it: the whole pot at a bet of 100K or
-  more, a proportional share below that.
+- **🏺 Hũ Rồng progressive jackpot:** 1% of every paid bet feeds a shared pot that never drops below
+  100,000,000. Three 🔮 on the middle row, on the spin or any repeat, wins a share that grows with
+  the bet: bet ÷ 1M of the pot (1K → 0.1%, 100K → 10%, 1M → the whole pot), so every bet wins at
+  least 100× itself.
 - **🧧 Red envelope (scatter):** pays anywhere on the grid. 3 → ×1 + 5 free spins, 4 → ×5 + 8,
   5+ → ×25 + 10. Free spins play at the bet that won them.
 - The Dragon Oracle doubles your next spin's winnings, once an hour.
 - 50,000 coins on sign-up, 50,000 more every 20 hours, plus admin-created promo codes.
 - Every cell is drawn independently with Node's `crypto.randomInt`. No near-miss forcing, no
   per-player tuning.
-- **Return to player: 95.0% from the game + 1% through the jackpot = 96%.** Measured over 200M
-  simulated spins and re-checked against the real engine (`npm run rtp`); a test enforces it.
-  About 45% of spins pay something, 23% are a profit, 1 in 117 pays 10× or more, max seen 1,200×.
+- **Return to player: 95.8% from the game + 1% through the jackpot = 96.8%.** Measured over 60M
+  simulated spins (±0.1%) and re-checked against the real engine (`npm run rtp`); a test enforces it.
+  About 32% of spins pay something, 20% are a profit, 1 in 82 pays 10× or more, max seen 1,900×.
 - Celebrations scale with the win (coin pop → BIG WIN fireworks → MEGA WIN → DRAGON FORTUNE →
   NỔ HŨ for the jackpot). Spins that pay back less than the bet are labelled honestly as small
   wins and are not celebrated. Reels are animated from JavaScript, so they spin even on phones

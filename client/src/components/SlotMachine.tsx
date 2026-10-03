@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, RotateCw, Volume2, VolumeX, Wand2, Gift, Info, Crown, Lock } from "lucide-react";
 import {
   BET_OPTIONS, PAYLINES, SLOT_SYMBOLS, SCATTER_PAYS, WILD_ID, SCATTER_ID, REPEATER_MULTIPLIERS,
-  JACKPOT_LINE, JACKPOT_FULL_BET,
+  JACKPOT_LINE, JACKPOT_FULL_BET, jackpotShare,
 } from "@shared/schema";
 import { useGameState, useSpin, useSetBalance, useJackpot, JACKPOT_KEY, type SpinResponse, type JackpotResponse } from "@/hooks/use-game";
 import { useLang } from "@/lib/lang-context";
@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const EMOJI: Record<string, string> = {
-  pearl: "🔮", dragon: "🐉", drum: "🥁", lotus: "🌸", lantern: "🏮", coin: "🪙", envelope: "🧧",
+  pearl: "🔮", dragon: "🐉", drum: "🥁", lotus: "🌸", lantern: "🏮", koi: "🐟", coin: "🪙", envelope: "🧧",
 };
 const GLOW: Record<string, string> = {
   pearl: "drop-shadow(0 0 14px #c4b5fd)",
@@ -23,6 +23,7 @@ const GLOW: Record<string, string> = {
   drum: "drop-shadow(0 0 12px #a855f7)",
   lotus: "drop-shadow(0 0 12px #ec4899)",
   lantern: "drop-shadow(0 0 10px #f97316)",
+  koi: "drop-shadow(0 0 10px #38bdf8)",
   coin: "drop-shadow(0 0 8px #facc15)",
   envelope: "drop-shadow(0 0 12px #ef4444)",
 };
@@ -191,7 +192,7 @@ function Bulbs({ mode }: { mode: "idle" | "spin" | "win" }) {
   );
 }
 
-function JackpotMeter() {
+function JackpotMeter({ bet }: { bet: number }) {
   const { t } = useLang();
   const { data } = useJackpot();
   if (!data) return null;
@@ -203,6 +204,9 @@ function JackpotMeter() {
         <span className="font-mono font-black text-xl sm:text-2xl text-yellow-300 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" data-testid="text-jackpot">
           <RollingNumber value={data.amount} />
         </span>
+      </div>
+      <div className="text-[10px] sm:text-[11px] font-bold text-yellow-100/80" data-testid="text-jackpot-share">
+        {t.jackpotYourBet} {fmtBet(bet)}: <span className="font-mono text-yellow-300">{jackpotShare(data.amount, bet).toLocaleString()}</span>
       </div>
       {data.lastWinner && data.lastAmount ? (
         <div className="text-[10px] text-yellow-100/70">{t.jackpotLast}: {data.lastWinner} · {data.lastAmount.toLocaleString()}</div>
@@ -491,7 +495,7 @@ export function SlotMachine() {
         </div>
       </div>
 
-      <JackpotMeter />
+      <JackpotMeter bet={lockedBet} />
 
       {/* Cabinet */}
       <div
@@ -740,7 +744,7 @@ export function SlotMachine() {
           <div className="flex items-center justify-center gap-2 rounded-xl bg-red-800/40 border border-yellow-400/40 py-1.5">
             <span className="text-xs text-yellow-100/70">{t.jackpotName}</span>
             <span className="text-xl tracking-widest">🔮🔮🔮</span>
-            <span className="text-[10px] text-yellow-100/60">≥ {fmtBet(JACKPOT_FULL_BET)}</span>
+            <span className="text-[10px] text-yellow-100/60">{fmtBet(JACKPOT_FULL_BET)} = 100%</span>
           </div>
 
           <p className="text-sm text-red-200/90 mt-1">{t.paytableScatter}</p>

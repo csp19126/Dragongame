@@ -37,6 +37,20 @@ const NOTHING = fromRows([
 describe("paylines", () => {
   it("has 9 paylines", () => expect(PAYLINES).toHaveLength(9));
 
+  it("every win scales with the bet: 1000x the bet pays 1000x as much", () => {
+    for (const s of SLOT_SYMBOLS.filter((x) => x.kind !== "scatter")) {
+      const grid = NOTHING.map((col) => [...col]);
+      PAYLINES[0].forEach((row, col) => { grid[col][row] = s.id; });
+      const small = lineWinsFor(grid, 1000).find((w) => w.line === 0)!.amount;
+      const big = lineWinsFor(grid, 1_000_000).find((w) => w.line === 0)!.amount;
+      expect(big).toBe(small * 1000);
+    }
+  });
+
+  it("no line win pays less than 40% of the bet", () => {
+    for (const s of SLOT_SYMBOLS.filter((x) => x.kind !== "scatter")) expect(s.pays).toBeGreaterThanOrEqual(0.4);
+  });
+
   it("pays nothing when nothing lines up", () => {
     expect(lineWinsFor(NOTHING, BET)).toEqual([]);
     expect(scatterFor(NOTHING, BET).count).toBe(0);
