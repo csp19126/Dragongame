@@ -62,13 +62,16 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-yellow-500/20 bg-gradient-to-r from-[#120625]/90 via-[#1a0b35]/80 to-[#120625]/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40">
       <div className="container mx-auto px-4 md:px-6 h-16 md:h-20 flex items-center justify-between gap-2">
         <Link href="/" className="flex items-center gap-2 md:gap-3 group" data-testid="link-home">
-          <motion.div 
-            whileHover={{ rotate: 360, scale: 1.1 }}
-            className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-yellow-500/90 to-orange-500/90 rounded-xl flex items-center justify-center text-2xl md:text-3xl shadow-[0_0_22px_rgba(251,191,36,0.45)] transition-all duration-500"
-          >
-            <Coins className="w-5 h-5 md:w-6 md:h-6 text-white" />
-          </motion.div>
-          <span className="font-display text-2xl md:text-3xl gold-gradient-text hidden md:inline-block tracking-tighter">VnSlot</span>
+          <motion.img
+            src="/icons/icon-192.png"
+            alt=""
+            whileHover={{ rotate: 12, scale: 1.1 }}
+            className="w-10 h-10 md:w-12 md:h-12 rounded-xl shadow-[0_0_22px_rgba(251,191,36,0.45)]"
+          />
+          <span className="leading-none">
+            <span className="block font-display text-xl md:text-3xl gold-gradient-text tracking-tight" data-testid="text-brand">VnSlot 888</span>
+            <span className="hidden sm:block text-[10px] md:text-xs font-black tracking-[0.25em] text-yellow-500/70 uppercase">Long Phát Tài</span>
+          </span>
         </Link>
 
         <div className="flex items-center gap-2 md:gap-4 flex-wrap">
