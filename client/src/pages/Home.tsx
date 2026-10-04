@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { GameTabs } from "@/components/GameTabs";
 import { useGameState, useAchievements, useLeaderboard, useRecentWins, useJackpot } from "@/hooks/use-game";
 import { SlotMachine } from "@/components/SlotMachine";
 import { Header } from "@/components/Header";
@@ -239,6 +240,7 @@ export default function Home() {
               </h1>
               <p className="text-[11px] sm:text-xs font-black tracking-[0.35em] text-yellow-500/80 uppercase mt-1">🐉 {t.subtitle} 🐉</p>
             </div>
+            <GameTabs />
             <div className="w-full max-w-md lg:hidden"><RecentWinsTicker /></div>
             {gameState ? (
               <SlotMachine />
