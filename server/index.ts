@@ -17,6 +17,8 @@ async function main() {
   // 3. Admins listed in ADMIN_USERNAMES (comma separated)
   const adminNames = (process.env.ADMIN_USERNAMES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   await storage.syncAdmins(adminNames);
+  const vouchers = await storage.ensureStarterPack();
+  if (vouchers) console.log(`[startup] created the starter pack: ${vouchers} voucher codes (see Admin > Promo codes)`);
 
   // 4. Frontend
   if (process.env.NODE_ENV === "production") {

@@ -62,6 +62,24 @@ npm run dev               # http://localhost:5000, migrations run automatically
 Every push runs typecheck, tests against a real PostgreSQL, the build and a smoke test of the
 built server (`.github/workflows/ci.yml`).
 
+## The other games
+
+All games share one coin balance; every result is drawn on the server.
+
+- **🦀 Bầu Cua Tôm Cá** (`/bau-cua`): bet on six pictures, three dice; a picture on k dice pays k to 1. RTP 92.13% (exact).
+- **🎡 Roulette** (`/roulette`): European single zero. RTP 97.30% (exact).
+- **🃏 Xì Dách / Blackjack** (`/blackjack`): 6 decks shuffled every hand, dealer stands on all 17s,
+  blackjack pays 3:2, double on any two cards (also after a split), split once, split aces get one card,
+  dealer peeks. The hand lives on the server (the shoe and hole card never reach the browser).
+  About 99.6% RTP with basic strategy (0.39% ± 0.12% edge over 4M simulated hands).
+
+## Voucher codes
+
+Admin → Promo codes lists every code with its value, batch, a note (who it was given to) and who
+redeemed it. "Make a batch" creates up to 200 random codes like `VN888-K7QX-M2PA` at once. A starter
+pack of 53 codes (50K to 5M) is generated once on first start; codes are made on the server at runtime
+and are never in this repository. A link like `/auth?code=VN888-XXXX-XXXX` pre-fills the code at sign-up.
+
 ## The game
 
 - 3×3 grid, **9 paylines**: rows, diagonals, V shapes and zigzags. Three of a kind on a line pays

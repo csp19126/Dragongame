@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, bigint, boolean, timestamp, varchar, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, bigint, boolean, timestamp, varchar, json, index, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -67,6 +67,10 @@ export const giftCards = pgTable("gift_cards", {
   redeemedBy: varchar("redeemed_by"),
   createdAt: timestamp("created_at").defaultNow(),
   redeemedAt: timestamp("redeemed_at"),
+  /** Which batch the code was made in, e.g. "Starter pack" */
+  batch: text("batch"),
+  /** Admin's note, e.g. who the code was given to */
+  note: text("note"),
 });
 
 // Legacy table, no longer used by the app. Kept so `db:push` doesn't drop existing rows.
@@ -76,6 +80,17 @@ export const withdrawals = pgTable("withdrawals", {
   amount: integer("amount").notNull(),
   status: text("status").default("pending").notNull(),
   note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Blackjack hands. A hand in progress (finished = false) holds the shoe and the dealer's
+// hole card, so they never reach the browser; at most one per player (partial unique index).
+export const blackjackHands = pgTable("blackjack_hands", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  state: jsonb("state").notNull(),
+  finished: boolean("finished").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

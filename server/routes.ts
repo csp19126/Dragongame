@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { storage } from "./storage";
 import { bauCuaBetsSchema, rouletteBetsSchema, playBauCua, playRoulette } from "./tablegames";
+import { publicView } from "./blackjack";
 import {
   BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
   ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, BASE_RTP, TOTAL_RTP,
@@ -205,6 +206,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(result);
   });
 
+  // Blackjack: the hand lives on the server; the browser only ever sees publicView()
+  const BJ_MAX_BET = 1_000_000;
+  app.get("/api/games/blackjack", requireUser, async (_req, res) => {
+    const s = await storage.getActiveBlackjack(res.locals.user.id);
+    res.json({ hand: s ? publicView(s) : null });
+  });
+
+  app.post("/api/games/blackjack/deal", requireUser, async (req, res) => {
+    const bet = Number(req.body?.bet);
+    if (!Number.isInteger(bet) || bet < 1000 || bet > BJ_MAX_BET || bet % 1000 !== 0) return res.status(400).json({ message: "Invalid bet" });
+    const r = await storage.blackjackDeal(res.locals.user.id, bet);
+    if ("error" in r) return res.status(r.error === "hand_in_progress" ? 409 : 400).json({ message: r.error === "hand_in_progress" ? "Finish your hand first" : "Insufficient balance", code: r.error });
+    if (r.stats) recordBigWin(res.locals.user, r.state.payout, r.state.totalBet);
+    res.json({ hand: publicView(r.state), newBalance: r.balance, ...(r.stats ?? {}) });
+  });
+
+  app.post("/api/games/blackjack/action", requireUser, async (req, res) => {
+    const action = req.body?.action;
+    if (!["hit", "stand", "double", "split"].includes(action)) return res.status(400).json({ message: "Invalid action" });
+    const r = await storage.blackjackAct(res.locals.user.id, action);
+    if ("error" in r) {
+      const msg = { no_hand: "No hand in play", not_allowed: "You can't do that now", insufficient_balance: "Insufficient balance" }[r.error];
+      return res.status(r.error === "no_hand" ? 404 : 400).json({ message: msg, code: r.error });
+    }
+    if (r.stats) recordBigWin(res.locals.user, r.state.payout, r.state.totalBet);
+    res.json({ hand: publicView(r.state), newBalance: r.balance, ...(r.stats ?? {}) });
+  });
+
   app.post("/api/game/oracle", requireUser, async (_req, res) => {
     const r = await storage.consultOracle(res.locals.user.id);
     res.json(r);
@@ -354,13 +383,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const parsed = z.object({
       code: z.string().trim().min(3).max(40).transform((s) => s.toUpperCase()),
       denomination: z.coerce.number().int().positive().max(1_000_000_000),
+      note: z.string().trim().max(120).optional(),
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: firstError(parsed.error) });
     try {
-      res.json(await storage.createPromoCode(parsed.data.code, parsed.data.denomination));
+      res.json(await storage.createPromoCode(parsed.data.code, parsed.data.denomination, parsed.data.note));
     } catch {
       res.status(409).json({ message: "That code already exists" });
     }
+  });
+
+  app.post("/api/admin/dashboard/gift-cards/batch", requireAdmin, async (req, res) => {
+    const parsed = z.object({
+      count: z.coerce.number().int().min(1).max(200),
+      denomination: z.coerce.number().int().positive().max(1_000_000_000),
+      batch: z.string().trim().max(60).optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: firstError(parsed.error) });
+    const { count: n, denomination, batch } = parsed.data;
+    const name = batch || `${n} × ${denomination.toLocaleString("en")} · ${new Date().toISOString().slice(0, 10)}`;
+    res.json(await storage.createPromoBatch(n, denomination, name));
+  });
+
+  app.patch("/api/admin/dashboard/gift-cards/:id", requireAdmin, async (req, res) => {
+    const note = z.string().trim().max(120).safeParse(req.body?.note ?? "");
+    if (!note.success) return res.status(400).json({ message: firstError(note.error) });
+    const card = await storage.updatePromoNote(Number(req.params.id), note.data);
+    if (!card) return res.status(404).json({ message: "Code not found" });
+    res.json(card);
   });
 
   app.delete("/api/admin/dashboard/gift-cards/:id", requireAdmin, async (req, res) => {

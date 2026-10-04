@@ -11,6 +11,7 @@ import {
   ArrowLeft, RefreshCw, Eye, EyeOff, Crown
 } from "lucide-react";
 import { Link } from "wouter";
+import { VouchersTab } from "@/components/admin/VouchersTab";
 
 function fmt(n: number) { return n?.toLocaleString() ?? "0"; }
 function fmtDate(d: string | null) {
@@ -274,135 +275,6 @@ function UsersTab() {
   );
 }
 
-function GiftCardsTab() {
-  const { toast } = useToast();
-  const [newCode, setNewCode] = useState("");
-  const [newAmount, setNewAmount] = useState("");
-  const [showForm, setShowForm] = useState(false);
-
-  const { data: cards = [], isLoading, refetch } = useQuery<any[]>({ queryKey: ["/api/admin/dashboard/gift-cards"] });
-
-  const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/admin/dashboard/gift-cards", data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/dashboard/gift-cards"] }); toast({ title: "🎁 Promo code created!" }); setNewCode(""); setNewAmount(""); setShowForm(false); },
-    onError: (e: any) => toast({ title: e.message || "Failed to create", variant: "destructive" }),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/dashboard/gift-cards/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/dashboard/gift-cards"] }); toast({ title: "🗑 Code deleted" }); },
-    onError: () => toast({ title: "Delete failed", variant: "destructive" }),
-  });
-
-  const available = cards.filter(c => !c.isRedeemed);
-  const redeemed = cards.filter(c => c.isRedeemed);
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-3 text-sm">
-          <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-300 font-bold">{available.length} Available</span>
-          <span className="px-3 py-1 rounded-full bg-white/10 text-white/40 font-bold">{redeemed.length} Redeemed</span>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => refetch()} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-yellow-400/60 hover:text-yellow-300 transition-colors">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-sm bg-gradient-to-r from-yellow-400 to-yellow-600 text-purple-950"
-          >
-            <Plus className="w-4 h-4" /> New Code
-          </button>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="rounded-2xl p-5 space-y-4" style={{ background: "rgba(45,20,102,0.5)", border: "1px solid rgba(251,191,36,0.25)" }}>
-              <h3 className="font-black text-yellow-300 flex items-center gap-2"><Plus className="w-4 h-4" /> Create Promo Code</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-yellow-500/60 font-bold uppercase tracking-widest mb-1 block">Code</label>
-                  <input
-                    value={newCode}
-                    onChange={e => setNewCode(e.target.value.toUpperCase())}
-                    placeholder="TET-2027"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-yellow-400/50 uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-yellow-500/60 font-bold uppercase tracking-widest mb-1 block">Coins</label>
-                  <input
-                    type="number"
-                    value={newAmount}
-                    onChange={e => setNewAmount(e.target.value)}
-                    placeholder="500000"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-yellow-400/50"
-                  />
-                </div>
-              </div>
-              {newAmount && <div className="text-xs text-yellow-400/60">= {fmt(Number(newAmount))} coins</div>}
-              <div className="flex gap-3">
-                <button onClick={() => setShowForm(false)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 font-bold text-sm hover:bg-white/5">Cancel</button>
-                <button
-                  onClick={() => createMutation.mutate({ code: newCode, denomination: Number(newAmount) })}
-                  disabled={!newCode || !newAmount || createMutation.isPending}
-                  className="flex-1 py-2.5 rounded-xl font-black text-sm bg-gradient-to-r from-yellow-400 to-yellow-600 text-purple-950 disabled:opacity-50"
-                >
-                  {createMutation.isPending ? "Creating..." : "Create Code"}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {isLoading ? (
-        <div className="text-center py-12 text-yellow-400/40">Loading promo codes...</div>
-      ) : (
-        <div className="space-y-2">
-          {cards.map(card => (
-            <div
-              key={card.id}
-              className="flex items-center gap-3 p-4 rounded-2xl"
-              style={{ background: "rgba(45,20,102,0.3)", border: card.isRedeemed ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(251,191,36,0.2)", opacity: card.isRedeemed ? 0.6 : 1 }}
-            >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${card.isRedeemed ? "bg-white/10" : "bg-yellow-400/20"}`}>
-                <Gift className={`w-4 h-4 ${card.isRedeemed ? "text-white/30" : "text-yellow-400"}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-mono font-black text-sm text-white">{card.code}</div>
-                <div className="text-xs text-white/40">{fmt(card.denomination)} coins {card.isRedeemed ? `• Redeemed ${fmtDate(card.redeemedAt)}` : "• Available"}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                {card.isRedeemed
-                  ? <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/30 font-bold">Used</span>
-                  : <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-300 font-bold">Active</span>
-                }
-                {!card.isRedeemed && (
-                  <button
-                    onClick={() => { if (confirm("Delete this promo code?")) deleteMutation.mutate(card.id); }}
-                    className="p-1.5 rounded-lg text-red-400/50 hover:text-red-300 hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function StatsTab() {
   const { data: stats, isLoading } = useQuery<any>({ queryKey: ["/api/admin/dashboard/stats"] });
 
@@ -485,7 +357,7 @@ export default function Admin() {
         >
           {tab === "stats" && <StatsTab />}
           {tab === "users" && <UsersTab />}
-          {tab === "cards" && <GiftCardsTab />}
+          {tab === "cards" && <VouchersTab />}
         </motion.div>
       </div>
     </div>
