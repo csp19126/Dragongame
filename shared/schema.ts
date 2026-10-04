@@ -95,6 +95,21 @@ export const blackjackHands = pgTable("blackjack_hands", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Online pool matches. Stakes are taken when a player sits down and paid to the winner;
+// the live game itself is kept in server memory (server/pool.ts).
+export const poolMatches = pgTable("pool_matches", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  player1: varchar("player1").notNull(),
+  player2: varchar("player2"),
+  stake: integer("stake").notNull(),
+  status: text("status").notNull(), // waiting | playing | finished | cancelled
+  winner: varchar("winner"),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+});
+
 // Server-managed settings, e.g. the auto-generated session secret
 export const appSettings = pgTable("app_settings", {
   key: text("key").primaryKey(),

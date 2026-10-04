@@ -5,6 +5,7 @@ import { z } from "zod";
 import { storage } from "./storage";
 import { bauCuaBetsSchema, rouletteBetsSchema, playBauCua, playRoulette } from "./tablegames";
 import { publicView } from "./blackjack";
+import { registerPoolRoutes } from "./pool";
 import {
   BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
   ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, BASE_RTP, TOTAL_RTP,
@@ -205,6 +206,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     recordBigWin(res.locals.user, result.winAmount, total);
     res.json(result);
   });
+
+  registerPoolRoutes(app, requireUser);
 
   // Blackjack: the hand lives on the server; the browser only ever sees publicView()
   const BJ_MAX_BET = 1_000_000;

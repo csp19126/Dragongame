@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { registerRoutes } from "./routes";
 import { getSessionMiddleware } from "./session";
 import { db } from "./db";
+import { attachPoolSockets, recoverPoolMatches } from "./pool";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -23,7 +24,8 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'"],
+        // The page talks to its own host over HTTPS and WebSocket (online pool)
+        connectSrc: ["'self'", (req) => `wss://${(req as Request).headers.host}`],
         workerSrc: ["'self'", "blob:"],
         manifestSrc: ["'self'"],
         objectSrc: ["'none'"],
@@ -47,7 +49,8 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   });
   app.get("/api/ping", (_req, res) => res.json({ status: "alive" }));
 
-  app.use(getSessionMiddleware(sessionSecret));
+  const sessionMiddleware = getSessionMiddleware(sessionSecret);
+  app.use(sessionMiddleware);
 
   // Compact API request log: "POST /api/game/spin 200 12ms"
   if (process.env.NODE_ENV !== "test") {
@@ -60,6 +63,8 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
 
   const httpServer = createServer(app);
   await registerRoutes(httpServer, app);
+  await recoverPoolMatches();
+  attachPoolSockets(httpServer, sessionMiddleware);
 
   // Errors always come back as JSON, never an HTML stack trace
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

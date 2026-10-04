@@ -36,6 +36,13 @@
       "when": 1791130587908,
       "tag": "0004_blackjack",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791132857388,
+      "tag": "0005_pool",
+      "breakpoints": true
     }
   ]
 }
