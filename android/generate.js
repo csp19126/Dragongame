@@ -9,8 +9,8 @@ const Color = require(require.resolve('color', { paths: [require.resolve('@bubbl
   tm.name = 'VnSlot 888';
   tm.launcherName = 'VnSlot 888';
   tm.startUrl = '/?source=app';
-  tm.appVersionCode = 1;
-  tm.appVersionName = '1.0.0';
+  tm.appVersionCode = 2;
+  tm.appVersionName = '1.1.0';
   tm.navigationColor = new Color('#0a0515');
   tm.navigationColorDark = new Color('#0a0515');
   tm.navigationDividerColor = new Color('#0a0515');
