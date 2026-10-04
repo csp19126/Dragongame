@@ -318,6 +318,107 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("blackjack", () => {
+    const shoe = (...cards: string[]) => [...cards, ...Array(30).fill("2C")].reverse();
+
+    it("keeps an exact ledger through deal, double and settle, and hides the hole card", async () => {
+      const { storage } = await import("../server/storage");
+      const p = new Player();
+      const user = await p.register();
+      // player 6+5, dealer 6 + hidden 10; double draws a K (21); dealer 16 draws a 9 (25, bust)
+      const dealt = await storage.blackjackDeal(user.id, 10000, shoe("6S", "6H", "5D", "10C", "KD", "9S"));
+      if ("error" in dealt) throw new Error(dealt.error);
+      expect(dealt.balance).toBe(40000);
+
+      const open = await p.req("GET", "/api/games/blackjack");
+      expect(open.body.hand.dealer.cards).toEqual(["6H", null]);
+      expect(JSON.stringify(open.body)).not.toContain("10C");
+      expect(open.body.hand.actions).toEqual(["hit", "stand", "double"]);
+      expect((await p.req("POST", "/api/games/blackjack/deal", { bet: 1000 })).status).toBe(409);
+
+      const r = await p.req("POST", "/api/games/blackjack/action", { action: "double" });
+      expect(r.status).toBe(200);
+      expect(r.body.hand.finished).toBe(true);
+      expect(r.body.hand.hands[0].outcome).toBe("win");
+      expect(r.body.hand.totalBet).toBe(20000);
+      expect(r.body.hand.payout).toBe(40000);
+      expect(r.body.newBalance).toBe(50000 - 20000 + 40000);
+      expect((await p.state()).balance).toBe(70000);
+      expect((await p.req("GET", "/api/games/blackjack")).body.hand).toBeNull();
+      expect((await p.req("POST", "/api/games/blackjack/action", { action: "hit" })).status).toBe(404);
+    });
+
+    it("plays real hands over HTTP with an exact ledger", async () => {
+      const p = new Player();
+      await p.register();
+      for (let i = 0; i < 12; i++) {
+        const before = (await p.state()).balance;
+        let r = await p.req("POST", "/api/games/blackjack/deal", { bet: 2000 });
+        expect(r.status).toBe(200);
+        while (!r.body.hand.finished) r = await p.req("POST", "/api/games/blackjack/action", { action: r.body.hand.hands[r.body.hand.active].total < 17 ? "hit" : "stand" });
+        expect(r.body.newBalance).toBe(before - r.body.hand.totalBet + r.body.hand.payout);
+        expect((await p.state()).balance).toBe(r.body.newBalance);
+      }
+    });
+
+    it("refuses bad bets, unaffordable doubles and unknown actions", async () => {
+      const { storage } = await import("../server/storage");
+      const p = new Player();
+      const user = await p.register();
+      expect((await p.req("POST", "/api/games/blackjack/deal", { bet: 1500 })).status).toBe(400);
+      expect((await p.req("POST", "/api/games/blackjack/deal", { bet: 2_000_000 })).status).toBe(400);
+      await setBalance(p.username, 10000);
+      const dealt = await storage.blackjackDeal(user.id, 10000, shoe("6S", "6H", "5D", "10C"));
+      if ("error" in dealt) throw new Error(dealt.error);
+      const dbl = await p.req("POST", "/api/games/blackjack/action", { action: "double" });
+      expect(dbl.status).toBe(400);
+      expect(dbl.body.code).toBe("insufficient_balance");
+      expect((await p.req("POST", "/api/games/blackjack/action", { action: "surrender" })).status).toBe(400);
+      expect((await p.req("POST", "/api/games/blackjack/action", { action: "stand" })).status).toBe(200);
+    });
+  });
+
+  describe("voucher codes", () => {
+    it("makes the starter pack exactly once, with unguessable codes", async () => {
+      const { storage, STARTER_PACK } = await import("../server/storage");
+      const expected = STARTER_PACK.reduce((a, b) => a + b.count, 0);
+      const [first, second] = await Promise.all([storage.ensureStarterPack(), storage.ensureStarterPack()]);
+      expect(first + second).toBe(expected);
+      expect(await storage.ensureStarterPack()).toBe(0);
+      const rows = (await pool.query("select code, denomination from gift_cards where batch = 'Starter pack'")).rows;
+      expect(rows).toHaveLength(expected);
+      for (const r of rows) expect(r.code).toMatch(/^VN888-[A-HJ-KM-NP-Z2-9]{4}-[A-HJ-KM-NP-Z2-9]{4}$/);
+      expect(new Set(rows.map((r) => r.code)).size).toBe(expected);
+    });
+
+    it("admins make batches, add notes, and see who redeemed a code", async () => {
+      const admin = new Player();
+      const a = await admin.register();
+      await pool.query("update users set is_admin = true where id = $1", [a.id]);
+      const batch = await admin.req("POST", "/api/admin/dashboard/gift-cards/batch", { count: 5, denomination: 250000, batch: "Test batch" });
+      expect(batch.status).toBe(200);
+      expect(batch.body).toHaveLength(5);
+      expect(batch.body[0].batch).toBe("Test batch");
+      expect((await admin.req("POST", "/api/admin/dashboard/gift-cards/batch", { count: 500, denomination: 1000 })).status).toBe(400);
+
+      const card = batch.body[0];
+      const noted = await admin.req("PATCH", `/api/admin/dashboard/gift-cards/${card.id}`, { note: "For Minh" });
+      expect(noted.body.note).toBe("For Minh");
+
+      const p = new Player();
+      await p.register();
+      const r = await p.req("POST", "/api/promo/redeem", { code: card.code.toLowerCase() });
+      expect(r.status).toBe(200);
+      expect(r.body.amount).toBe(250000);
+      expect((await p.req("POST", "/api/promo/redeem", { code: card.code })).status).toBe(400);
+
+      const list = (await admin.req("GET", "/api/admin/dashboard/gift-cards")).body;
+      const used = list.find((c: any) => c.id === card.id);
+      expect(used).toMatchObject({ isRedeemed: true, redeemedByName: p.username, note: "For Minh" });
+      expect((await p.req("POST", "/api/admin/dashboard/gift-cards/batch", { count: 1, denomination: 1000 })).status).toBe(403);
+    });
+  });
+
   describe("account deletion and Android app", () => {
     it("a player can delete their own account, but only with the right password", async () => {
       const p = new Player();

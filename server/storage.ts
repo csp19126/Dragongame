@@ -1,12 +1,31 @@
 import { db } from "./db";
 import {
-  users, gameStates, achievements, deposits, giftCards, jackpot,
+  users, gameStates, achievements, deposits, giftCards, jackpot, appSettings, blackjackHands,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
   JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare,
 } from "@shared/schema";
 import { eq, desc, sql, and, or, isNull, lt, count, sum } from "drizzle-orm";
+import { randomInt } from "crypto";
 import { spin as runSpin, type SpinOutcome } from "./game";
+import * as bj from "./blackjack";
+
+/** Unambiguous characters (no 0/O, 1/I/L) so codes are easy to read out and type */
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const codePart = (n: number) => Array.from({ length: n }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
+/** A random voucher code like VN888-K7QX-M2PA (about 40 bits of randomness, so it can't be guessed) */
+export function newVoucherCode(prefix = "VN888") {
+  return `${prefix}-${codePart(4)}-${codePart(4)}`;
+}
+
+/** Made once, the first time the server starts with this version, so the admin has codes to hand out */
+export const STARTER_PACK = [
+  { denomination: 50_000, count: 20 },
+  { denomination: 100_000, count: 15 },
+  { denomination: 500_000, count: 10 },
+  { denomination: 1_000_000, count: 5 },
+  { denomination: 5_000_000, count: 3 },
+];
 
 export const SLOT_ID = "main";
 
@@ -284,6 +303,78 @@ export class DatabaseStorage {
     });
   }
 
+  // ---- Blackjack ----
+
+  async getActiveBlackjack(userId: string): Promise<bj.BlackjackState | null> {
+    const [row] = await db.select().from(blackjackHands)
+      .where(and(eq(blackjackHands.userId, userId), eq(blackjackHands.finished, false)));
+    return (row?.state as bj.BlackjackState) ?? null;
+  }
+
+  /** Pays out a finished hand and updates stats; returns the stats for the response */
+  private async settleBlackjack(tx: Tx, userId: string, s: bj.BlackjackState): Promise<TableStats> {
+    const won = s.payout > s.totalBet;
+    const [user] = await tx.update(users).set({
+      balance: sql`${users.balance} + ${s.payout}`,
+      gamesPlayed: sql`${users.gamesPlayed} + 1`,
+      totalWins: won ? sql`${users.totalWins} + 1` : users.totalWins,
+      maxWin: sql`greatest(${users.maxWin}, ${s.payout})`,
+    }).where(eq(users.id, userId)).returning();
+    const earned: BadgeId[] = [];
+    if (won) earned.push("first_win");
+    if (s.totalBet >= 100000) earned.push("high_roller");
+    if (user.balance >= 1_000_000) earned.push("millionaire");
+    if (user.totalWins >= 7) earned.push("lucky_seven");
+    return { newBalance: user.balance, totalWins: user.totalWins, maxWin: user.maxWin, gamesPlayed: user.gamesPlayed, newAchievements: await this.award(tx, userId, earned) };
+  }
+
+  /** Starts a hand: takes the stake, deals, and settles straight away on a blackjack */
+  async blackjackDeal(userId: string, bet: number, shoe: bj.Card[] = bj.newShoe()):
+    Promise<{ state: bj.BlackjackState; stats: TableStats | null; balance: number } | { error: "insufficient_balance" | "hand_in_progress" }> {
+    return db.transaction(async (tx) => {
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update");
+      const [open] = await tx.select({ id: blackjackHands.id }).from(blackjackHands)
+        .where(and(eq(blackjackHands.userId, userId), eq(blackjackHands.finished, false)));
+      if (open) return { error: "hand_in_progress" as const };
+      const [paid] = await tx.update(users).set({ balance: sql`${users.balance} - ${bet}` })
+        .where(and(eq(users.id, userId), sql`${users.balance} >= ${bet}`)).returning({ balance: users.balance });
+      if (!paid) return { error: "insufficient_balance" as const };
+      const state = bj.deal(bet, shoe);
+      await tx.insert(blackjackHands).values({ userId, state, finished: state.finished });
+      const stats = state.finished ? await this.settleBlackjack(tx, userId, state) : null;
+      return { state, stats, balance: stats?.newBalance ?? paid.balance };
+    });
+  }
+
+  /** Hit, stand, double or split on the player's open hand */
+  async blackjackAct(userId: string, action: bj.Action):
+    Promise<{ state: bj.BlackjackState; stats: TableStats | null; balance: number } | { error: "insufficient_balance" | "no_hand" | "not_allowed" }> {
+    return db.transaction(async (tx) => {
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update");
+      const [row] = await tx.select().from(blackjackHands)
+        .where(and(eq(blackjackHands.userId, userId), eq(blackjackHands.finished, false))).for("update");
+      if (!row) return { error: "no_hand" as const };
+      const before = row.state as bj.BlackjackState;
+      if (!bj.allowedActions(before).includes(action)) return { error: "not_allowed" as const };
+      const extra = bj.extraStake(before, action);
+      let balance: number | undefined;
+      if (extra > 0) {
+        const [paid] = await tx.update(users).set({ balance: sql`${users.balance} - ${extra}` })
+          .where(and(eq(users.id, userId), sql`${users.balance} >= ${extra}`)).returning({ balance: users.balance });
+        if (!paid) return { error: "insufficient_balance" as const };
+        balance = paid.balance;
+      }
+      const state = bj.act(before, action);
+      await tx.update(blackjackHands).set({ state, finished: state.finished, updatedAt: new Date() }).where(eq(blackjackHands.id, row.id));
+      const stats = state.finished ? await this.settleBlackjack(tx, userId, state) : null;
+      if (balance === undefined && !stats) {
+        const [u] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId));
+        balance = u.balance;
+      }
+      return { state, stats, balance: stats?.newBalance ?? balance! };
+    });
+  }
+
   async getJackpot() {
     const [pot] = await db.select().from(jackpot).where(eq(jackpot.id, 1));
     return pot ?? { id: 1, amount: JACKPOT_SEED, lastWinner: null, lastAmount: null, lastWonAt: null };
@@ -359,18 +450,57 @@ export class DatabaseStorage {
   async adminDeleteUser(userId: string): Promise<void> {
     await db.transaction(async (tx) => {
       await tx.delete(achievements).where(eq(achievements.userId, userId));
+      await tx.delete(blackjackHands).where(eq(blackjackHands.userId, userId));
       await tx.delete(gameStates).where(eq(gameStates.userId, userId));
       await tx.delete(deposits).where(eq(deposits.userId, userId));
       await tx.delete(users).where(eq(users.id, userId));
     });
   }
 
-  async getAllPromoCodes(): Promise<GiftCard[]> {
-    return db.select().from(giftCards).orderBy(desc(giftCards.createdAt));
+  async getAllPromoCodes(): Promise<(GiftCard & { redeemedByName: string | null })[]> {
+    const rows = await db.select({ card: giftCards, redeemedByName: users.username })
+      .from(giftCards).leftJoin(users, eq(users.id, giftCards.redeemedBy))
+      .orderBy(desc(giftCards.createdAt), giftCards.id);
+    return rows.map((r) => ({ ...r.card, redeemedByName: r.redeemedByName }));
   }
 
-  async createPromoCode(code: string, denomination: number): Promise<GiftCard> {
-    const [card] = await db.insert(giftCards).values({ code, denomination }).returning();
+  /** Makes `count` new random codes worth `denomination` each */
+  async createPromoBatch(count: number, denomination: number, batch: string, prefix = "VN888"): Promise<GiftCard[]> {
+    const made: GiftCard[] = [];
+    while (made.length < count) {
+      const rows = await db.insert(giftCards)
+        .values(Array.from({ length: count - made.length }, () => ({ code: newVoucherCode(prefix), denomination, batch })))
+        .onConflictDoNothing({ target: giftCards.code })
+        .returning();
+      made.push(...rows);
+    }
+    return made;
+  }
+
+  async updatePromoNote(id: number, note: string): Promise<GiftCard | undefined> {
+    const [card] = await db.update(giftCards).set({ note: note || null }).where(eq(giftCards.id, id)).returning();
+    return card;
+  }
+
+  /** Creates the starter pack of vouchers once; safe to call on every boot and from several servers */
+  async ensureStarterPack(): Promise<number> {
+    return db.transaction(async (tx) => {
+      const [claimed] = await tx.insert(appSettings).values({ key: "voucher_starter_pack", value: new Date().toISOString() })
+        .onConflictDoNothing().returning();
+      if (!claimed) return 0;
+      let made = 0;
+      for (const { denomination, count } of STARTER_PACK) {
+        const rows = await tx.insert(giftCards)
+          .values(Array.from({ length: count }, () => ({ code: newVoucherCode(), denomination, batch: "Starter pack" })))
+          .onConflictDoNothing({ target: giftCards.code }).returning({ id: giftCards.id });
+        made += rows.length;
+      }
+      return made;
+    });
+  }
+
+  async createPromoCode(code: string, denomination: number, note?: string): Promise<GiftCard> {
+    const [card] = await db.insert(giftCards).values({ code, denomination, batch: "Custom", note: note || null }).returning();
     return card;
   }
 

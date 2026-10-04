@@ -22,6 +22,20 @@
       "when": 1791032990957,
       "tag": "0002_bigger_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791130330302,
+      "tag": "0003_voucher_batches",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791130587908,
+      "tag": "0004_blackjack",
+      "breakpoints": true
     }
   ]
 }
