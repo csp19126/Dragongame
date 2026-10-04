@@ -6,6 +6,7 @@ const GAMES = [
   { href: "/bau-cua", icon: "🦀", key: "gameBauCua" },
   { href: "/roulette", icon: "🎡", key: "gameRoulette" },
   { href: "/blackjack", icon: "🃏", key: "gameBlackjack" },
+  { href: "/pool", icon: "🎱", key: "gamePool" },
 ] as const;
 
 /** Switch between the games; the coin balance is shared by all of them */
@@ -13,9 +14,9 @@ export function GameTabs() {
   const { t } = useLang();
   const [location] = useLocation();
   return (
-    <nav className="w-full max-w-md grid grid-cols-4 gap-1 p-1.5 rounded-2xl bg-black/40 border border-yellow-500/20" data-testid="game-tabs">
+    <nav className="w-full max-w-md grid grid-cols-5 gap-1 p-1.5 rounded-2xl bg-black/40 border border-yellow-500/20" data-testid="game-tabs">
       {GAMES.map((g) => {
-        const active = location === g.href;
+        const active = location === g.href || (g.href !== "/" && location.startsWith(g.href));
         return (
           <Link
             key={g.href}

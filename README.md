@@ -72,6 +72,13 @@ All games share one coin balance; every result is drawn on the server.
   blackjack pays 3:2, double on any two cards (also after a split), split once, split aces get one card,
   dealer peeks. The hand lives on the server (the shoe and hole card never reach the browser).
   About 99.6% RTP with basic strategy (0.39% ± 0.12% edge over 4M simulated hands).
+- **🎱 Bi-a 8 bóng / 8-ball pool** (`/pool`): play the computer for practice, or play other people
+  online for a stake (free, 1K to 1M). Each player puts the stake up, the winner takes both; there is
+  no house cut. Share an invite link (`/pool?table=CODE`) or join an open table from the lobby; anyone
+  can watch live tables. The server is the referee: it runs the same deterministic physics
+  (`shared/pool/engine.ts`) as the browsers and applies standard 8-ball rules (fouls give ball in
+  hand). 45 seconds a shot; three timeouts or 90 seconds away loses the game. Live games are held in
+  memory, so a redeploy cancels them and refunds both stakes on the next start.
 
 ## Voucher codes
 

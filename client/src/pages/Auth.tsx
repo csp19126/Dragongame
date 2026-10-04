@@ -62,7 +62,10 @@ export default function Auth() {
     typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("code") ?? "").toUpperCase() : "");
 
   useEffect(() => {
-    if (user) setLocation("/");
+    if (!user) return;
+    // Back to where the player was heading (e.g. a friend's pool table invite)
+    const next = new URLSearchParams(window.location.search).get("next");
+    setLocation(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
   }, [user, setLocation]);
   if (user) return null;
 

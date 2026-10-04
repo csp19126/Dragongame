@@ -318,6 +318,99 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("online pool", () => {
+    async function connect(p: Player, code: string) {
+      const { WebSocket } = await import("ws");
+      const ws = new WebSocket(base.replace("http", "ws") + `/ws/pool?code=${code}`, { headers: { Cookie: p.cookie } });
+      const msgs: any[] = [];
+      ws.on("message", (m) => msgs.push(JSON.parse(String(m))));
+      await new Promise<void>((resolve, reject) => { ws.on("open", () => resolve()); ws.on("error", reject); });
+      /** Waits for the next message matching `pred` */
+      const next = async (pred: (m: any) => boolean, ms = 4000) => {
+        const start = Date.now();
+        while (Date.now() - start < ms) {
+          const i = msgs.findIndex(pred);
+          if (i >= 0) return msgs.splice(0, i + 1)[i];
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        throw new Error("timed out waiting for a message");
+      };
+      return { ws, msgs, next };
+    }
+
+    it("two players stake, break, play and the winner takes the pot", async () => {
+      const { playShot } = await import("../shared/pool/engine");
+      const a = new Player(), b = new Player(), watcher = new Player();
+      await a.register(); await b.register(); await watcher.register();
+      const made = await a.req("POST", "/api/pool/tables", { stake: 10000 });
+      expect(made.status).toBe(200);
+      const code = made.body.code;
+      expect((await a.state()).balance).toBe(40000);
+      expect((await b.req("GET", "/api/pool/tables")).body.open.map((t: any) => t.code)).toContain(code);
+      expect((await a.req("POST", "/api/pool/tables", { stake: 0 })).status).toBe(409); // one table at a time
+
+      const ca = await connect(a, code);
+      expect((await ca.next((m) => m.t === "state")).status).toBe("waiting");
+      expect((await b.req("POST", `/api/pool/tables/${code}/join`)).status).toBe(200);
+      expect((await b.state()).balance).toBe(40000);
+      const cb = await connect(b, code);
+      const cw = await connect(watcher, code);
+      const sb = await cb.next((m) => m.t === "state" && m.status === "playing");
+      expect(sb.seat).toBe(1);
+      expect((await cw.next((m) => m.t === "state")).seat).toBeNull();
+
+      // The breaker shoots; everyone sees the same shot; a local replay lands exactly where the server says
+      const game = sb.game;
+      const shooter = game.turn === 0 ? ca : cb;
+      const other = game.turn === 0 ? cb : ca;
+      cw.ws.send(JSON.stringify({ t: "shoot", shot: { dx: 1, dy: 0, power: 1, spin: 0 }, cue: { x: 50, y: 63.5 } })); // ignored: a spectator
+      shooter.ws.send(JSON.stringify({ t: "shoot", shot: { dx: 1, dy: 0.01, power: 1, spin: 0 }, cue: { x: 50, y: 63.5 } }));
+      const seenByOther = await other.next((m) => m.t === "shot");
+      const seenByShooter = await shooter.next((m) => m.t === "shot");
+      expect(seenByOther).toEqual(seenByShooter);
+      const replay = playShot(game, seenByOther.shot, { x: 50, y: 63.5 }, false).state;
+      expect(replay.balls).toEqual(seenByOther.state.balls);
+      expect(seenByOther.by).toBe(game.turn);
+
+      // Emotes reach the other player
+      other.ws.send(JSON.stringify({ t: "emote", e: "🔥" }));
+      expect((await shooter.next((m) => m.t === "emote")).e).toBe("🔥");
+
+      // Player A resigns: B wins both stakes
+      ca.ws.send(JSON.stringify({ t: "resign" }));
+      const end = await cb.next((m) => m.t === "state" && m.status === "finished");
+      expect(end.result).toMatchObject({ winner: 1, reason: "resign", payout: 20000 });
+      expect((await a.state()).balance).toBe(40000);
+      expect((await b.state()).balance).toBe(60000);
+      const row = (await pool.query("select status, winner from pool_matches where code = $1", [code])).rows[0];
+      expect(row.status).toBe("finished");
+      for (const c of [ca, cb, cw]) c.ws.close();
+    });
+
+    it("refunds a cancelled table, refuses a join you can't afford, and refunds after a restart", async () => {
+      const a = new Player(), b = new Player();
+      await a.register(); await b.register();
+      const t1 = (await a.req("POST", "/api/pool/tables", { stake: 50000 })).body.code;
+      expect((await a.state()).balance).toBe(0);
+      await setBalance(b.username, 1000);
+      const j = await b.req("POST", `/api/pool/tables/${t1}/join`);
+      expect(j.status).toBe(400);
+      expect((await b.state()).balance).toBe(1000);
+      expect((await b.req("GET", "/api/pool/tables")).body.open.map((t: any) => t.code)).toContain(t1); // seat freed again
+      expect((await a.req("POST", `/api/pool/tables/${t1}/cancel`)).status).toBe(200);
+      expect((await a.state()).balance).toBe(50000);
+      expect((await a.req("POST", "/api/pool/tables", { stake: 777 })).status).toBe(400);
+
+      // A table left open when the server restarts gets its stake back
+      const t2 = (await a.req("POST", "/api/pool/tables", { stake: 10000 })).body.code;
+      expect((await a.state()).balance).toBe(40000);
+      const { recoverPoolMatches } = await import("../server/pool");
+      await recoverPoolMatches();
+      expect((await a.state()).balance).toBe(50000);
+      expect((await pool.query("select status from pool_matches where code = $1", [t2])).rows[0].status).toBe("cancelled");
+    });
+  });
+
   describe("blackjack", () => {
     const shoe = (...cards: string[]) => [...cards, ...Array(30).fill("2C")].reverse();
 
