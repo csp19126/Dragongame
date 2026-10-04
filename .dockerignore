@@ -8,3 +8,4 @@ attached_assets
 tests
 !migrations/*.sql
 marketing
+android

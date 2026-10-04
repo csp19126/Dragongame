@@ -249,7 +249,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(await storage.getCredits(res.locals.user.id));
   });
 
+  // ---------------- Android app (Google Play) ----------------
+
+  // Digital Asset Links: proves the Play app and this site have the same owner, so the
+  // app opens the site full-screen. ANDROID_CERT_SHA256 lists the signing certificates'
+  // SHA-256 fingerprints, comma separated (upload key and Play app signing key).
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    const fingerprints = (process.env.ANDROID_CERT_SHA256 ?? "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+    res.json(fingerprints.length ? [{
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: { namespace: "android_app", package_name: process.env.ANDROID_PACKAGE || "online.vnslot888.twa", sha256_cert_fingerprints: fingerprints },
+    }] : []);
+  });
+
   // ---------------- Profile ----------------
+
+  // Players can delete their own account and all its data (required by Google Play)
+  app.post("/api/user/delete", authLimiter, requireUser, async (req, res) => {
+    const user: User = res.locals.user;
+    const password = req.body?.password;
+    if (typeof password !== "string" || !(await bcrypt.compare(password, user.password))) {
+      return res.status(400).json({ message: "Password is wrong" });
+    }
+    await storage.adminDeleteUser(user.id);
+    req.session.destroy(() => {
+      res.clearCookie("dragon_session");
+      res.json({ ok: true });
+    });
+  });
 
   app.get("/api/user/profile", requireUser, (_req, res) => {
     res.json(toPublic(res.locals.user));

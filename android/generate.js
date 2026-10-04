@@ -1,0 +1,26 @@
+const { TwaManifest, TwaGenerator, ConsoleLog } = require('@bubblewrap/core');
+const fs = require('fs');
+const Color = require(require.resolve('color', { paths: [require.resolve('@bubblewrap/core')] }));
+(async () => {
+  const webManifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  const tm = TwaManifest.fromWebManifestJson(new URL('https://vnslot888.online/manifest.json'), webManifest);
+  tm.packageId = 'online.vnslot888.twa';
+  tm.host = 'vnslot888.online';
+  tm.name = 'VnSlot 888';
+  tm.launcherName = 'VnSlot 888';
+  tm.startUrl = '/?source=app';
+  tm.appVersionCode = 1;
+  tm.appVersionName = '1.0.0';
+  tm.navigationColor = new Color('#0a0515');
+  tm.navigationColorDark = new Color('#0a0515');
+  tm.navigationDividerColor = new Color('#0a0515');
+  tm.navigationDividerColorDark = new Color('#0a0515');
+  tm.enableNotifications = false;
+  tm.fallbackType = 'customtabs';
+  tm.signingKey = { path: './upload.jks', alias: 'upload' };
+  tm.generatorApp = 'bubblewrap-cli';
+  console.log(JSON.stringify({ icon: tm.iconUrl, maskable: tm.maskableIconUrl, shortcuts: tm.shortcuts.length, orientation: tm.orientation, display: tm.display, minSdk: tm.minSdkVersion }));
+  await tm.saveToFile('./twa-manifest.json');
+  await new TwaGenerator().createTwaProject('./app', tm, new ConsoleLog('gen'));
+  console.log('generated');
+})().catch((e) => { console.error(e); process.exit(1); });
