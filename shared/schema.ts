@@ -211,3 +211,6 @@ export const ORACLE_COOLDOWN_MS = 60 * 60 * 1000;
 export const DAILY_BONUS_AMOUNT = 50000;
 export const DAILY_BONUS_COOLDOWN_MS = 20 * 60 * 60 * 1000;
 export const STARTING_BALANCE = 50000;
+
+/** Public contact address (privacy questions, account deletion help) */
+export const CONTACT_EMAIL = "support@vnslot888.online";

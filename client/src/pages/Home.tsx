@@ -1,5 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { GameTabs } from "@/components/GameTabs";
+import { InstallDialog } from "@/components/InstallApp";
 import { useGameState, useAchievements, useLeaderboard, useRecentWins, useJackpot } from "@/hooks/use-game";
 import { SlotMachine } from "@/components/SlotMachine";
 import { Header } from "@/components/Header";
@@ -319,14 +320,18 @@ function MiniLeaderboard() {
 
 export function AppFooter() {
   const { t } = useLang();
+  const [installOpen, setInstallOpen] = useState(false);
   return (
     <footer className="relative z-10 border-t border-yellow-500/10 bg-[#080315]/80 backdrop-blur-sm mt-8" data-testid="app-footer">
       <div className="container mx-auto px-4 py-6 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-6 text-xs text-yellow-100/50">
+        <div className="flex items-center justify-center flex-wrap gap-x-5 gap-y-2 text-xs text-yellow-100/50">
           <Link href="/about" className="hover:text-yellow-400 transition-colors" data-testid="link-about">{t.about}</Link>
           <Link href="/terms" className="hover:text-yellow-400 transition-colors" data-testid="link-terms">{t.terms}</Link>
           <Link href="/coins" className="hover:text-yellow-400 transition-colors" data-testid="link-coins">{t.deposit}</Link>
+          <Link href="/privacy" className="hover:text-yellow-400 transition-colors" data-testid="link-privacy">{t.privacy}</Link>
+          <button type="button" onClick={() => setInstallOpen(true)} className="hover:text-yellow-400 transition-colors font-bold text-yellow-300/80" data-testid="link-install">📲 {t.installShort}</button>
         </div>
+        <InstallDialog open={installOpen} onOpenChange={setInstallOpen} />
         <div className="text-xs text-yellow-100/30 text-center">{t.copyright}</div>
       </div>
     </footer>

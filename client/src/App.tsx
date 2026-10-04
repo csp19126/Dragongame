@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
+import { InstallBanner } from "@/components/InstallApp";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/lib/lang-context";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -46,6 +47,7 @@ const Profile = lazyPage(() => import("@/pages/Profile"));
 const Admin = lazyPage(() => import("@/pages/Admin"));
 const BauCua = lazyPage(() => import("@/pages/BauCua"));
 const Roulette = lazyPage(() => import("@/pages/Roulette"));
+const Privacy = lazyPage(() => import("@/pages/Privacy"));
 const NotFound = lazyPage(() => import("@/pages/not-found"));
 
 /** Last line of defence: never leave the player on a blank screen */
@@ -98,6 +100,8 @@ function Router() {
         <Route path="/admin" component={Admin} />
         <Route path="/bau-cua" component={BauCua} />
         <Route path="/roulette" component={Roulette} />
+        <Route path="/privacy" component={Privacy} />
+        <Route path="/delete-account" component={Privacy} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>
@@ -114,6 +118,7 @@ export default function App() {
             <ErrorBoundary>
               <Router />
             </ErrorBoundary>
+            <InstallBanner />
           </TooltipProvider>
         </AuthProvider>
       </LanguageProvider>

@@ -318,6 +318,37 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("account deletion and Android app", () => {
+    it("a player can delete their own account, but only with the right password", async () => {
+      const p = new Player();
+      const user = await p.register();
+      await p.spin();
+      expect((await p.req("POST", "/api/user/delete", { password: "wrong-one" })).status).toBe(400);
+      expect((await p.req("GET", "/api/me")).status).toBe(200);
+      const r = await p.req("POST", "/api/user/delete", { password: p.password });
+      expect(r.status).toBe(200);
+      expect((await p.req("GET", "/api/me")).status).toBe(401);
+      const left = await pool.query("select (select count(*) from users where id = $1) u, (select count(*) from game_states where user_id = $1) g", [user.id]);
+      expect(Number(left.rows[0].u) + Number(left.rows[0].g)).toBe(0);
+      const again = await new Player(p.username, p.password).req("POST", "/api/login", { username: p.username, password: p.password });
+      expect(again.status).toBe(401);
+    });
+
+    it("serves Digital Asset Links from the environment", async () => {
+      const empty = await new Player().req("GET", "/.well-known/assetlinks.json");
+      expect(empty.status).toBe(200);
+      expect(empty.body).toEqual([]);
+      process.env.ANDROID_CERT_SHA256 = "aa:bb, CC:DD";
+      try {
+        const r = await new Player().req("GET", "/.well-known/assetlinks.json");
+        expect(r.body[0].target).toEqual({ namespace: "android_app", package_name: "online.vnslot888.twa", sha256_cert_fingerprints: ["AA:BB", "CC:DD"] });
+        expect(r.body[0].relation).toEqual(["delegate_permission/common.handle_all_urls"]);
+      } finally {
+        delete process.env.ANDROID_CERT_SHA256;
+      }
+    });
+  });
+
   describe("table games", () => {
     it("Bầu Cua takes the whole stake and pays exactly what the dice say", async () => {
       const p = new Player();

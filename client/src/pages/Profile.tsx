@@ -12,6 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, Trophy, Gamepad2, TrendingUp, Flame, Crown, Save, ArrowLeft } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
+import { DeleteAccountCard } from "@/components/DeleteAccount";
 
 interface ProfileData {
   id: string;
@@ -232,6 +233,7 @@ export default function Profile() {
           </Card>
 
           <PasswordCard />
+          <DeleteAccountCard />
         </div>
       </main>
     </div>
