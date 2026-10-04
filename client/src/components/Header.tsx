@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/lang-context";
 import { Button } from "@/components/ui/button";
 import { LogOut, Globe, Trophy, User, Plus, Coins, Crown, MessageCircle } from "lucide-react";
+import { TournamentAlert } from "@/components/TournamentBits";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -208,6 +209,7 @@ export function Header() {
           )}
         </div>
       </div>
+      {user && <TournamentAlert />}
     </header>
   );
 }

@@ -7,7 +7,10 @@ export const POOL_EMOTES = ["👍", "🔥", "😂", "😮", "😡", "😭", "�
 /** Time to take a shot in an online game */
 export const POOL_TURN_MS = 45_000;
 
-export interface PoolTable { code: string; stake: number; host: string; guest?: string; status: "waiting" | "playing" }
+/** How long both tournament players have to turn up before the match is decided without them */
+export const TOURNAMENT_GRACE_MS = 5 * 60_000;
+
+export interface PoolTable { code: string; stake: number; host: string; guest?: string; status: "waiting" | "playing"; tournament?: string }
 
 export type PoolServerMsg =
   | {
@@ -23,6 +26,10 @@ export type PoolServerMsg =
       online: [boolean, boolean];
       spectators: number;
       result: { winner: Side; reason: string; payout: number } | null;
+      /** Set for a tournament match */
+      tournament: { id: number; name: string; round: number; rounds: number } | null;
+      /** False while a tournament match waits for both players to arrive (turnMsLeft then counts that down) */
+      ready: boolean;
     }
   | { t: "shot"; by: Side; start: Ball[]; shot: Shot; state: GameState }
   | { t: "aim"; dx: number; dy: number; power: number; cue: { x: number; y: number } | null }

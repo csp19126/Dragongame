@@ -7,7 +7,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./db";
 import { poolMatches, users } from "@shared/schema";
 import { newGame, playShot, cleanShot, type GameState, type Shot, type Side } from "@shared/pool/engine";
-import { POOL_STAKES, POOL_EMOTES, POOL_TURN_MS, type PoolServerMsg, type PoolTable } from "@shared/pool/protocol";
+import { POOL_STAKES, POOL_EMOTES, POOL_TURN_MS, TOURNAMENT_GRACE_MS, type PoolServerMsg, type PoolTable } from "@shared/pool/protocol";
 
 /**
  * Online pool. Tables (and their stakes) live in the database; the game in progress lives
@@ -35,7 +35,17 @@ interface Room {
   timeouts: [number, number];
   clients: Set<Client>;
   result?: { winner: Side; reason: string; payout: number };
+  /** A tournament match: both players are seated from the start and get a few minutes to arrive */
+  tournament?: { id: number; matchId: number; name: string; round: number; rounds: number; graceUntil: number; seen: [boolean, boolean] };
 }
+
+type TournamentHook = (matchId: number, winnerId: string, reason: string) => Promise<void>;
+let tournamentHook: TournamentHook | null = null;
+/** The tournament module hears about every tournament match result through this */
+export function setTournamentHook(fn: TournamentHook) { tournamentHook = fn; }
+
+/** True until both players of a tournament match have turned up */
+const waitingForPlayers = (room: Room) => !!room.tournament && !(room.tournament.seen[0] && room.tournament.seen[1]);
 
 const rooms = new Map<string, Room>();
 const activeByUser = new Map<string, string>(); // userId -> table code
@@ -71,6 +81,8 @@ function stateMsg(room: Room, seat: Side | null): PoolServerMsg {
     online: online(room),
     spectators: [...room.clients].filter((c) => c.seat === null).length,
     result: room.result ?? null,
+    tournament: room.tournament ? { id: room.tournament.id, name: room.tournament.name, round: room.tournament.round, rounds: room.tournament.rounds } : null,
+    ready: !waitingForPlayers(room),
   };
 }
 
@@ -108,6 +120,9 @@ async function finish(room: Room, winner: Side, reason: string) {
   room.result = { winner, reason, payout };
   for (const id of room.players) if (id && activeByUser.get(id) === room.code) activeByUser.delete(id);
   broadcastState(room);
+  if (room.tournament && tournamentHook) {
+    await tournamentHook(room.tournament.matchId, winnerId, reason).catch((e) => console.error("[pool] tournament result", e));
+  }
   setTimeout(() => { if (rooms.get(room.code) === room) rooms.delete(room.code); }, 10 * 60_000).unref?.();
 }
 
@@ -148,6 +163,7 @@ async function onShot(room: Room, client: Client, shot: Shot, cue?: { x: number;
   const g = room.game;
   if (room.status !== "playing" || !g || client.seat === null) return;
   if (g.turn !== client.seat) return send(client.ws, { t: "error", message: "Not your turn" });
+  if (waitingForPlayers(room)) return send(client.ws, { t: "error", message: "Waiting for your opponent" });
   let result;
   try {
     result = playShot(g, cleanShot(shot), g.ballInHand ? cue : undefined, false);
@@ -169,6 +185,13 @@ async function tick() {
     try {
       if (room.status === "waiting" && now - room.createdAt > WAITING_MS) { await cancel(room, "expired"); continue; }
       if (room.status !== "playing" || !room.game) continue;
+      if (room.tournament && waitingForPlayers(room)) {
+        if (now < room.tournament.graceUntil) continue;
+        // Time's up: whoever turned up wins; if nobody did, a coin toss decides
+        const [s0, s1] = room.tournament.seen;
+        await finish(room, s0 ? 0 : s1 ? 1 : (randomInt(2) as Side), "no_show");
+        continue;
+      }
       const on = online(room);
       for (const s of [0, 1] as Side[]) {
         if (on[s]) room.lastSeen[s] = now;
@@ -190,6 +213,42 @@ async function tick() {
   }
 }
 
+// ---------------- Tournament matches ----------------
+
+/** Tests shorten the wait for no-shows */
+const graceMs = () => Number(process.env.TOURNAMENT_GRACE_MS) || TOURNAMENT_GRACE_MS;
+
+/** Opens a table for a tournament match with both players already seated. Returns its code. */
+export async function createTournamentRoom(t: {
+  tournamentId: number; matchId: number; name: string; round: number; rounds: number;
+  players: [string, string]; names: [string, string];
+}): Promise<string> {
+  let code = newCode();
+  while (rooms.has(code)) code = newCode();
+  const [m] = await db.insert(poolMatches).values({ code, player1: t.players[0], player2: t.players[1], stake: 0, status: "playing" }).returning();
+  const now = Date.now();
+  const room: Room = {
+    id: m.id, code, stake: 0, players: [t.players[0], t.players[1]], names: [t.names[0], t.names[1]], status: "playing",
+    game: newGame(cryptoRng, randomInt(2) as Side), deadline: now + graceMs(), createdAt: now,
+    lastSeen: [now, now], timeouts: [0, 0], clients: new Set(),
+    tournament: { id: t.tournamentId, matchId: t.matchId, name: t.name, round: t.round, rounds: t.rounds, graceUntil: now + graceMs(), seen: [false, false] },
+  };
+  rooms.set(code, room);
+  for (const id of t.players) activeByUser.set(id, code);
+  return code;
+}
+
+/** Tests only: forget every table, as a restart would */
+export function dropAllRoomsForTest() {
+  rooms.clear();
+  activeByUser.clear();
+}
+
+/** Whether this server holds the table (false after a restart wiped it) */
+export function roomExists(code: string | null | undefined) {
+  return !!code && rooms.has(code);
+}
+
 // ---------------- HTTP: the lobby ----------------
 
 export function registerPoolRoutes(app: Express, requireUser: RequestHandler) {
@@ -203,7 +262,7 @@ export function registerPoolRoutes(app: Express, requireUser: RequestHandler) {
       .map((r) => ({ code: r.code, stake: r.stake, host: r.names[0], status: "waiting" as const }));
     const live: PoolTable[] = [...rooms.values()]
       .filter((r) => r.status === "playing")
-      .map((r) => ({ code: r.code, stake: r.stake, host: r.names[0], guest: r.names[1] ?? undefined, status: "playing" as const }));
+      .map((r) => ({ code: r.code, stake: r.stake, host: r.names[0], guest: r.names[1] ?? undefined, status: "playing" as const, ...(r.tournament ? { tournament: r.tournament.name } : {}) }));
     res.json({ open, live, mine: activeByUser.get(me) ?? null, stakes: POOL_STAKES });
   });
 
@@ -302,6 +361,11 @@ export function attachPoolSockets(httpServer: Server, sessionMiddleware: Request
     const client: Client = { ws, userId, seat: seatOf(room, userId), lastAim: 0, lastEmote: 0 };
     room.clients.add(client);
     if (client.seat !== null) room.lastSeen[client.seat] = Date.now();
+    if (client.seat !== null && room.tournament && waitingForPlayers(room)) {
+      room.tournament.seen[client.seat] = true;
+      // Both here: the clock starts now
+      if (!waitingForPlayers(room)) { room.lastSeen = [Date.now(), Date.now()]; startTurnClock(room); }
+    }
     broadcastState(room);
 
     ws.on("message", (raw) => {

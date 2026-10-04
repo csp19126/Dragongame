@@ -153,6 +153,50 @@ export const stickerRewards = pgTable("sticker_rewards", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [primaryKey({ columns: [t.userId, t.setId] })]);
 
+// Pool tournaments: free to enter, coin prizes paid by the house, single elimination
+export const tournaments = pgTable("tournaments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  startsAt: timestamp("starts_at").notNull(),
+  size: integer("size").notNull(), // most players allowed (8, 16 or 32)
+  prizes: jsonb("prizes").$type<number[]>().notNull(), // [1st, 2nd, each semi-finalist]
+  status: text("status").notNull(), // open | live | finished | cancelled
+  auto: boolean("auto").default(false).notNull(), // made by the weekly schedule
+  rounds: integer("rounds"),
+  winnerId: varchar("winner_id"),
+  winnerName: text("winner_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+}, (t) => [index("tournaments_status").on(t.status)]);
+
+export const tournamentPlayers = pgTable("tournament_players", {
+  tournamentId: integer("tournament_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  username: text("username").notNull(),
+  place: integer("place"), // 1, 2, 3 (semi-finalists) once decided
+  prize: bigint("prize", { mode: "number" }),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.tournamentId, t.userId] })]);
+
+export const tournamentMatches = pgTable("tournament_matches", {
+  id: serial("id").primaryKey(),
+  tournamentId: integer("tournament_id").notNull(),
+  round: integer("round").notNull(), // 1 = first round
+  slot: integer("slot").notNull(),
+  player1: varchar("player1"),
+  player2: varchar("player2"),
+  name1: text("name1"),
+  name2: text("name2"),
+  status: text("status").notNull(), // pending | playing | finished
+  code: text("code"), // the pool table while it's being played
+  winnerId: varchar("winner_id"),
+  reason: text("reason"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => [uniqueIndex("tournament_matches_slot").on(t.tournamentId, t.round, t.slot)]);
+
+export type Tournament = typeof tournaments.$inferSelect;
+export type TournamentMatch = typeof tournamentMatches.$inferSelect;
+
 // Server-managed settings, e.g. the auto-generated session secret
 export const appSettings = pgTable("app_settings", {
   key: text("key").primaryKey(),

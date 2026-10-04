@@ -94,6 +94,24 @@ All games share one coin balance; every result is drawn on the server.
 - **Invite a friend**: `/auth?ref=USERNAME`. The friend gets 50K extra at sign-up; once they've
   played 20 games the inviter claims 100K plus a sticker pack (up to 50 friends).
 
+## Pool tournaments (`/tournament`)
+
+Free to enter; the house pays coin prizes (default 5M / 2M / 500K to each losing semi-finalist), so
+it's a skill competition with no stake. One is scheduled automatically every Saturday at 20:00
+Vietnam time (13:00 UTC); admins can switch that off, create their own, start one early or cancel
+one (Admin → Tournaments). At the start time the bracket is drawn at random (byes fill it to a
+power of two) and each match opens as an online pool table with both players seated. Players get an
+alert on any page and have 5 minutes to sit down; whoever turns up wins a no-show (a coin toss if
+neither does). Everything is stored in the database, so a redeploy only restarts the frames being
+played: a watchdog reopens tables for matches that lost theirs. The champion is announced in chat.
+
+## Share cards
+
+Big slot wins, online pool wins, tournament places and completed sticker sets offer a "share" button.
+It draws a 1080×1920 picture in the browser (`client/src/lib/shareCard.ts`) with the win, the
+player's name and a QR code of their invite link, then opens the phone's share sheet (or saves the
+picture). The card says play coins have no cash value.
+
 ## Voucher codes
 
 Admin → Promo codes lists every code with its value, batch, a note (who it was given to) and who

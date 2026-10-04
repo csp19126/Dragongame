@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
 import { Header } from "@/components/Header";
+import { ShareDialog, type ShareWhat } from "@/components/ShareCard";
 import { useAuth, ME_KEY } from "@/hooks/use-auth";
 import { STATE_KEY } from "@/hooks/use-game";
 import { useLang } from "@/lib/lang-context";
@@ -133,6 +134,7 @@ function AlbumTab({ L, lang }: { L: L; lang: "vi" | "en" }) {
   const album = useQuery<AlbumView>({ queryKey: ALBUM_KEY });
   const [reveal, setReveal] = useState<{ id: string; isNew: boolean }[] | null>(null);
   const [giftFor, setGiftFor] = useState<Sticker | null>(null);
+  const [brag, setBrag] = useState<ShareWhat | null>(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
@@ -143,10 +145,18 @@ function AlbumTab({ L, lang }: { L: L; lang: "vi" | "en" }) {
     onError: fail,
   });
   const claim = useMutation({
-    mutationFn: async (set: string) => (await apiRequest("POST", "/api/stickers/claim", { set })).json() as Promise<{ reward: number }>,
+    mutationFn: async (set: string) => ({ set, ...(await (await apiRequest("POST", "/api/stickers/claim", { set })).json()) }) as { set: string; reward: number },
     onSuccess: (r) => {
       soundManager.win(true); fireworks(2500); coinBurst();
       toast({ title: `+${fmt(r.reward)} 🪙` });
+      const set = STICKER_SETS.find((x) => x.id === r.set);
+      const emoji = r.set === "album" ? "📒" : STICKERS.filter((x) => x.set === r.set).map((x) => x.emoji).slice(0, 3).join("");
+      setBrag({
+        emoji,
+        title: r.set === "album" ? (lang === "vi" ? "HOÀN THÀNH ALBUM!" : "ALBUM COMPLETE!") : (lang === "vi" ? "ĐỦ BỘ STICKER!" : "SET COMPLETE!"),
+        amount: r.reward,
+        detail: set ? (lang === "vi" ? set.vi : set.en) : (lang === "vi" ? "Sưu tầm đủ 24 sticker" : "All 24 stickers collected"),
+      });
       queryClient.invalidateQueries({ queryKey: ALBUM_KEY }); queryClient.invalidateQueries({ queryKey: ME_KEY }); queryClient.invalidateQueries({ queryKey: STATE_KEY });
     },
     onError: fail,
@@ -226,6 +236,7 @@ function AlbumTab({ L, lang }: { L: L; lang: "vi" | "en" }) {
       <AnimatePresence>
         {reveal && <PackReveal items={reveal} L={L} lang={lang} onClose={() => setReveal(null)} />}
       </AnimatePresence>
+      {brag && <ShareDialog what={brag} onClose={() => setBrag(null)} />}
       {giftFor && <GiftDialog s={giftFor} count={own(giftFor.id)} left={a.giftsLeft} L={L} lang={lang} onClose={() => setGiftFor(null)} />}
     </div>
   );
