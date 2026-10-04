@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Gift, Loader2, Lock, Sparkles, Ticket, User } from "lucide-react";
 import { STARTING_BALANCE } from "@shared/schema";
+import { REFERRAL_WELCOME } from "@shared/stickers";
 import { useAuth, ME_KEY } from "@/hooks/use-auth";
 import { useLang } from "@/lib/lang-context";
 import { useToast } from "@/hooks/use-toast";
@@ -51,8 +52,18 @@ export default function Auth() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const [mode, setMode] = useState<"login" | "register">(() =>
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("code") ? "register" : "login");
+  // A friend's invite link (vnslot888.online/auth?ref=NAME): remembered in case they look around first
+  const [ref] = useState(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("ref")?.trim() ?? "";
+    try {
+      if (fromUrl) localStorage.setItem("vn888_ref", fromUrl);
+      return fromUrl || localStorage.getItem("vn888_ref") || "";
+    } catch { return fromUrl; }
+  });
+  const [mode, setMode] = useState<"login" | "register">(() => {
+    const q = new URLSearchParams(window.location.search);
+    return q.has("code") || q.has("ref") ? "register" : "login";
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -79,8 +90,9 @@ export default function Auth() {
         toast({ title: vi ? "Chào mừng trở lại!" : "Welcome back!", className: "bg-yellow-500 text-purple-900 font-bold" });
         return;
       }
-      await register.mutateAsync({ username, password });
-      toast({ title: vi ? `Đã tạo tài khoản! +${STARTING_BALANCE.toLocaleString()} 🪙` : `Account created! +${STARTING_BALANCE.toLocaleString()} 🪙`, className: "bg-yellow-500 text-purple-900 font-bold" });
+      const created = await register.mutateAsync({ username, password, ...(ref ? { ref } : {}) });
+      try { localStorage.removeItem("vn888_ref"); } catch { /* ignore */ }
+      toast({ title: vi ? `Đã tạo tài khoản! +${created.balance.toLocaleString()} 🪙` : `Account created! +${created.balance.toLocaleString()} 🪙`, className: "bg-yellow-500 text-purple-900 font-bold" });
       if (code.trim()) {
         try {
           const r = await (await apiRequest("POST", "/api/promo/redeem", { code: code.trim() })).json();
@@ -151,7 +163,8 @@ export default function Auth() {
               <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-yellow-500/15 to-orange-500/10 border border-yellow-400/30 px-4 py-3">
                 <Gift className="w-6 h-6 text-yellow-300 shrink-0" />
                 <p className="text-sm text-yellow-100">
-                  <b className="text-yellow-300">+{STARTING_BALANCE.toLocaleString()} {vi ? "xu" : "coins"}</b> {vi ? "khi đăng ký, thêm xu miễn phí mỗi ngày." : "when you join, plus free coins every day."}
+                  <b className="text-yellow-300">+{(STARTING_BALANCE + (ref ? REFERRAL_WELCOME : 0)).toLocaleString()} {vi ? "xu" : "coins"}</b> {vi ? "khi đăng ký, thêm xu miễn phí mỗi ngày." : "when you join, plus free coins every day."}
+                  {ref && <span className="block text-xs text-yellow-200/80 mt-0.5" data-testid="text-invited-by">{vi ? `🎁 ${ref} mời bạn: thêm ${REFERRAL_WELCOME.toLocaleString()} xu!` : `🎁 Invited by ${ref}: ${REFERRAL_WELCOME.toLocaleString()} bonus coins!`}</span>}
                 </p>
               </div>
             )}

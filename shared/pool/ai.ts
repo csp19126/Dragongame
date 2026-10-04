@@ -115,8 +115,8 @@ export function chooseAiShot(s: GameState, rng: () => number = Math.random, budg
   }
   if (!best) best = { shot: { dx: 1, dy: 0, power: 0.5, spin: 0 }, prior: 0 };
 
-  // Aim wobble: up to about ±0.8° and ±6% power
-  const wobble = (rng() - 0.5) * 0.028;
+  // Aim wobble: up to about ±1.4° and ±6% power, so a casual player can win
+  const wobble = (rng() - 0.5) * 0.05;
   const cos = Math.cos(wobble), sin = Math.sin(wobble);
   const { dx, dy } = best.shot;
   return {

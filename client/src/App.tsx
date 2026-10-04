@@ -50,6 +50,7 @@ const Roulette = lazyPage(() => import("@/pages/Roulette"));
 const Privacy = lazyPage(() => import("@/pages/Privacy"));
 const Blackjack = lazyPage(() => import("@/pages/Blackjack"));
 const Pool = lazyPage(() => import("@/pages/Pool"));
+const Community = lazyPage(() => import("@/pages/Community"));
 const NotFound = lazyPage(() => import("@/pages/not-found"));
 
 /** Last line of defence: never leave the player on a blank screen */
@@ -104,6 +105,7 @@ function Router() {
         <Route path="/roulette" component={Roulette} />
         <Route path="/blackjack" component={Blackjack} />
         <Route path="/pool" component={Pool} />
+        <Route path="/community" component={Community} />
         <Route path="/privacy" component={Privacy} />
         <Route path="/delete-account" component={Privacy} />
         <Route component={NotFound} />

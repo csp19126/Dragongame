@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/lang-context";
 import { Button } from "@/components/ui/button";
-import { LogOut, Globe, Trophy, User, Plus, Coins, Crown } from "lucide-react";
+import { LogOut, Globe, Trophy, User, Plus, Coins, Crown, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -106,6 +106,12 @@ export function Header() {
                 >
                   <Plus className="w-4 h-4" />
                   <span className="font-bold text-xs">{t.topUp}</span>
+                </Button>
+              </Link>
+
+              <Link href="/community">
+                <Button variant="ghost" size="icon" className="hover:bg-white/10" aria-label="Community" data-testid="button-community">
+                  <MessageCircle className="w-5 h-5 text-yellow-400" />
                 </Button>
               </Link>
 

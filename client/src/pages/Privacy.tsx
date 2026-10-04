@@ -11,7 +11,7 @@ const UPDATED = { vi: "Cập nhật: Tháng 10, 2026", en: "Last updated: Octobe
 
 function sections(vi: boolean) {
   return vi ? [
-    { title: "Chúng tôi lưu gì", content: "Tên đăng nhập bạn chọn; mật khẩu đã mã hoá một chiều (bcrypt, chúng tôi không thể đọc được); số dư xu ảo, thống kê chơi, thành tích và lịch sử nhận xu miễn phí. Chúng tôi không hỏi tên thật, email, số điện thoại, vị trí hay danh bạ." },
+    { title: "Chúng tôi lưu gì", content: "Tên đăng nhập bạn chọn; mật khẩu đã mã hoá một chiều (bcrypt, chúng tôi không thể đọc được); số dư xu ảo, thống kê chơi, thành tích, sticker và lịch sử nhận xu miễn phí; tin nhắn bạn gửi trong phòng trò chuyện (công khai với mọi người chơi); ai đã mời bạn tham gia; và lần cuối bạn mở trò chơi. Chúng tôi không hỏi tên thật, email, số điện thoại, vị trí hay danh bạ." },
     { title: "Cookie", content: "Một cookie đăng nhập (httpOnly) để giữ bạn đăng nhập. Ứng dụng không dùng cookie quảng cáo, không có quảng cáo và không có công cụ theo dõi hay phân tích." },
     { title: "Dữ liệu được dùng để làm gì", content: "Chỉ để chạy trò chơi: đăng nhập, giữ số dư và hiển thị bảng xếp hạng (chỉ tên đăng nhập và số xu). Chúng tôi không bán, không chia sẻ và không dùng dữ liệu của bạn cho quảng cáo." },
     { title: "Dịch vụ bên thứ ba", content: "Máy chủ và cơ sở dữ liệu được lưu trữ tại Railway (railway.com). Phông chữ được tải từ Google Fonts, nên Google có thể thấy địa chỉ IP của bạn khi tải phông chữ. Không có bên nào khác nhận dữ liệu của bạn." },
@@ -19,7 +19,7 @@ function sections(vi: boolean) {
     { title: "Lưu trữ và xoá dữ liệu", content: "Dữ liệu được giữ cho đến khi bạn xoá tài khoản. Khi xoá, tài khoản, số dư, thống kê, thành tích và lịch sử xu bị xoá vĩnh viễn ngay lập tức. Bạn có thể tự xoá ở trang Hồ sơ hoặc ngay bên dưới." },
     { title: "Độ tuổi", content: "Trò chơi chỉ dành cho người từ 18 tuổi. Chúng tôi không cố ý thu thập dữ liệu của trẻ em." },
   ] : [
-    { title: "What we store", content: "The username you choose; your password, one-way hashed with bcrypt so we can't read it; your play-coin balance, game statistics, achievements and free-coin history. We never ask for your real name, email, phone number, location or contacts." },
+    { title: "What we store", content: "The username you choose; your password, one-way hashed with bcrypt so we can't read it; your play-coin balance, game statistics, achievements, stickers and free-coin history; the messages you post in the chat room (public to all players); who invited you; and when you last opened the game. We never ask for your real name, email, phone number, location or contacts." },
     { title: "Cookies", content: "One login cookie (httpOnly) to keep you signed in. There are no ads, no advertising cookies and no tracking or analytics tools." },
     { title: "How we use it", content: "Only to run the game: logging in, keeping your balance and showing the leaderboard (username and coins only). We don't sell or share your data or use it for advertising." },
     { title: "Third parties", content: "The server and database are hosted by Railway (railway.com). Fonts load from Google Fonts, so Google may see your IP address when they load. Nobody else receives your data." },

@@ -637,4 +637,138 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(r.body).toEqual({ message: "Not found" });
     });
   });
+  describe("community", () => {
+    const games = (username: string, n: number) => pool.query("update users set games_played = $1 where username = $2", [n, username]);
+
+    it("chat: needs a few games, filters money talk and links, masks swearing, rate limits, reports hide", async () => {
+      const a = new Player(), b = new Player(), c = new Player(), d = new Player();
+      for (const p of [a, b, c, d]) await p.register();
+      expect((await a.req("POST", "/api/chat", { text: "xin chào" })).body.message).toBe("play_first");
+      for (const p of [a, b, c, d]) await games(p.username, 5);
+      const hi = await a.req("POST", "/api/chat", { text: "  xin   chào các bạn  " });
+      expect(hi.status).toBe(200);
+      expect(hi.body.text).toBe("xin chào các bạn");
+      expect((await b.req("POST", "/api/chat", { text: "bán xu giá rẻ, ib zalo" })).body.message).toBe("trade");
+      expect((await b.req("POST", "/api/chat", { text: "vào vnslot888.online" })).body.message).toBe("link");
+      expect((await b.req("POST", "/api/chat", { text: "gọi 0912 345 678" })).body.message).toBe("phone");
+      expect((await b.req("POST", "/api/chat", { text: "x".repeat(201) })).body.message).toBe("long");
+      const sw = await b.req("POST", "/api/chat", { text: "đm thua rồi" });
+      expect(sw.body.text).toBe("** thua rồi");
+      expect((await b.req("POST", "/api/chat", { text: "again" })).status).toBe(429); // 3 s between messages
+      expect((await d.req("POST", "/api/chat", { sticker: "legend_rong" })).body.message).toBe("not_owned");
+
+      const list = await c.req("GET", "/api/chat");
+      expect(list.body.messages.map((m: any) => m.id)).toEqual([hi.body.id, sw.body.id]);
+      expect(list.body.messages[0]).not.toHaveProperty("userId");
+      expect((await c.req("GET", `/api/chat?after=${hi.body.id}`)).body.messages.map((m: any) => m.id)).toEqual([sw.body.id]);
+
+      // Three different players report: hidden for everyone
+      expect((await b.req("POST", `/api/chat/${sw.body.id}/report`)).status).toBe(400); // not your own
+      for (const p of [a, c, d]) expect((await p.req("POST", `/api/chat/${sw.body.id}/report`)).status).toBe(200);
+      const after = await c.req("GET", "/api/chat");
+      expect(after.body.messages.map((m: any) => m.id)).toEqual([hi.body.id]);
+      expect(after.body.removed).toContain(sw.body.id);
+    });
+
+    it("admin: mute, ban (logs out, blocks login), announcement and stats", async () => {
+      const admin = new Player(), bad = new Player();
+      const aUser = await admin.register(); const bUser = await bad.register();
+      await pool.query("update users set is_admin = true where id = $1", [aUser.id]);
+      await games(bad.username, 5);
+      const m = await bad.req("POST", "/api/chat", { text: "hello" });
+      expect((await bad.req("GET", "/api/admin/community/chat")).status).toBe(403);
+      const view = await admin.req("GET", "/api/admin/community/chat");
+      expect(view.body.messages.find((x: any) => x.id === m.body.id)).toMatchObject({ username: bad.username, reports: 0, deleted: false });
+
+      expect((await admin.req("POST", `/api/admin/community/users/${bUser.id}`, { minutes: 60 })).status).toBe(200);
+      expect((await bad.req("POST", "/api/chat", { text: "still here" })).body.message).toBe("muted");
+      expect((await admin.req("POST", `/api/admin/community/users/${bUser.id}`, { minutes: 0 })).status).toBe(200);
+
+      await admin.req("PUT", "/api/admin/announcement", { text: "Giải đấu bi-a tối nay 20:00!" });
+      expect((await new Player().req("GET", "/api/announcement")).body.text).toBe("Giải đấu bi-a tối nay 20:00!");
+
+      expect((await admin.req("POST", `/api/admin/community/users/${bUser.id}`, { banned: true })).status).toBe(200);
+      expect((await bad.req("GET", "/api/me")).status).toBe(403);
+      expect((await bad.req("GET", "/api/me")).status).toBe(401); // the session is gone
+      expect((await bad.req("POST", "/api/login", { username: bad.username, password: bad.password })).status).toBe(403);
+      expect((await admin.req("GET", "/api/chat")).body.messages.map((x: any) => x.id)).not.toContain(m.body.id);
+
+      const stats = (await admin.req("GET", "/api/admin/dashboard/stats")).body;
+      for (const k of ["activeToday", "activeWeek", "newUsersWeek", "chatToday", "poolToday", "invitedPlayers", "mutedOrBanned"]) expect(typeof stats[k]).toBe("number");
+      expect(stats.mutedOrBanned).toBeGreaterThanOrEqual(1);
+    });
+
+    it("stickers: a free pack a day, play packs, set rewards once, trade-in and gifts", async () => {
+      const a = new Player(), b = new Player();
+      await a.register(); await b.register();
+      let album = (await a.req("GET", "/api/stickers")).body;
+      expect(album.packs).toMatchObject({ free: true, play: 0, bonus: 0 });
+      const first = await a.req("POST", "/api/stickers/open", { kind: "free" });
+      expect(first.body.stickers).toHaveLength(3);
+      expect((await a.req("POST", "/api/stickers/open", { kind: "free" })).status).toBe(409); // once a day
+      expect((await a.req("POST", "/api/stickers/open", { kind: "play" })).status).toBe(409);
+      await games(a.username, 50);
+      expect((await a.req("GET", "/api/stickers")).body.packs.play).toBe(2);
+      expect((await a.req("POST", "/api/stickers/open", { kind: "play" })).status).toBe(200);
+      expect((await a.req("POST", "/api/stickers/open", { kind: "play" })).status).toBe(200);
+      expect((await a.req("POST", "/api/stickers/open", { kind: "play" })).status).toBe(409);
+      album = (await a.req("GET", "/api/stickers")).body;
+      expect(Object.values(album.owned).reduce((t: number, n: any) => t + n, 0)).toBe(9);
+
+      // Complete the Tết set by hand and claim it once
+      expect((await a.req("POST", "/api/stickers/claim", { set: "tet" })).status).toBe(400);
+      const { STICKERS } = await import("../shared/stickers");
+      const uid = (await a.req("GET", "/api/me")).body.id;
+      for (const s of STICKERS.filter((x) => x.set === "tet")) {
+        await pool.query("insert into user_stickers (user_id, sticker_id, count) values ($1, $2, 3) on conflict (user_id, sticker_id) do update set count = 3", [uid, s.id]);
+      }
+      const before = (await a.state()).balance;
+      const claim = await a.req("POST", "/api/stickers/claim", { set: "tet" });
+      expect(claim.body.reward).toBe(200_000);
+      expect((await a.state()).balance).toBe(before + 200_000);
+      expect((await a.req("POST", "/api/stickers/claim", { set: "tet" })).body.message).toBe("Already claimed");
+      expect((await a.req("POST", "/api/stickers/claim", { set: "album" })).status).toBe(400);
+
+      // Trade 5 spares for a bonus pack; never touches the last copy
+      const t = await a.req("POST", "/api/stickers/trade");
+      expect(t.status).toBe(200);
+      expect(t.body.traded.reduce((s: number, x: any) => s + x.n, 0)).toBe(5);
+      album = (await a.req("GET", "/api/stickers")).body;
+      expect(album.packs.bonus).toBe(1);
+      for (const s of STICKERS.filter((x) => x.set === "tet")) expect(album.owned[s.id]).toBeGreaterThanOrEqual(1);
+
+      // Gift a spare; can't gift your last one or to yourself
+      const spare = STICKERS.find((x) => x.set === "tet" && album.owned[x.id] >= 2)!;
+      const g = await a.req("POST", "/api/stickers/gift", { to: b.username.toUpperCase(), sticker: spare.id });
+      expect(g.status).toBe(200);
+      expect((await b.req("GET", "/api/stickers")).body.owned[spare.id]).toBe(1);
+      expect((await b.req("POST", "/api/stickers/gift", { to: a.username, sticker: spare.id })).body.message).toBe("You need a spare one to gift");
+      expect((await a.req("POST", "/api/stickers/gift", { to: a.username, sticker: spare.id })).status).toBe(400);
+      expect((await a.req("GET", "/api/stickers")).body.giftsLeft).toBe(9);
+    });
+
+    it("invites: the friend gets a welcome bonus, the inviter is paid once after 20 games", async () => {
+      const inviter = new Player(), friend = new Player(), stranger = new Player();
+      await inviter.register();
+      const f = await friend.req("POST", "/api/register", { username: friend.username, password: friend.password, ref: inviter.username.toUpperCase() });
+      expect(f.status).toBe(200);
+      expect(f.body.balance).toBe(100_000); // 50,000 start + 50,000 welcome
+      const s = await stranger.req("POST", "/api/register", { username: stranger.username, password: stranger.password, ref: "nobody_by_that_name" });
+      expect(s.body.balance).toBe(50_000);
+
+      let view = (await inviter.req("GET", "/api/referrals")).body;
+      expect(view).toMatchObject({ code: inviter.username, paid: 0, claimable: 0 });
+      expect(view.friends.map((x: any) => x.username)).toEqual([friend.username]);
+      expect((await inviter.req("POST", "/api/referrals/claim")).body.paid).toBe(0);
+
+      await games(friend.username, 20);
+      view = (await inviter.req("GET", "/api/referrals")).body;
+      expect(view.claimable).toBe(1);
+      const before = (await inviter.state()).balance;
+      const [c1, c2] = await Promise.all([inviter.req("POST", "/api/referrals/claim"), inviter.req("POST", "/api/referrals/claim")]);
+      expect(c1.body.paid + c2.body.paid).toBe(1); // paid once even when tapped twice
+      expect((await inviter.state()).balance).toBe(before + 100_000);
+      expect((await inviter.req("GET", "/api/stickers")).body.packs.bonus).toBe(1);
+    });
+  });
 });
