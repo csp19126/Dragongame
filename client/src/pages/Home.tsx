@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { GameTabs } from "@/components/GameTabs";
 import { InstallDialog } from "@/components/InstallApp";
+import { AnnouncementBar, CommunityStrip } from "@/components/CommunityStrip";
 import { useGameState, useAchievements, useLeaderboard, useRecentWins, useJackpot } from "@/hooks/use-game";
 import { SlotMachine } from "@/components/SlotMachine";
 import { Header } from "@/components/Header";
@@ -241,6 +242,7 @@ export default function Home() {
               </h1>
               <p className="text-[11px] sm:text-xs font-black tracking-[0.35em] text-yellow-500/80 uppercase mt-1">🐉 {t.subtitle} 🐉</p>
             </div>
+            <AnnouncementBar />
             <GameTabs />
             <div className="w-full max-w-md lg:hidden"><RecentWinsTicker /></div>
             {gameState ? (
@@ -257,6 +259,7 @@ export default function Home() {
                 </Card>
               ))}
             </div>
+            <CommunityStrip />
           </section>
 
           <aside className="order-3 lg:order-1 space-y-4" data-testid="sidebar-achievements">

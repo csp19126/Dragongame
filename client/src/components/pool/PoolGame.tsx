@@ -38,6 +38,8 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
   const dropping = useRef(new Map<number, { x: number; y: number; t: number }>());
   const drag = useRef<"aim" | "place" | null>(null);
   const powerDrag = useRef(false);
+  const [badSpot, setBadSpot] = useState(false);
+  useEffect(() => { if (!badSpot) return; const t = window.setTimeout(() => setBadSpot(false), 2200); return () => clearTimeout(t); }, [badSpot]);
 
   const cueBall = game.balls.find((b) => b.n === 0);
   const ballInHand = canShoot && game.ballInHand;
@@ -93,7 +95,8 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
     let lastFrame = -1;
     const potTimes = new Map<number, number>();
     const step = (now: number) => {
-      const f = Math.min(frames.length - 1, Math.floor(((now - t0) / 1000) * 60));
+      // A frame's timestamp can be a little before t0 on phones, so never go below frame 0
+      const f = Math.max(0, Math.min(frames.length - 1, Math.floor(((now - t0) / 1000) * 60)));
       if (f !== lastFrame) {
         // Balls that just went down: start their drop
         for (let i = 0; i < order.length; i++) {
@@ -113,7 +116,7 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
       }
       for (const [n, d] of dropping.current) {
         const t0p = potTimes.get(n) ?? now;
-        d.t = Math.min(1, (now - t0p) / 320);
+        d.t = Math.max(0, Math.min(1, (now - t0p) / 320));
         if (d.t >= 1) dropping.current.delete(n);
       }
       if (f < frames.length - 1 || dropping.current.size) raf = requestAnimationFrame(step);
@@ -164,7 +167,7 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
   const onDown = (e: React.PointerEvent) => {
     if (!showAim) return;
     const p = point(e);
-    (e.target as Element).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
     if (ballInHand && placing && Math.hypot(p.x - placing.x, p.y - placing.y) < BALL_R * 3.5) {
       drag.current = "place";
     } else {
@@ -196,11 +199,16 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
     return Math.min(1, Math.max(0, (clientX - r.left) / r.width));
   };
   const placeOk = !ballInHand || (placing ? canPlaceCue(game, placing.x, placing.y) : false);
-  const release = () => {
+  // The latest power, read straight from the finger: a quick flick can let go before React re-renders
+  const powerNow = useRef(0);
+  const pull = (clientX: number) => { powerNow.current = powerAt(clientX); setPower(powerNow.current); };
+  const release = (e: React.PointerEvent) => {
     if (!powerDrag.current) return;
     powerDrag.current = false;
-    if (power < 0.03 || !showAim || !placeOk) { setPower(0); return; }
-    onShoot({ dx: aim.dx, dy: aim.dy, power, spin }, ballInHand && placing ? placing : undefined);
+    pull(e.clientX);
+    const p = powerNow.current;
+    if (p < 0.03 || !showAim || !placeOk) { setPower(0); return; }
+    onShoot({ dx: aim.dx, dy: aim.dy, power: p, spin }, ballInHand && placing ? placing : undefined);
     setPower(0);
   };
 
@@ -236,15 +244,15 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
             <div
               ref={barRef}
               className="relative flex-1 h-11 rounded-xl bg-black/50 border border-yellow-400/40 overflow-hidden touch-none"
-              onPointerDown={(e) => { if (!placeOk) return; powerDrag.current = true; (e.target as Element).setPointerCapture(e.pointerId); setPower(powerAt(e.clientX)); }}
-              onPointerMove={(e) => { if (powerDrag.current) setPower(powerAt(e.clientX)); }}
+              onPointerDown={(e) => { if (!placeOk) { setBadSpot(true); return; } powerDrag.current = true; e.currentTarget.setPointerCapture(e.pointerId); pull(e.clientX); }}
+              onPointerMove={(e) => { if (powerDrag.current) pull(e.clientX); }}
               onPointerUp={release}
               onPointerCancel={() => { powerDrag.current = false; setPower(0); }}
               data-testid="pool-power"
             >
               <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-green-400 via-yellow-400 to-red-500" style={{ width: `${power * 100}%` }} />
               <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white drop-shadow pointer-events-none">
-                {power > 0 ? `${Math.round(power * 100)}%` : `${labels.power} ⟶`}
+                {badSpot ? <span className="text-red-300 text-[11px] leading-tight px-2 text-center">{labels.placeCue}</span> : power > 0 ? `${Math.round(power * 100)}%` : `${labels.power} ⟶`}
               </span>
             </div>
             <button type="button" onPointerDown={() => startHold(0.15)} onPointerUp={endHold} onPointerLeave={endHold} className="w-10 h-11 rounded-xl bg-white/10 text-white flex items-center justify-center active:bg-white/20" aria-label="Nudge aim right" data-testid="pool-nudge-right">

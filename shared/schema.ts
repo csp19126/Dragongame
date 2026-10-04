@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, bigint, boolean, timestamp, varchar, json, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, bigint, boolean, timestamp, varchar, json, index, jsonb, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -20,6 +20,17 @@ export const users = pgTable("users", {
   gamesPlayed: integer("games_played").default(0).notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(),
   lastDailyBonusAt: timestamp("last_daily_bonus_at"),
+  // Community
+  lastSeenAt: timestamp("last_seen_at"),
+  mutedUntil: timestamp("muted_until"),
+  banned: boolean("banned").default(false).notNull(),
+  // Invite a friend: who sent this player, and whether the inviter has been paid for them
+  referredBy: varchar("referred_by"),
+  referralPaid: boolean("referral_paid").default(false).notNull(),
+  // Sticker packs: when the free daily pack was last opened, and how many play packs were opened
+  lastFreePackAt: timestamp("last_free_pack_at"),
+  playPacksOpened: integer("play_packs_opened").default(0).notNull(),
+  bonusPacks: integer("bonus_packs").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -110,6 +121,38 @@ export const poolMatches = pgTable("pool_matches", {
   finishedAt: timestamp("finished_at"),
 });
 
+// Community chat. Text or a sticker; deleted messages stay for the moderation log.
+export const chatMessages = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  username: text("username").notNull(),
+  text: text("text"),
+  sticker: text("sticker"),
+  deleted: boolean("deleted").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("chat_messages_created").on(t.createdAt)]);
+
+export const chatReports = pgTable("chat_reports", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull(),
+  reporterId: varchar("reporter_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("chat_reports_once").on(t.messageId, t.reporterId)]);
+
+// The sticker album: how many of each sticker a player holds
+export const userStickers = pgTable("user_stickers", {
+  userId: varchar("user_id").notNull(),
+  stickerId: text("sticker_id").notNull(),
+  count: integer("count").default(0).notNull(),
+}, (t) => [primaryKey({ columns: [t.userId, t.stickerId] })]);
+
+// Album rewards already paid (one per set, plus "album" for the whole book)
+export const stickerRewards = pgTable("sticker_rewards", {
+  userId: varchar("user_id").notNull(),
+  setId: text("set_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.userId, t.setId] })]);
+
 // Server-managed settings, e.g. the auto-generated session secret
 export const appSettings = pgTable("app_settings", {
   key: text("key").primaryKey(),
@@ -135,6 +178,7 @@ export const sessions = pgTable("session", {
 
 export type User = typeof users.$inferSelect;
 export type PublicUser = Omit<User, "password">;
+export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type GameState = typeof gameStates.$inferSelect;
 export type InsertGameState = typeof gameStates.$inferInsert;

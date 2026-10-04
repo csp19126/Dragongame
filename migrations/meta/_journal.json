@@ -43,6 +43,13 @@
       "when": 1791132857388,
       "tag": "0005_pool",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791139354035,
+      "tag": "0006_community",
+      "breakpoints": true
     }
   ]
 }

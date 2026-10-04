@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { bauCuaBetsSchema, rouletteBetsSchema, playBauCua, playRoulette } from "./tablegames";
 import { publicView } from "./blackjack";
 import { registerPoolRoutes } from "./pool";
+import { registerCommunityRoutes, applyReferral, communityStats } from "./community";
 import {
   BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
   ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, BASE_RTP, TOTAL_RTP,
@@ -58,6 +59,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const id = req.session.userId;
     const user = id ? await storage.getUser(id) : undefined;
     if (!user) return res.status(401).json({ message: "Not logged in" });
+    if (user.banned) {
+      req.session.destroy(() => res.status(403).json({ message: "This account has been suspended" }));
+      return;
+    }
+    // "Last seen" for the admin's active-player counts, written at most every 5 minutes
+    if (!user.lastSeenAt || Date.now() - user.lastSeenAt.getTime() > 5 * 60_000) void storage.touch(user.id).catch(() => {});
     res.locals.user = user;
     next();
   }
@@ -87,7 +94,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (await storage.getUserByUsername(username)) {
       return res.status(409).json({ message: "That username is taken" });
     }
-    const user = await storage.createUser({ username, password: await bcrypt.hash(password, 10) });
+    let user = await storage.createUser({ username, password: await bcrypt.hash(password, 10) });
+    // Joined through a friend's invite link: link them up and add the welcome bonus
+    if (req.body?.ref && (await applyReferral(user.id, req.body.ref))) user = (await storage.getUser(user.id)) ?? user;
     startSession(req, res, user);
   });
 
@@ -100,6 +109,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: "Wrong username or password" });
     }
+    if (user.banned) return res.status(403).json({ message: "This account has been suspended" });
     startSession(req, res, user);
   });
 
@@ -208,6 +218,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   registerPoolRoutes(app, requireUser);
+  registerCommunityRoutes(app, requireUser, requireAdmin);
 
   // Blackjack: the hand lives on the server; the browser only ever sees publicView()
   const BJ_MAX_BET = 1_000_000;
@@ -347,7 +358,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ---------------- Admin ----------------
 
   app.get("/api/admin/dashboard/stats", requireAdmin, async (_req, res) => {
-    res.json(await storage.getAdminStats());
+    res.json({ ...(await storage.getAdminStats()), ...(await communityStats()) });
   });
 
   app.get("/api/admin/dashboard/users", requireAdmin, async (_req, res) => {

@@ -8,10 +8,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, Gift, BarChart3, Search, Edit3, Trash2, Plus,
   Check, X, ChevronDown, ChevronUp, Shield, Wallet, Trophy, Gamepad2,
-  ArrowLeft, RefreshCw, Eye, EyeOff, Crown
+  ArrowLeft, RefreshCw, Eye, EyeOff, Crown, MessageCircle, Activity, UserPlus, Share2, VolumeX
 } from "lucide-react";
 import { Link } from "wouter";
 import { VouchersTab } from "@/components/admin/VouchersTab";
+import { CommunityTab } from "@/components/admin/CommunityTab";
 
 function fmt(n: number) { return n?.toLocaleString() ?? "0"; }
 function fmtDate(d: string | null) {
@@ -225,7 +226,8 @@ function UsersTab() {
                           { label: "Max Win", value: fmt(user.maxWin) },
                           { label: "Max Streak", value: user.maxStreak },
                           { label: "Joined", value: fmtDate(user.createdAt) },
-                          { label: "Last Active", value: fmtDate(user.updatedAt) },
+                          { label: "Last Seen", value: fmtDate(user.lastSeenAt ?? user.updatedAt) },
+                          { label: "Status", value: user.banned ? "Banned" : user.mutedUntil && new Date(user.mutedUntil) > new Date() ? "Muted" : "OK" },
                         ].map(f => (
                           <div key={f.label} className="bg-black/20 rounded-lg px-3 py-2">
                             <div className="text-yellow-500/50 font-bold uppercase tracking-wider text-[9px]">{f.label}</div>
@@ -289,13 +291,20 @@ function StatsTab() {
       <StatCard icon={Gamepad2} label="Games Played" value={stats.totalGamesPlayed} color="#60a5fa" />
       <StatCard icon={Gift} label="Active Codes" value={stats.activePromoCodes} color="#f472b6" />
       <StatCard icon={Check} label="Codes Redeemed" value={stats.redeemedPromoCodes} color="#a78bfa" />
+      <StatCard icon={Activity} label="Active Today" value={stats.activeToday} color="#22d3ee" />
+      <StatCard icon={Activity} label="Active 7 Days" value={stats.activeWeek} color="#38bdf8" />
+      <StatCard icon={UserPlus} label="New (7 Days)" value={stats.newUsersWeek} color="#4ade80" />
+      <StatCard icon={Share2} label="Joined by Invite" value={stats.invitedPlayers} color="#fb923c" />
+      <StatCard icon={MessageCircle} label="Chat Today" value={stats.chatToday} color="#e879f9" />
+      <StatCard icon={Gamepad2} label="Pool Games Today" value={stats.poolToday} color="#10b981" />
+      <StatCard icon={VolumeX} label="Muted / Banned" value={stats.mutedOrBanned} color="#f87171" />
     </div>
   );
 }
 
 export default function Admin() {
   const { user, isLoading } = useAuth();
-  const [tab, setTab] = useState<"stats" | "users" | "cards">("stats");
+  const [tab, setTab] = useState<"stats" | "users" | "cards" | "community">("stats");
 
   if (isLoading) {
     return (
@@ -345,6 +354,7 @@ export default function Admin() {
           <TabBtn active={tab === "stats"} onClick={() => setTab("stats")}><BarChart3 className="w-4 h-4 inline mr-1.5" />Stats</TabBtn>
           <TabBtn active={tab === "users"} onClick={() => setTab("users")}><Users className="w-4 h-4 inline mr-1.5" />Users</TabBtn>
           <TabBtn active={tab === "cards"} onClick={() => setTab("cards")}><Gift className="w-4 h-4 inline mr-1.5" />Promo Codes</TabBtn>
+          <TabBtn active={tab === "community"} onClick={() => setTab("community")}><MessageCircle className="w-4 h-4 inline mr-1.5" />Community</TabBtn>
         </div>
 
         <motion.div
@@ -358,6 +368,7 @@ export default function Admin() {
           {tab === "stats" && <StatsTab />}
           {tab === "users" && <UsersTab />}
           {tab === "cards" && <VouchersTab />}
+          {tab === "community" && <CommunityTab />}
         </motion.div>
       </div>
     </div>

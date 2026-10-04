@@ -80,6 +80,20 @@ All games share one coin balance; every result is drawn on the server.
   hand). 45 seconds a shot; three timeouts or 90 seconds away loses the game. Live games are held in
   memory, so a redeploy cancels them and refunds both stakes on the next start.
 
+## Community (`/community`)
+
+- **Chat**: one public room. Players unlock it after 3 games. The server enforces the rules in
+  `shared/chat.ts`: links, phone numbers and any buying/selling of coins for real money are blocked,
+  swearing is starred out, there are 3 seconds between messages, and 3 reports from different players
+  hide a message. Admins hide or restore messages, mute (1h/24h/7d) or ban players, and set an
+  announcement shown on the home page and in chat (Admin → Community).
+- **Sticker album** (`shared/stickers.ts`): 4 Vietnamese sets of 6 with rarities. Packs of 3 come
+  from a free daily pack, one pack per 25 games, and bonus packs. Completing a set pays 200K-1M coins
+  and the full album pays 5M, each once. Five spare stickers swap for a pack; spares can be gifted
+  (10 a day). Stickers can be sent in chat.
+- **Invite a friend**: `/auth?ref=USERNAME`. The friend gets 50K extra at sign-up; once they've
+  played 20 games the inviter claims 100K plus a sticker pack (up to 50 friends).
+
 ## Voucher codes
 
 Admin → Promo codes lists every code with its value, batch, a note (who it was given to) and who

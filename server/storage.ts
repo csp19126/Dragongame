@@ -1,6 +1,7 @@
 import { db } from "./db";
 import {
   users, gameStates, achievements, deposits, giftCards, jackpot, appSettings, blackjackHands,
+  chatMessages, chatReports, userStickers, stickerRewards,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
   JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare,
@@ -93,6 +94,10 @@ export class DatabaseStorage {
       balance: STARTING_BALANCE,
     }).returning();
     return user;
+  }
+
+  async touch(userId: string): Promise<void> {
+    await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
   }
 
   async updatePassword(userId: string, hashedPassword: string): Promise<void> {
@@ -453,6 +458,11 @@ export class DatabaseStorage {
       await tx.delete(blackjackHands).where(eq(blackjackHands.userId, userId));
       await tx.delete(gameStates).where(eq(gameStates.userId, userId));
       await tx.delete(deposits).where(eq(deposits.userId, userId));
+      await tx.delete(userStickers).where(eq(userStickers.userId, userId));
+      await tx.delete(stickerRewards).where(eq(stickerRewards.userId, userId));
+      await tx.delete(chatReports).where(eq(chatReports.reporterId, userId));
+      await tx.delete(chatMessages).where(eq(chatMessages.userId, userId));
+      await tx.update(users).set({ referredBy: null }).where(eq(users.referredBy, userId));
       await tx.delete(users).where(eq(users.id, userId));
     });
   }
