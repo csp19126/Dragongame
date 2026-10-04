@@ -3,6 +3,7 @@ import type { Server } from "http";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { storage } from "./storage";
+import { bauCuaBetsSchema, rouletteBetsSchema, playBauCua, playRoulette } from "./tablegames";
 import {
   BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
   ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, BASE_RTP, TOTAL_RTP,
@@ -169,6 +170,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       recentWins.unshift({ user: maskName(user.username), amount: result.winAmount, multiple, at: Date.now(), jackpot: result.jackpotWin > 0 });
       recentWins.length = Math.min(recentWins.length, 20);
     }
+    res.json(result);
+  });
+
+  // ---------------- Table games ----------------
+
+  function recordBigWin(user: User, winAmount: number, totalBet: number) {
+    const multiple = winAmount / totalBet;
+    if (multiple >= 10) {
+      recentWins.unshift({ user: maskName(user.username), amount: winAmount, multiple, at: Date.now() });
+      recentWins.length = Math.min(recentWins.length, 20);
+    }
+  }
+
+  app.post("/api/games/baucua", requireUser, async (req, res) => {
+    const parsed = bauCuaBetsSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: firstError(parsed.error) });
+    const bets = parsed.data.bets;
+    const total = Object.values(bets).reduce((a, n) => a + n, 0);
+    const result = await storage.playTable(res.locals.user.id, total, () => playBauCua(bets));
+    if ("error" in result) return res.status(400).json({ message: "Insufficient balance", code: result.error });
+    recordBigWin(res.locals.user, result.winAmount, total);
+    res.json(result);
+  });
+
+  app.post("/api/games/roulette", requireUser, async (req, res) => {
+    const parsed = rouletteBetsSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: firstError(parsed.error) });
+    const bets = parsed.data.bets;
+    const total = bets.reduce((a, b) => a + b.amount, 0);
+    const result = await storage.playTable(res.locals.user.id, total, () => playRoulette(bets));
+    if ("error" in result) return res.status(400).json({ message: "Insufficient balance", code: result.error });
+    recordBigWin(res.locals.user, result.winAmount, total);
     res.json(result);
   });
 

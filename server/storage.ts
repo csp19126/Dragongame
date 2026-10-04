@@ -46,6 +46,16 @@ export interface SpinResult extends SpinOutcome {
 
 export type SpinError = { error: "insufficient_balance" | "no_user" };
 
+export interface TableStats {
+  newBalance: number;
+  totalWins: number;
+  maxWin: number;
+  gamesPlayed: number;
+  newAchievements: Achievement[];
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export class DatabaseStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -185,18 +195,7 @@ export class DatabaseStorage {
       if (outcome.repeats >= 3) earned.push("chain_reaction");
       if (jackpotWin > 0) earned.push("no_hu");
 
-      const newAchievements: Achievement[] = [];
-      if (earned.length) {
-        const have = new Set((await tx.select({ b: achievements.badgeId }).from(achievements)
-          .where(eq(achievements.userId, userId))).map((r) => r.b));
-        for (const id of earned.filter((b) => !have.has(b))) {
-          const def = ACHIEVEMENTS[id];
-          const [a] = await tx.insert(achievements).values({
-            userId, badgeId: id, badgeName: def.name, description: def.description, icon: def.icon,
-          }).returning();
-          newAchievements.push(a);
-        }
-      }
+      const newAchievements = await this.award(tx, userId, earned);
 
       // 7. Feed the jackpot last: the shared row is locked only for the moment before commit
       if (contribution > 0 && jackpotPool === null) {
@@ -221,6 +220,66 @@ export class DatabaseStorage {
         maxWin: user.maxWin,
         gamesPlayed: user.gamesPlayed,
         newAchievements,
+      };
+    });
+  }
+
+  /** Grants the badges in `earned` that the player doesn't have yet */
+  private async award(tx: Tx, userId: string, earned: BadgeId[]): Promise<Achievement[]> {
+    const newAchievements: Achievement[] = [];
+    if (!earned.length) return newAchievements;
+    const have = new Set((await tx.select({ b: achievements.badgeId }).from(achievements)
+      .where(eq(achievements.userId, userId))).map((r) => r.b));
+    for (const id of earned.filter((b) => !have.has(b))) {
+      const def = ACHIEVEMENTS[id];
+      const [a] = await tx.insert(achievements).values({
+        userId, badgeId: id, badgeName: def.name, description: def.description, icon: def.icon,
+      }).returning();
+      newAchievements.push(a);
+    }
+    return newAchievements;
+  }
+
+  /**
+   * One round of a table game (Bầu Cua, roulette): takes the whole stake with a
+   * conditional UPDATE, plays, and pays out, all in one transaction.
+   */
+  async playTable<T extends { totalBet: number; winAmount: number }>(
+    userId: string, totalBet: number, play: () => T,
+  ): Promise<(T & TableStats) | SpinError> {
+    return db.transaction(async (tx) => {
+      const [paid] = await tx.update(users)
+        .set({ balance: sql`${users.balance} - ${totalBet}` })
+        .where(and(eq(users.id, userId), sql`${users.balance} >= ${totalBet}`))
+        .returning({ id: users.id });
+      if (!paid) return { error: "insufficient_balance" } as SpinError;
+
+      const outcome = play();
+      if (outcome.totalBet !== totalBet) throw new Error("Stake mismatch");
+      const won = outcome.winAmount > totalBet;
+
+      const [user] = await tx.update(users).set({
+        balance: sql`${users.balance} + ${outcome.winAmount}`,
+        gamesPlayed: sql`${users.gamesPlayed} + 1`,
+        totalWins: won ? sql`${users.totalWins} + 1` : users.totalWins,
+        maxWin: sql`greatest(${users.maxWin}, ${outcome.winAmount})`,
+      }).where(eq(users.id, userId)).returning();
+      if (!user) throw new Error("User vanished mid-round");
+
+      const earned: BadgeId[] = [];
+      if (won) earned.push("first_win");
+      if (totalBet >= 100000) earned.push("high_roller");
+      if (user.balance >= 1_000_000) earned.push("millionaire");
+      if (outcome.winAmount >= totalBet * 50) earned.push("jackpot_hunter");
+      if (user.totalWins >= 7) earned.push("lucky_seven");
+
+      return {
+        ...outcome,
+        newBalance: user.balance,
+        totalWins: user.totalWins,
+        maxWin: user.maxWin,
+        gamesPlayed: user.gamesPlayed,
+        newAchievements: await this.award(tx, userId, earned),
       };
     });
   }

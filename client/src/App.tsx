@@ -44,6 +44,8 @@ const About = lazyPage(() => import("@/pages/About"));
 const Terms = lazyPage(() => import("@/pages/Terms"));
 const Profile = lazyPage(() => import("@/pages/Profile"));
 const Admin = lazyPage(() => import("@/pages/Admin"));
+const BauCua = lazyPage(() => import("@/pages/BauCua"));
+const Roulette = lazyPage(() => import("@/pages/Roulette"));
 const NotFound = lazyPage(() => import("@/pages/not-found"));
 
 /** Last line of defence: never leave the player on a blank screen */
@@ -94,6 +96,8 @@ function Router() {
         <Route path="/terms" component={Terms} />
         <Route path="/profile" component={Profile} />
         <Route path="/admin" component={Admin} />
+        <Route path="/bau-cua" component={BauCua} />
+        <Route path="/roulette" component={Roulette} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

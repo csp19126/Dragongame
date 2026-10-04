@@ -318,6 +318,69 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("table games", () => {
+    it("Bầu Cua takes the whole stake and pays exactly what the dice say", async () => {
+      const p = new Player();
+      await p.register();
+      for (let i = 0; i < 15; i++) {
+        const before = (await p.state()).balance;
+        const r = await p.req("POST", "/api/games/baucua", { bets: { cua: 1000, ga: 2000 } });
+        expect(r.status).toBe(200);
+        expect(r.body.dice).toHaveLength(3);
+        const hits = (s: string) => r.body.dice.filter((d: string) => d === s).length;
+        const expected = (hits("cua") ? 1000 * (1 + hits("cua")) : 0) + (hits("ga") ? 2000 * (1 + hits("ga")) : 0);
+        expect(r.body.winAmount).toBe(expected);
+        expect(r.body.newBalance).toBe(before - 3000 + expected);
+        expect((await p.state()).balance).toBe(r.body.newBalance);
+      }
+    });
+
+    it("roulette settles on the server and keeps an exact ledger", async () => {
+      const p = new Player();
+      await p.register();
+      for (let i = 0; i < 15; i++) {
+        const before = (await p.state()).balance;
+        const r = await p.req("POST", "/api/games/roulette", { bets: [{ type: "red", amount: 1000 }, { type: "straight", value: 7, amount: 1000 }] });
+        expect(r.status).toBe(200);
+        const n = r.body.number;
+        expect(n).toBeGreaterThanOrEqual(0);
+        expect(n).toBeLessThanOrEqual(36);
+        const red = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36].includes(n);
+        const expected = (red ? 2000 : 0) + (n === 7 ? 36000 : 0);
+        expect(r.body.winAmount).toBe(expected);
+        expect(r.body.newBalance).toBe(before - 2000 + expected);
+      }
+    });
+
+    it("refuses bets it can't cover, bad bets, and logged-out players", async () => {
+      const p = new Player();
+      await p.register();
+      await setBalance(p.username, 5000);
+      const big = await p.req("POST", "/api/games/baucua", { bets: { tom: 10000 } });
+      expect(big.status).toBe(400);
+      expect(big.body.code).toBe("insufficient_balance");
+      expect((await p.state()).balance).toBe(5000);
+      expect((await p.req("POST", "/api/games/roulette", { bets: [{ type: "straight", value: 40, amount: 1000 }] })).status).toBe(400);
+      expect((await p.req("POST", "/api/games/baucua", { bets: { cua: 1234 } })).status).toBe(400);
+      expect((await new Player().req("POST", "/api/games/roulette", { bets: [{ type: "red", amount: 1000 }] })).status).toBe(401);
+    });
+
+    it("two rounds at once can't spend the same coins", async () => {
+      const p = new Player();
+      await p.register();
+      await setBalance(p.username, 10000);
+      const rs = await Promise.all(Array.from({ length: 5 }, () =>
+        p.req("POST", "/api/games/roulette", { bets: [{ type: "even", amount: 10000 }] })));
+      // Rounds queue up on the balance, so none can spend coins that are not there
+      const ok = rs.filter((r) => r.status === 200);
+      expect(ok.length).toBeGreaterThanOrEqual(1);
+      const final = (await p.state()).balance;
+      const net = ok.reduce((a, r) => a + r.body.winAmount - 10000, 0);
+      expect(final).toBe(10000 + net);
+      expect(final).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe("admin and public data", () => {
     it("admin endpoints are closed to normal players and open to admins", async () => {
       const p = new Player();
