@@ -50,6 +50,13 @@
       "when": 1791139354035,
       "tag": "0006_community",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791143762717,
+      "tag": "0007_tournaments",
+      "breakpoints": true
     }
   ]
 }

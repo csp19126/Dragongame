@@ -50,6 +50,7 @@ describe.skipIf(!TEST_DB)("API", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = TEST_DB;
     process.env.NODE_ENV = "test";
+    process.env.TOURNAMENT_GRACE_MS = "2500";
     const pg = await import("pg");
     const wipe = new pg.default.Pool({ connectionString: TEST_DB });
     await wipe.query("drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public;");
@@ -769,6 +770,137 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(c1.body.paid + c2.body.paid).toBe(1); // paid once even when tapped twice
       expect((await inviter.state()).balance).toBe(before + 100_000);
       expect((await inviter.req("GET", "/api/stickers")).body.packs.bonus).toBe(1);
+    });
+  });
+  describe("pool tournament", () => {
+    async function connect(p: Player, code: string) {
+      const { WebSocket } = await import("ws");
+      const ws = new WebSocket(base.replace("http", "ws") + `/ws/pool?code=${code}`, { headers: { Cookie: p.cookie } });
+      const msgs: any[] = [];
+      ws.on("message", (m) => msgs.push(JSON.parse(String(m))));
+      await new Promise<void>((resolve, reject) => { ws.on("open", () => resolve()); ws.on("error", reject); });
+      return { ws, msgs };
+    }
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    async function until<T>(f: () => Promise<T | null | undefined | false>, ms = 6000): Promise<T> {
+      const start = Date.now();
+      while (Date.now() - start < ms) { const v = await f(); if (v) return v; await wait(50); }
+      throw new Error("timed out");
+    }
+    const current = (p: Player) => p.req("GET", "/api/tournaments/current").then((r) => r.body);
+
+    it("free entry, bracket with a bye, winners advance, prizes paid once, results in chat", async () => {
+      const admin = new Player(), a = new Player(), b = new Player(), c = new Player();
+      const au = await admin.register();
+      for (const p of [a, b, c]) await p.register();
+      await pool.query("update users set is_admin = true where id = $1", [au.id]);
+      expect((await a.req("POST", "/api/admin/tournaments", { name: "Test Cup", startsAt: new Date(Date.now() + 60_000).toISOString(), size: 4, prizes: [300_000, 200_000, 100_000] })).status).toBe(403);
+      const made = await admin.req("POST", "/api/admin/tournaments", { name: "Test Cup", startsAt: new Date(Date.now() + 60_000).toISOString(), size: 4, prizes: [300_000, 200_000, 100_000] });
+      expect(made.status).toBe(200);
+      const id = made.body.id;
+
+      for (const p of [a, b, c]) expect((await p.req("POST", `/api/tournaments/${id}/join`)).status).toBe(200);
+      expect((await a.req("POST", `/api/tournaments/${id}/join`)).status).toBe(200); // joining twice is harmless
+      expect((await current(a)).players).toHaveLength(3);
+      expect((await a.state()).balance).toBe(50_000); // free to enter
+
+      expect((await admin.req("POST", `/api/admin/tournaments/${id}/start`)).body.result).toBe("started");
+      expect((await new Player().req("POST", `/api/tournaments/${id}/join`)).status).toBe(401);
+      const late = new Player(); await late.register();
+      expect((await late.req("POST", `/api/tournaments/${id}/join`)).status).toBe(409); // closed once live
+
+      // 3 players in a 4 bracket: one bye straight into the final, one semi-final being played
+      let v = await current(a);
+      expect(v.tournament).toMatchObject({ status: "live", rounds: 2 });
+      expect(v.matches.filter((m: any) => m.reason === "bye")).toHaveLength(1);
+      const byName = new Map([[a.username, a], [b.username, b], [c.username, c]]);
+      const semi = v.matches.find((m: any) => m.round === 1 && m.status === "playing");
+      const [p1, p2] = [byName.get(semi.name1)!, byName.get(semi.name2)!];
+      const byeName = [a, b, c].find((p) => p !== p1 && p !== p2)!.username;
+      expect(v.matches.find((m: any) => m.round === 2)).toMatchObject({ name1: byeName, status: "pending" });
+      const my = (await current(p1)).myMatch;
+      expect(my).toMatchObject({ code: semi.code, opponent: p2.username, round: 1 });
+
+      // Both arrive; nobody can shoot before that; then p2 resigns
+      const s1 = await connect(p1, my.code);
+      const first = await until(async () => s1.msgs.find((m) => m.t === "state"));
+      expect(first.tournament).toMatchObject({ id, name: "Test Cup", round: 1, rounds: 2 });
+      expect(first.ready).toBe(false);
+      const s2 = await connect(p2, my.code);
+      await until(async () => s2.msgs.find((m) => m.t === "state" && m.ready));
+      s2.ws.send(JSON.stringify({ t: "resign" }));
+      await until(async () => s1.msgs.find((m) => m.t === "state" && m.result));
+      s1.ws.close(); s2.ws.close();
+
+      // The final opens by itself between p1 and the bye player
+      const finalMatch = await until(async () => (await current(p1)).myMatch);
+      expect(finalMatch.opponent).toBe(byeName);
+      const byePlayer = byName.get(byeName)!;
+      const f1 = await connect(p1, finalMatch.code), f2 = await connect(byePlayer, finalMatch.code);
+      await until(async () => f1.msgs.find((m) => m.t === "state" && m.ready));
+      f1.ws.send(JSON.stringify({ t: "resign" }));
+      await until(async () => (await current(byePlayer)).tournament?.status === "finished");
+      f1.ws.close(); f2.ws.close();
+
+      v = await current(a);
+      expect(v.tournament.status).toBe("finished");
+      expect(v.tournament.winnerName).toBe(byeName);
+      expect((await byePlayer.state()).balance).toBe(50_000 + 300_000);
+      expect((await p1.state()).balance).toBe(50_000 + 200_000);
+      expect((await p2.state()).balance).toBe(50_000 + 100_000);
+      expect(v.champions[0]).toMatchObject({ name: byeName, tournament: "Test Cup", prize: 300_000 });
+      const chat = (await admin.req("GET", "/api/chat")).body.messages.map((m: any) => m.text).join("\n");
+      expect(chat).toContain(`${byeName} vô địch Test Cup`);
+
+      // Settling twice can't pay twice
+      const { onMatchFinished } = await import("../server/tournament");
+      const finalId = v.matches.find((m: any) => m.round === 2).id;
+      await onMatchFinished(finalId, (await byePlayer.req("GET", "/api/me")).body.id, "win");
+      expect((await byePlayer.state()).balance).toBe(350_000);
+    });
+
+    it("a no-show loses, too few players cancels, and a restart reopens lost tables", async () => {
+      const admin = new Player(), a = new Player(), b = new Player(), solo = new Player();
+      const au = await admin.register();
+      for (const p of [a, b, solo]) await p.register();
+      await pool.query("update users set is_admin = true where id = $1", [au.id]);
+      const mk = async (name: string) => (await admin.req("POST", "/api/admin/tournaments", { name, startsAt: new Date(Date.now() + 60_000).toISOString(), size: 4, prizes: [1000, 500, 0] })).body.id;
+
+      const lonely = await mk("Lonely Cup");
+      await solo.req("POST", `/api/tournaments/${lonely}/join`);
+      expect((await admin.req("POST", `/api/admin/tournaments/${lonely}/start`)).body.result).toBe("cancelled");
+
+      const cup = await mk("No Show Cup");
+      for (const p of [a, b]) await p.req("POST", `/api/tournaments/${cup}/join`);
+      await admin.req("POST", `/api/admin/tournaments/${cup}/start`);
+      const m1 = await until(async () => (await current(a)).myMatch);
+
+      // A restart wipes the table; the watchdog opens a new one for the same match
+      const { dropAllRoomsForTest } = await import("../server/pool");
+      const { tournamentTick } = await import("../server/tournament");
+      dropAllRoomsForTest();
+      await tournamentTick();
+      const m2 = (await current(a)).myMatch;
+      expect(m2.code).not.toBe(m1.code);
+
+      // Only a turns up: after the wait, a wins the final by no-show
+      const sa = await connect(a, m2.code);
+      await until(async () => sa.msgs.find((m) => m.t === "state" && m.result), 8000);
+      const fin = sa.msgs.filter((m) => m.t === "state").pop();
+      expect(fin.result.reason).toBe("no_show");
+      expect(fin.names[fin.result.winner]).toBe(a.username);
+      sa.ws.close();
+      await until(async () => (await admin.req("GET", "/api/admin/tournaments")).body.tournaments.find((t: any) => t.id === cup)?.status === "finished");
+      expect((await a.state()).balance).toBe(51_000);
+      expect((await b.state()).balance).toBe(50_500);
+    });
+
+    it("the weekly tournament is scheduled for Saturday 20:00 Vietnam time", async () => {
+      const { nextWeeklyStart } = await import("../server/tournament");
+      const s = nextWeeklyStart(new Date("2026-10-04T10:00:00Z")); // a Sunday
+      expect(s.toISOString()).toBe("2026-10-10T13:00:00.000Z");
+      expect(nextWeeklyStart(new Date("2026-10-10T12:30:00Z")).toISOString()).toBe("2026-10-17T13:00:00.000Z"); // under an hour away: next week
+      expect(nextWeeklyStart(new Date("2026-10-10T11:00:00Z")).toISOString()).toBe("2026-10-10T13:00:00.000Z");
     });
   });
 });

@@ -18,6 +18,9 @@ import { colorOf, type Aim } from "@/lib/poolDraw";
 import { soundManager } from "@/lib/sound";
 import { coinBurst, fireworks } from "@/lib/celebrate";
 import { ME_KEY } from "@/hooks/use-auth";
+import { TournamentPromo } from "@/components/TournamentBits";
+import { ShareButton } from "@/components/ShareCard";
+import { roundName } from "@shared/tournament";
 
 const TXT = {
   vi: {
@@ -27,7 +30,8 @@ const TXT = {
     cancel: "Huỷ bàn", resign: "Đầu hàng", resignAsk: "Đầu hàng và thua ván này?", you: "Bạn", computer: "Máy", yourTurn: "Lượt của bạn", theirTurn: "Lượt đối thủ",
     solids: "Bi trơn", stripes: "Bi sọc", open8: "Bàn mở", ballInHand: "Bi trong tay", break: "Phá bi",
     foul: { scratch: "Phạm lỗi: bi trắng rơi lỗ", no_hit: "Phạm lỗi: không chạm bi", wrong_ball: "Phạm lỗi: chạm sai bi", no_rail: "Phạm lỗi: không bi nào chạm băng", timeout: "Hết giờ" } as Record<string, string>,
-    won: "BẠN THẮNG!", lost: "BẠN THUA", winnerIs: "thắng", again: "Chơi lại", lobby: "Sảnh", reason: { win: "", resign: "(đầu hàng)", left: "(đối thủ rời bàn)", timeouts: "(hết giờ 3 lần)" } as Record<string, string>,
+    won: "BẠN THẮNG!", lost: "BẠN THUA", winnerIs: "thắng", again: "Chơi lại", lobby: "Sảnh", reason: { win: "", resign: "(đầu hàng)", left: "(đối thủ rời bàn)", timeouts: "(hết giờ 3 lần)", no_show: "(vắng mặt)" } as Record<string, string>,
+    waitOpp: "Đang chờ đối thủ vào bàn", bracket: "Bảng đấu", wonPool: "THẮNG BI-A!",
     spectators: "người xem", offline: "mất kết nối", power: "Kéo để đánh", spin: "Xoáy", top: "Trên", centre: "Giữa", backSpin: "Dưới",
     dragToAim: "Kéo trên bàn để ngắm, kéo thanh lực rồi thả để đánh", placeCue: "Kéo bi trắng để đặt, rồi ngắm và đánh",
     rules: "Luật 8 bóng: phá bi, rồi người đầu tiên đưa bi vào lỗ hợp lệ nhận nhóm (trơn 1-7 hoặc sọc 9-15). Đưa hết bi nhóm mình rồi đưa bi 8 vào lỗ để thắng. Bi 8 vào lỗ sớm là thua. Phạm lỗi (bi trắng rơi, chạm sai bi, không chạm bi, không bi nào chạm băng) thì đối thủ được bi trong tay. Mỗi lượt 45 giây. Bàn có cược: người thắng nhận cả hai phần cược.",
@@ -39,7 +43,8 @@ const TXT = {
     cancel: "Close table", resign: "Resign", resignAsk: "Resign and lose this game?", you: "You", computer: "Computer", yourTurn: "Your turn", theirTurn: "Their turn",
     solids: "Solids", stripes: "Stripes", open8: "Open table", ballInHand: "Ball in hand", break: "Break",
     foul: { scratch: "Foul: cue ball potted", no_hit: "Foul: missed everything", wrong_ball: "Foul: wrong ball first", no_rail: "Foul: no ball hit a cushion", timeout: "Out of time" } as Record<string, string>,
-    won: "YOU WIN!", lost: "YOU LOSE", winnerIs: "wins", again: "Play again", lobby: "Lobby", reason: { win: "", resign: "(resigned)", left: "(opponent left)", timeouts: "(out of time 3 times)" } as Record<string, string>,
+    won: "YOU WIN!", lost: "YOU LOSE", winnerIs: "wins", again: "Play again", lobby: "Lobby", reason: { win: "", resign: "(resigned)", left: "(opponent left)", timeouts: "(out of time 3 times)", no_show: "(no-show)" } as Record<string, string>,
+    waitOpp: "Waiting for your opponent to sit down", bracket: "Bracket", wonPool: "POOL WIN!",
     spectators: "watching", offline: "offline", power: "Pull to shoot", spin: "Spin", top: "Top", centre: "Centre", backSpin: "Back",
     dragToAim: "Drag on the table to aim, pull the power bar and let go to shoot", placeCue: "Drag the cue ball to place it, then aim and shoot",
     rules: "8-ball: break, then the first player to legally pot a ball takes that group (solids 1-7 or stripes 9-15). Clear your group, then pot the 8 to win. Potting the 8 early loses. A foul (cue ball potted, wrong ball first, nothing hit, no cushion after contact) gives the other player ball in hand. 45 seconds a shot. On a staked table the winner takes both stakes.",
@@ -146,6 +151,7 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: typeof TXT.v
 
   return (
     <div className="w-full max-w-md flex flex-col gap-3" data-testid="pool-lobby">
+      <TournamentPromo />
       {mine && (
         <button type="button" onClick={() => onOpen(mine)} className="w-full rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500" data-testid="button-pool-back">{L.back} ({mine})</button>
       )}
@@ -184,8 +190,8 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: typeof TXT.v
           <p className="text-xs font-black uppercase tracking-widest text-yellow-400/80">{L.live}</p>
           {tables.data.live.map((tb) => (
             <div key={tb.code} className="flex items-center gap-3 rounded-2xl p-3 bg-black/20 border border-white/5">
-              <span className="text-xl">🔴</span>
-              <div className="flex-1 min-w-0"><p className="font-bold text-white/90 truncate text-sm">{tb.host} vs {tb.guest}</p><p className="text-xs text-yellow-300/80">{tb.stake ? `${fmt(tb.stake)} 🪙` : L.free}</p></div>
+              <span className="text-xl">{tb.tournament ? "🏆" : "🔴"}</span>
+              <div className="flex-1 min-w-0"><p className="font-bold text-white/90 truncate text-sm">{tb.host} vs {tb.guest}</p><p className="text-xs text-yellow-300/80 truncate">{tb.tournament ?? (tb.stake ? `${fmt(tb.stake)} 🪙` : L.free)}</p></div>
               <button type="button" onClick={() => onOpen(tb.code)} className="px-3 py-2 rounded-xl font-black text-xs text-white bg-white/10 flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{L.watch}</button>
             </div>
           ))}
@@ -260,13 +266,14 @@ function PracticeTable({ L, name, onExit }: { L: typeof TXT.vi; name: string; on
   );
 }
 
-function EndBanner({ title, sub, actions }: { title: string; sub: string; actions: { label: string; onClick: () => void }[] }) {
+function EndBanner({ title, sub, actions, extra }: { title: string; sub: string; actions: { label: string; onClick: () => void }[]; extra?: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6" data-testid="pool-end">
       <div className="w-full max-w-xs rounded-3xl p-6 text-center bg-gradient-to-b from-[#2a0f4f] to-[#140726] border-2 border-yellow-400/60 shadow-[0_0_50px_rgba(250,204,21,0.35)]">
         <p className="text-5xl mb-2">🎱</p>
         <p className="font-display text-4xl text-yellow-300">{title}</p>
         {sub && <p className="mt-2 text-white/80 font-bold">{sub}</p>}
+        {extra && <div className="mt-4">{extra}</div>}
         <div className="mt-5 flex gap-2">
           {actions.map((a) => <button key={a.label} type="button" onClick={a.onClick} className="flex-1 py-2.5 rounded-xl font-black text-black bg-gradient-to-b from-yellow-300 to-orange-500">{a.label}</button>)}
         </div>
@@ -281,6 +288,7 @@ type StateMsg = Extract<PoolServerMsg, { t: "state" }>;
 
 function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; code: string; userId: string; onExit: () => void; toast: ReturnType<typeof useToast>["toast"] }) {
   const [table, setTable] = useState<StateMsg | null>(null);
+  const [, nav] = useLocation();
   const [game, setGame] = useState<GameState | null>(null);
   const [playback, setPlayback] = useState<Playback | null>(null);
   const [remoteAim, setRemoteAim] = useState<{ aim: Aim; cue: { x: number; y: number } | null } | null>(null);
@@ -385,16 +393,25 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; cod
   }
 
   if (!g) return null;
-  const myTurn = seat !== null && g.turn === seat && table.status === "playing" && !playback;
+  const ready = table.ready !== false;
+  const myTurn = seat !== null && g.turn === seat && table.status === "playing" && !playback && ready;
+  const tour = table.tournament;
+  const vi = L === TXT.vi;
+  const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
   const left = (s: Side) => (g.groups[s] ? ballsLeft(g, g.groups[s]!) : 7);
   const order: Side[] = seat === 1 ? [1, 0] : [0, 1];
   const label = (s: Side) => `${names[s] ?? "…"}${seat === s ? ` (${L.you})` : ""}`;
 
   return (
     <div className="w-full max-w-md flex flex-col gap-2 relative" data-testid="pool-online">
+      {tour && (
+        <button type="button" onClick={() => nav("/tournament")} className="w-full rounded-xl bg-gradient-to-r from-yellow-500/25 to-emerald-600/25 border border-yellow-400/40 py-1 text-xs font-black text-yellow-200" data-testid="pool-tournament-badge">
+          🏆 {tour.name} · {roundName(tour.round, tour.rounds, vi ? "vi" : "en")}
+        </button>
+      )}
       <div className="flex gap-2">
         {order.map((s, i) => (
-          <PlayerCard key={s} name={label(s)} group={g.groups[s]} left={left(s)} active={g.turn === s && table.status === "playing"} online={table.online[s]} side={i === 0 ? "left" : "right"} game={g} msLeft={g.turn === s ? msLeft : null} />
+          <PlayerCard key={s} name={label(s)} group={g.groups[s]} left={left(s)} active={g.turn === s && table.status === "playing"} online={table.online[s]} side={i === 0 ? "left" : "right"} game={g} msLeft={g.turn === s && ready ? msLeft : null} />
         ))}
       </div>
       <div className="flex items-center justify-between text-[11px] text-white/50 px-1">
@@ -402,7 +419,7 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; cod
         <span className={connected ? "" : "text-red-300"}>{connected ? `👁 ${table.spectators} ${L.spectators}` : L.offline}</span>
       </div>
       <p className="text-center text-xs font-bold text-yellow-100/90 leading-tight min-h-[2rem]" data-testid="pool-status">
-        {table.status === "playing" && !playback ? statusLine(L, g, myTurn) : " "}
+        {table.status === "playing" && !playback ? (ready ? statusLine(L, g, myTurn) : `⏳ ${L.waitOpp}… ${msLeft != null ? mmss(msLeft) : ""}`) : " "}
         {myTurn && <span className="block text-[10px] font-normal text-emerald-100/60">{hint(L, g)}</span>}
       </p>
 
@@ -428,7 +445,15 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; cod
         <EndBanner
           title={seat === null ? `${names[ended.winner]} ${L.winnerIs}` : ended.winner === seat ? L.won : L.lost}
           sub={`${ended.payout ? `${ended.winner === seat ? "+" : ""}${fmt(ended.payout)} 🪙 ` : ""}${L.reason[ended.reason] ?? ""}`}
-          actions={[{ label: L.lobby, onClick: onExit }]}
+          actions={tour ? [{ label: L.bracket, onClick: () => nav("/tournament") }] : [{ label: L.lobby, onClick: onExit }]}
+          extra={seat !== null && ended.winner === seat ? (
+            <ShareButton what={{
+              emoji: "🎱",
+              title: L.wonPool,
+              amount: ended.payout || undefined,
+              detail: tour ? `${tour.name} · ${roundName(tour.round, tour.rounds, vi ? "vi" : "en")}` : `${vi ? "Bi-a 8 bóng · thắng" : "8-ball pool · beat"} ${names[(1 - seat) as Side] ?? ""}`,
+            }} />
+          ) : undefined}
         />
       )}
     </div>

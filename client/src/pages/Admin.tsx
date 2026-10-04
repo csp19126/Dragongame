@@ -13,6 +13,7 @@ import {
 import { Link } from "wouter";
 import { VouchersTab } from "@/components/admin/VouchersTab";
 import { CommunityTab } from "@/components/admin/CommunityTab";
+import { TournamentsTab } from "@/components/admin/TournamentsTab";
 
 function fmt(n: number) { return n?.toLocaleString() ?? "0"; }
 function fmtDate(d: string | null) {
@@ -304,7 +305,7 @@ function StatsTab() {
 
 export default function Admin() {
   const { user, isLoading } = useAuth();
-  const [tab, setTab] = useState<"stats" | "users" | "cards" | "community">("stats");
+  const [tab, setTab] = useState<"stats" | "users" | "cards" | "community" | "tournaments">("stats");
 
   if (isLoading) {
     return (
@@ -355,6 +356,7 @@ export default function Admin() {
           <TabBtn active={tab === "users"} onClick={() => setTab("users")}><Users className="w-4 h-4 inline mr-1.5" />Users</TabBtn>
           <TabBtn active={tab === "cards"} onClick={() => setTab("cards")}><Gift className="w-4 h-4 inline mr-1.5" />Promo Codes</TabBtn>
           <TabBtn active={tab === "community"} onClick={() => setTab("community")}><MessageCircle className="w-4 h-4 inline mr-1.5" />Community</TabBtn>
+          <TabBtn active={tab === "tournaments"} onClick={() => setTab("tournaments")}><Trophy className="w-4 h-4 inline mr-1.5" />Tournaments</TabBtn>
         </div>
 
         <motion.div
@@ -369,6 +371,7 @@ export default function Admin() {
           {tab === "users" && <UsersTab />}
           {tab === "cards" && <VouchersTab />}
           {tab === "community" && <CommunityTab />}
+          {tab === "tournaments" && <TournamentsTab />}
         </motion.div>
       </div>
     </div>

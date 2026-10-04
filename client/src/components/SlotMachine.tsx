@@ -10,6 +10,7 @@ import { useLang } from "@/lib/lang-context";
 import { soundManager } from "@/lib/sound";
 import { apiRequest, ApiError, queryClient } from "@/lib/queryClient";
 import { coinBurst, fireworks, luckyRain, cannons, stopCelebrations, winTier, type WinTier } from "@/lib/celebrate";
+import { ShareButton } from "@/components/ShareCard";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -242,6 +243,8 @@ export function SlotMachine() {
   const [showScatter, setShowScatter] = useState(false);
   const [repeaterBanner, setRepeaterBanner] = useState<number | null>(null);
   const [overlay, setOverlay] = useState<{ res: SpinResponse; tier: WinTier } | null>(null);
+  // The last big win stays shareable until the next one (or the player closes it)
+  const [brag, setBrag] = useState<{ amount: number; multiple: number; jackpot: boolean; tier: WinTier } | null>(null);
   const [scatterBanner, setScatterBanner] = useState<SpinResponse | null>(null);
   const [shaking, setShaking] = useState(false);
   const [autoSpin, setAutoSpin] = useState(false);
@@ -291,6 +294,7 @@ export function SlotMachine() {
       soundManager.win(false);
     } else if (tier !== "none" && tier !== "small") {
       setOverlay({ res, tier });
+      setBrag({ amount: res.winAmount, multiple: +(res.winAmount / res.bet).toFixed(1), jackpot: tier === "jackpot", tier });
       setShaking(true);
       later(() => setShaking(false), 1300);
       soundManager.bigWinFanfare();
@@ -710,6 +714,21 @@ export function SlotMachine() {
           </Button>
         </div>
       </div>
+
+      {brag && (
+        <div className="flex items-center justify-center gap-2 mt-3" data-testid="brag-chip">
+          <ShareButton
+            what={{
+              emoji: brag.jackpot ? "🏺" : brag.tier === "epic" ? "🐉" : "💰",
+              title: brag.jackpot ? (lang === "vi" ? "NỔ HŨ RỒNG!" : "JACKPOT!") : tierTitle(brag.tier),
+              amount: brag.amount,
+              detail: `Slot Rồng Vàng · ×${brag.multiple}`,
+            }}
+            label={lang === "vi" ? `Khoe thắng +${brag.amount.toLocaleString("vi-VN")}` : `Share +${brag.amount.toLocaleString()}`}
+          />
+          <button type="button" onClick={() => setBrag(null)} className="w-8 h-8 rounded-full bg-white/10 text-white/60 text-sm" aria-label="Dismiss">✕</button>
+        </div>
+      )}
 
       <Dialog open={showPaytable} onOpenChange={setShowPaytable}>
         <DialogContent className="bg-[#140a2e] border-yellow-500/30 text-yellow-50 max-w-md max-h-[90vh] overflow-y-auto">

@@ -2,6 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { GameTabs } from "@/components/GameTabs";
 import { InstallDialog } from "@/components/InstallApp";
 import { AnnouncementBar, CommunityStrip } from "@/components/CommunityStrip";
+import { TournamentPromo } from "@/components/TournamentBits";
 import { useGameState, useAchievements, useLeaderboard, useRecentWins, useJackpot } from "@/hooks/use-game";
 import { SlotMachine } from "@/components/SlotMachine";
 import { Header } from "@/components/Header";
@@ -243,6 +244,7 @@ export default function Home() {
               <p className="text-[11px] sm:text-xs font-black tracking-[0.35em] text-yellow-500/80 uppercase mt-1">🐉 {t.subtitle} 🐉</p>
             </div>
             <AnnouncementBar />
+            <TournamentPromo />
             <GameTabs />
             <div className="w-full max-w-md lg:hidden"><RecentWinsTicker /></div>
             {gameState ? (

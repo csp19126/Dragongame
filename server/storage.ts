@@ -1,7 +1,7 @@
 import { db } from "./db";
 import {
   users, gameStates, achievements, deposits, giftCards, jackpot, appSettings, blackjackHands,
-  chatMessages, chatReports, userStickers, stickerRewards,
+  chatMessages, chatReports, userStickers, stickerRewards, tournamentPlayers,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
   JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare,
@@ -462,6 +462,7 @@ export class DatabaseStorage {
       await tx.delete(stickerRewards).where(eq(stickerRewards.userId, userId));
       await tx.delete(chatReports).where(eq(chatReports.reporterId, userId));
       await tx.delete(chatMessages).where(eq(chatMessages.userId, userId));
+      await tx.delete(tournamentPlayers).where(eq(tournamentPlayers.userId, userId));
       await tx.update(users).set({ referredBy: null }).where(eq(users.referredBy, userId));
       await tx.delete(users).where(eq(users.id, userId));
     });
