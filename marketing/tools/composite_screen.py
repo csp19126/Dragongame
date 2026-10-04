@@ -1,11 +1,11 @@
 import cv2, numpy as np, sys, json
 SP=sys.argv[1]
 C={int(k):np.float32(v) for k,v in json.load(open(f"{SP}/corners.json")).items()}
-shot=cv2.imread("/root/.claude/uploads/5f527838-7d17-5eb4-afd1-f8167469746d/e9d12442-image.png")
+shot=cv2.imread(f"{SP}/screen_vi.png")
 W,H=1080,2340
 tex=np.full((H,W,3),(30,10,15),np.uint8)
-s=cv2.resize(shot,(W,int(shot.shape[0]*W/shot.shape[1])),interpolation=cv2.INTER_AREA)
-y=(H-s.shape[0])//2; tex[y:y+s.shape[0]]=s
+s=cv2.resize(shot,(W,H),interpolation=cv2.INTER_AREA)
+tex=s
 mask=np.zeros((H,W),np.uint8); r=110
 cv2.rectangle(mask,(r,0),(W-r,H),255,-1); cv2.rectangle(mask,(0,r),(W,H-r),255,-1)
 for cx,cy in [(r,r),(W-r,r),(r,H-r),(W-r,H-r)]: cv2.circle(mask,(cx,cy),r,255,-1)
