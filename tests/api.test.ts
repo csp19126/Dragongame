@@ -39,6 +39,15 @@ class Player {
     return r.body;
   }
   spin(betAmount = BET) { return this.req("POST", "/api/game/spin", { betAmount }); }
+  /** A spin that takes any free spins it wins straight away (steady pick), like a player would */
+  async play(betAmount = BET) {
+    const r = await this.spin(betAmount);
+    if (r.status === 200 && r.body.pendingFreeSpinUnits > 0) {
+      const pick = await this.req("POST", "/api/game/free-spins/pick", { choice: "steady" });
+      expect(pick.status).toBe(200);
+    }
+    return r;
+  }
   state() { return this.req("GET", "/api/game/state").then((r) => r.body); }
 }
 
@@ -150,7 +159,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       await p.register();
       let expected = 50000;
       for (let i = 0; i < 40; i++) {
-        const r = await p.spin(BET);
+        const r = await p.play(BET);
         expect(r.status).toBe(200);
         if (!r.body.isFreeSpin) expected -= r.body.bet;
         expected += r.body.winAmount;
@@ -182,7 +191,7 @@ describe.skipIf(!TEST_DB)("API", () => {
         [user.id, BET],
       );
       const results = await Promise.all(Array.from({ length: 20 }, () => p.spin(BET)));
-      results.forEach((r) => expect([200, 400]).toContain(r.status));
+      results.forEach((r) => expect([200, 400, 409]).toContain(r.status)); // 409: free spins won, waiting for the pick
       const ok = results.filter((r) => r.status === 200).map((r) => r.body);
       // Spins are serialised per player, so each stake must have come out of a non-negative balance
       ok.forEach((r) => expect(r.newBalance - r.winAmount).toBeGreaterThanOrEqual(0));
@@ -213,7 +222,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       await p.register();
       let wins = 0;
       for (let i = 0; i < 30; i++) {
-        const r = (await p.spin(BET)).body;
+        const r = (await p.play(BET)).body;
         if (r.winAmount > r.bet) wins++;
         expect(r.totalWins).toBe(wins);
       }
@@ -224,12 +233,17 @@ describe.skipIf(!TEST_DB)("API", () => {
     it("oracle blesses one spin per hour", async () => {
       const p = new Player();
       await p.register();
-      expect((await p.req("POST", "/api/game/oracle")).body.granted).toBe(true);
+      const { STICKS, GRADE_BLESSING } = await import("../shared/oracle");
+      const drawn = (await p.req("POST", "/api/game/oracle")).body;
+      expect(drawn.granted).toBe(true);
+      const stick = STICKS.find((x) => x.n === drawn.stick)!;
+      expect(drawn.blessing).toBe(GRADE_BLESSING[stick.grade]);
       expect((await p.req("POST", "/api/game/oracle")).body.granted).toBe(false);
-      expect((await p.state()).blessed).toBe(true);
+      const st = await p.state();
+      expect(st).toMatchObject({ blessed: true, blessing: drawn.blessing, oracleStick: drawn.stick });
       const r = (await p.spin(BET)).body;
       expect(r.blessed).toBe(true);
-      expect(r.winAmount % 2).toBe(0);
+      expect(r.blessing).toBe(drawn.blessing);
       expect((await p.state()).blessed).toBe(false);
       expect((await p.spin(BET)).body.blessed).toBe(false);
     });
@@ -287,8 +301,9 @@ describe.skipIf(!TEST_DB)("API", () => {
       const p = new Player();
       const user = await p.register();
       await pool.query("update jackpot set amount = 300000000 where id = 1");
-      const pearls = [["lotus", "pearl", "dragon"], ["drum", "pearl", "lotus"], ["dragon", "pearl", "drum"]]; // grid[col][row]
-      const noWins = () => { const seq = [3, 7, 3, 7, 3, 7]; let i = 0; return () => seq[i++ % seq.length]; };
+      // grid[reel][row]: pearls on the middle row of reels 1-3; re-spins draw envelopes, which never pay
+      const pearls = [["lotus", "pearl", "dragon"], ["drum", "pearl", "lotus"], ["dragon", "pearl", "drum"], ["koi", "lantern", "coin"], ["coin", "koi", "lantern"]];
+      const noWins = () => () => 104;
       const r = await storage.spin(user.id, 10000, (bet, o) => spin(bet, { ...o, startGrid: pearls, rng: noWins() }));
       if ("error" in r) throw new Error(r.error);
       expect(r.jackpotHit).toBe(true);
@@ -901,6 +916,109 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(s.toISOString()).toBe("2026-10-10T13:00:00.000Z");
       expect(nextWeeklyStart(new Date("2026-10-10T12:30:00Z")).toISOString()).toBe("2026-10-17T13:00:00.000Z"); // under an hour away: next week
       expect(nextWeeklyStart(new Date("2026-10-10T11:00:00Z")).toISOString()).toBe("2026-10-10T13:00:00.000Z");
+    });
+  });
+  describe("slot features", () => {
+    const LINE_WIN = [["dragon", "lantern", "drum"], ["koi", "lantern", "lotus"], ["drum", "lantern", "koi"], ["lotus", "dragon", "coin"], ["coin", "koi", "lantern"]]; // middle row: 3 lanterns
+    const envelopesRng = () => () => 104;
+
+    it("free spins wait for the player's pick, then play at that multiplier and bet", async () => {
+      const p = new Player();
+      const user = await p.register();
+      await pool.query("insert into game_states (user_id, slot_id, free_spin_units, free_spin_bet) values ($1, 'main', 12, 5000)", [user.id]);
+      expect((await p.state()).pendingFreeSpinUnits).toBe(12);
+      const blocked = await p.spin(BET);
+      expect(blocked.status).toBe(409);
+      expect(blocked.body.code).toBe("pick_free_spins");
+      expect((await p.state()).balance).toBe(50000); // nothing taken
+      expect((await p.req("POST", "/api/game/free-spins/pick", { choice: "silly" })).status).toBe(400);
+      const pick = await p.req("POST", "/api/game/free-spins/pick", { choice: "daring" });
+      expect(pick.body).toMatchObject({ choice: "daring", mult: 4, spins: 3, freeSpins: 3 });
+      expect((await p.req("POST", "/api/game/free-spins/pick", { choice: "steady" })).status).toBe(409); // only once
+      for (let i = 0; i < 3; i++) {
+        const r = (await p.spin(BET)).body;
+        expect(r).toMatchObject({ isFreeSpin: true, bet: 5000, freeSpinMult: 4 });
+        expect(r.winAmount % 4).toBe(0);
+      }
+      const s = await p.state();
+      expect(s.freeSpins === 0 || s.pendingFreeSpinUnits === 0).toBe(true);
+    });
+
+    it("the mystery envelope is one of the real choices", async () => {
+      const seen = new Set<number>();
+      for (let i = 0; i < 12; i++) {
+        const p = new Player();
+        const user = await p.register();
+        await pool.query("insert into game_states (user_id, slot_id, free_spin_units, free_spin_bet) values ($1, 'main', 24, 1000)", [user.id]);
+        const r = (await p.req("POST", "/api/game/free-spins/pick", { choice: "mystery" })).body;
+        expect(r.mystery).toBe(true);
+        expect(r.spins * r.mult).toBe(24);
+        seen.add(r.mult);
+      }
+      expect(seen.size).toBeGreaterThan(1);
+    });
+
+    it("Xóc Đĩa double-up: stakes the last win at fair odds, half or all, and stops after a loss", async () => {
+      const { storage } = await import("../server/storage");
+      const { spin } = await import("../server/game");
+      const { GAMBLE_PAYS, gambleWins } = await import("../shared/gamble");
+      const p = new Player();
+      const user = await p.register();
+      const r = await storage.spin(user.id, 10000, (bet, o) => spin(bet, { ...o, startGrid: LINE_WIN, rng: envelopesRng() }));
+      if ("error" in r) throw new Error(r.error);
+      expect(r.winAmount).toBe(3000); // 3 lanterns x 0.3
+      expect(r.gambleAmount).toBe(3000);
+      expect((await p.state()).gambleAmount).toBe(3000);
+      expect((await p.req("POST", "/api/game/gamble", { pick: "red" })).status).toBe(400);
+
+      let balance = (await p.state()).balance;
+      let pot = 3000;
+      let rounds = 0;
+      // Keep going (half stakes) until a loss or the round limit
+      while (true) {
+        const g = (await p.req("POST", "/api/game/gamble", { pick: "chan", half: true })).body;
+        rounds++;
+        const stake = Math.floor(pot / 2);
+        expect(g.stake).toBe(stake);
+        expect(g.kept).toBe(pot - stake);
+        expect(g.reds).toBe(g.coins.filter(Boolean).length);
+        expect(g.won).toBe(gambleWins("chan", g.reds));
+        expect(g.payout).toBe(g.won ? stake * GAMBLE_PAYS.chan : 0);
+        balance = balance - stake + g.payout;
+        expect(g.balance).toBe(balance);
+        expect(g.rounds).toBe(rounds);
+        pot = g.gambleAmount;
+        if (!g.canContinue) break;
+      }
+      expect(rounds).toBeLessThanOrEqual(5);
+      expect((await p.req("POST", "/api/game/gamble", { pick: "le" })).status).toBe(409);
+      expect((await p.state()).balance).toBe(balance);
+
+      // A new win, then collect: nothing left to stake
+      await storage.spin(user.id, 10000, (bet, o) => spin(bet, { ...o, startGrid: LINE_WIN, rng: envelopesRng() }));
+      await p.req("POST", "/api/game/gamble/collect");
+      expect((await p.req("POST", "/api/game/gamble", { pick: "chan" })).status).toBe(409);
+      // A losing spin leaves nothing to double up
+      const lose = await storage.spin(user.id, 1000, (bet, o) => spin(bet, { ...o, startGrid: [["dragon", "lantern", "drum"], ["drum", "koi", "lotus"], ["lotus", "dragon", "koi"], ["lantern", "drum", "dragon"], ["koi", "lotus", "lantern"]], rng: envelopesRng() }));
+      if ("error" in lose) throw new Error(lose.error);
+      expect(lose.winAmount).toBe(0);
+      expect((await p.state()).gambleAmount).toBe(0);
+    });
+
+    it("the double-up is fair over many rounds (about half of even/odd bets win)", async () => {
+      const p = new Player();
+      const user = await p.register();
+      let wins = 0;
+      const N = 400;
+      for (let i = 0; i < N; i++) {
+        await pool.query("update game_states set gamble_amount = 1000, gamble_rounds = 0 where user_id = $1", [user.id]).then(async (q) => {
+          if (!q.rowCount) await pool.query("insert into game_states (user_id, slot_id, gamble_amount) values ($1, 'main', 1000)", [user.id]);
+        });
+        const g = (await p.req("POST", "/api/game/gamble", { pick: i % 2 ? "chan" : "le" })).body;
+        if (g.won) wins++;
+      }
+      // Binomial(400, 1/2): 5 standard deviations is +-50
+      expect(Math.abs(wins - N / 2)).toBeLessThan(50);
     });
   });
 });

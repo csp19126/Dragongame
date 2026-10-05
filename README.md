@@ -1,6 +1,6 @@
 # VnSlot 888 · Dragon Fortune
 
-A free-to-play, Vietnamese-style 3×3 slot game. **Play money only**: coins can't be bought
+A free-to-play, Vietnamese-style 5-reel slot game. **Play money only**: coins can't be bought
 and can't be cashed out. Bilingual (Tiếng Việt / English), installable on phones as an app.
 
 The server looks after itself:
@@ -121,26 +121,37 @@ and are never in this repository. A link like `/auth?code=VN888-XXXX-XXXX` pre-f
 
 ## The game
 
-- 3×3 grid, **9 paylines**: rows, diagonals, V shapes and zigzags. Three of a kind on a line pays
-  the multiple of the bet in the in-game paytable (🐉 ×30, 🥁 ×3, 🌸 ×1.3, 🏮 ×0.7, 🐟 ×0.4, 🪙 ×0.4).
+- **5 reels × 3 rows, 20 paylines.** 3, 4 or 5 of a kind in a row from the leftmost reel pays the
+  multiple of the bet in the in-game paytable (🐉 ×2 / ×12 / ×100, 🥁 ×0.8 / ×4 / ×20, 🌸, 🏮, 🐟, 🪙).
   Every amount is a multiple of the bet, so a 1M bet pays 1,000 times what a 1K bet pays.
-- **🔮 Dragon Pearl (wild):** stands in for any symbol on a line; three pearls pay ×120.
-- **🔁 Repeater (Rồng Lặp):** after a line win the winning symbols lock and every other cell re-spins
-  for free. Each new winning line pays ×2, then ×3, ×5, ×8, ×12; the chain continues while each
-  repeat wins something new.
+- **🔮 Dragon Pearl (wild):** stands in for any symbol on a line, and a run of pearls pays by itself
+  (×8 / ×40 / ×400); a line pays whichever reading is worth more.
+- **🐉 Rồng Lặp (Repeater):** 3 or more 🔮 anywhere wake the dragon (about 1 spin in 160). The pearls
+  stick, winning cells lock and every other cell re-spins for free. Each new winning line, or a line
+  that grows longer (it pays the extra), pays ×2, then ×3, ×5, ×8, ×12; the chain continues while
+  each repeat adds something. Pearls that land during repeats stick too.
 - **🏺 Hũ Rồng progressive jackpot:** 1% of every paid bet feeds a shared pot that never drops below
-  100,000,000. Three 🔮 on the middle row, on the spin or any repeat, wins a share that grows with
-  the bet: bet ÷ 1M of the pot (1K → 0.1%, 100K → 10%, 1M → the whole pot), so every bet wins at
-  least 100× itself.
-- **🧧 Red envelope (scatter):** pays anywhere on the grid. 3 → ×1 + 5 free spins, 4 → ×5 + 8,
-  5+ → ×25 + 10. Free spins play at the bet that won them.
-- The Dragon Oracle doubles your next spin's winnings, once an hour.
+  100,000,000. Three 🔮 on the middle row of reels 1-3, on the spin or any repeat, wins a share that
+  grows with the bet: bet ÷ 1M of the pot (1K → 0.1%, 100K → 10%, 1M → the whole pot).
+- **🧧 Red envelope (scatter) and Chọn Lì Xì:** pays anywhere: 3 → ×1, 4 → ×4, 5+ → ×20, plus 12 / 24 / 40
+  free-spin units. The player picks how to take them: all the spins at ×1, half at ×2, a quarter at
+  ×4, or a mystery envelope (one of those at random). Spins × multiplier is the same, so every pick
+  is worth the same on average. More envelopes during free spins add spins at the same multiplier.
+- **🥣 Xóc Đĩa double-up:** after a paid spin wins, the player may stake the win (or half of it) on four
+  coins under a bowl: chẵn / lẻ ×2, four red / four white ×16, up to 5 rounds. Exactly fair odds
+  (100% return), so it never changes the game's RTP; the server shakes the coins.
+- **🎋 Xin Xăm oracle:** once an hour the player picks a topic (luck, wealth, love, work, health), may
+  type a question (it never leaves the phone) and draws one of 24 fortune sticks with a Vietnamese
+  verse, a meaning and advice. The stick's grade blesses the next spin: Đại Cát ×5, Thượng ×3,
+  Trung ×2, Hạ ×1.5. The fortune is entertainment and says so.
 - 50,000 coins on sign-up, 50,000 more every 20 hours, plus admin-created promo codes.
 - Every cell is drawn independently with Node's `crypto.randomInt`. No near-miss forcing, no
   per-player tuning.
-- **Return to player: 95.8% from the game + 1% through the jackpot = 96.8%.** Measured over 60M
-  simulated spins (±0.1%) and re-checked against the real engine (`npm run rtp`); a test enforces it.
-  About 32% of spins pay something, 20% are a profit, 1 in 82 pays 10× or more, max seen 1,900×.
+- **Return to player: 96.0% from the game + 1% through the jackpot = 97.0%.** Measured over 40M
+  simulated spins (±0.2%) and re-checked against the real engine (`npm run rtp`); tests check the
+  first-spin line pays against the exact value worked out from the paytable, and the whole game
+  against the published figure. About 48% of spins pay something, 13% are a profit, 1 in 140 pays
+  10× or more, max seen about 9,800×.
 - Celebrations scale with the win (coin pop → BIG WIN fireworks → MEGA WIN → DRAGON FORTUNE →
   NỔ HŨ for the jackpot). Spins that pay back less than the bet are labelled honestly as small
   wins and are not celebrated. Reels are animated from JavaScript, so they spin even on phones

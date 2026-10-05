@@ -4,8 +4,10 @@ import {
   chatMessages, chatReports, userStickers, stickerRewards, tournamentPlayers,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
-  JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare,
+  JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare, FREE_SPIN_OPTIONS, type FreeSpinChoice,
 } from "@shared/schema";
+import { GAMBLE_MAX_ROUNDS, GAMBLE_MAX_STAKE, GAMBLE_PAYS, gambleWins, type GamblePick } from "@shared/gamble";
+import { STICKS, GRADE_BLESSING } from "@shared/oracle";
 import { eq, desc, sql, and, or, isNull, lt, count, sum } from "drizzle-orm";
 import { randomInt } from "crypto";
 import { spin as runSpin, type SpinOutcome } from "./game";
@@ -55,6 +57,10 @@ export interface SpinResult extends SpinOutcome {
   bet: number;
   isFreeSpin: boolean;
   blessed: boolean;
+  /** Free-spin units waiting for the player to pick how to take them (Chọn Lì Xì) */
+  pendingFreeSpinUnits: number;
+  /** The win that can be taken to the Xóc Đĩa double-up (0 when it can't) */
+  gambleAmount: number;
   newBalance: number;
   totalFreeSpins: number;
   streak: number;
@@ -64,7 +70,7 @@ export interface SpinResult extends SpinOutcome {
   newAchievements: Achievement[];
 }
 
-export type SpinError = { error: "insufficient_balance" | "no_user" };
+export type SpinError = { error: "insufficient_balance" | "no_user" | "pick_free_spins" };
 
 export interface TableStats {
   newBalance: number;
@@ -138,7 +144,9 @@ export class DatabaseStorage {
       //    spins for the same player then queue up instead of deadlocking each other.
       //    The shared jackpot row is always locked last, so this order can't form a cycle.
       const [me] = await tx.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, userId)).for("update");
-      await tx.select({ id: gameStates.id }).from(gameStates).where(eq(gameStates.id, state.id)).for("update");
+      const [row] = await tx.select().from(gameStates).where(eq(gameStates.id, state.id)).for("update");
+      // Free spins won but not yet picked: the player chooses before spinning again
+      if (row.freeSpinUnits > 0) return { error: "pick_free_spins" } as SpinError;
 
       // 1. Pay for the spin: free spin first, otherwise stake from balance
       let isFreeSpin = false;
@@ -158,15 +166,13 @@ export class DatabaseStorage {
         if (!paid) return { error: "insufficient_balance" } as SpinError;
       }
 
-      // 2. Consume the oracle blessing, if one is waiting
-      const [blessing] = await tx.update(gameStates)
-        .set({ activeModifier: 100 })
-        .where(and(eq(gameStates.id, state.id), sql`${gameStates.activeModifier} > 100`))
-        .returning({ id: gameStates.id });
-      const blessed = !!blessing;
+      // 2. Consume the oracle blessing, if one is waiting (the row is locked, so this is safe)
+      const blessing = (row.activeModifier ?? 100) > 100 ? (row.activeModifier ?? 100) / 100 : 1;
+      if (blessing > 1) await tx.update(gameStates).set({ activeModifier: 100, oracleStick: null }).where(eq(gameStates.id, state.id));
+      const blessed = blessing > 1;
 
-      // 3. Spin (Repeater included)
-      const outcome = play(bet, { blessed });
+      // 3. Spin (Rồng Lặp included); free spins carry the multiplier the player picked
+      const outcome = play(bet, { blessing, freeSpinMult: isFreeSpin ? row.freeSpinMult : 1 });
 
       // 3b. Jackpot: paid spins feed the pot; middle-row pearls win it
       const contribution = isFreeSpin ? 0 : Math.floor(bet * JACKPOT_CONTRIBUTION);
@@ -185,10 +191,17 @@ export class DatabaseStorage {
       // A "win" means the spin actually made a profit; getting your stake back isn't a win
       const won = totalWin > bet;
 
-      // 4. Free spins: awarded spins are locked to the bet that won them
+      // 4. Free spins. Won in the base game: waiting for the player's pick, locked to this bet.
+      //    Won during free spins: added straight away at the multiplier already picked.
+      const retrigger = isFreeSpin && outcome.freeSpinUnits > 0;
+      const units = outcome.freeSpinUnits;
+      // 4b. Double-up: a paid spin's win can be staked on Xóc Đĩa (not a jackpot, not mid-feature)
+      const gambleAmount = !isFreeSpin && units === 0 && jackpotWin === 0 && outcome.winAmount > 0 ? outcome.winAmount : 0;
       const [gs] = await tx.update(gameStates).set({
-        freeSpins: sql`${gameStates.freeSpins} + ${outcome.freeSpinsAwarded}`,
-        ...(outcome.freeSpinsAwarded > 0 ? { freeSpinBet: bet } : {}),
+        ...(retrigger ? { freeSpins: sql`${gameStates.freeSpins} + ${Math.floor(units / Math.max(1, row.freeSpinMult))}` } : {}),
+        ...(!isFreeSpin && units > 0 ? { freeSpinUnits: units, freeSpinBet: bet } : {}),
+        gambleAmount,
+        gambleRounds: 0,
         consecutiveWins: won ? sql`${gameStates.consecutiveWins} + 1` : 0,
         updatedAt: new Date(),
       }).where(eq(gameStates.id, state.id)).returning();
@@ -214,7 +227,7 @@ export class DatabaseStorage {
       if (user.balance >= 1_000_000) earned.push("millionaire");
       if (totalWin >= bet * 50) earned.push("jackpot_hunter");
       if (user.totalWins >= 7) earned.push("lucky_seven");
-      if (outcome.freeSpinsAwarded > 0) earned.push("lucky_envelope");
+      if (outcome.freeSpinUnits > 0) earned.push("lucky_envelope");
       if (outcome.lineWins.some((w) => w.withWild || w.symbol === WILD_ID)) earned.push("pearl_power");
       if (outcome.repeats >= 3) earned.push("chain_reaction");
       if (jackpotWin > 0) earned.push("no_hu");
@@ -237,6 +250,8 @@ export class DatabaseStorage {
         bet,
         isFreeSpin,
         blessed,
+        pendingFreeSpinUnits: gs.freeSpinUnits,
+        gambleAmount,
         newBalance: user.balance,
         totalFreeSpins: gs.freeSpins ?? 0,
         streak: user.streak,
@@ -386,15 +401,68 @@ export class DatabaseStorage {
   }
 
   /** Returns the time the oracle can next be used, or null if the blessing was granted now. */
-  async consultOracle(userId: string): Promise<{ granted: boolean; nextAvailableAt: Date }> {
+  /** Xin Xăm: draws a fortune stick once an hour; its grade blesses the next spin */
+  async consultOracle(userId: string): Promise<{ granted: boolean; nextAvailableAt: Date; stick?: number; blessing?: number }> {
     const state = await this.ensureGameState(userId);
     const cutoff = new Date(Date.now() - ORACLE_COOLDOWN_MS);
+    const stick = STICKS[randomInt(STICKS.length)];
+    const blessing = GRADE_BLESSING[stick.grade];
     const [updated] = await db.update(gameStates)
-      .set({ activeModifier: 200, lastOracleAt: new Date() })
+      .set({ activeModifier: Math.round(blessing * 100), oracleStick: stick.n, lastOracleAt: new Date() })
       .where(and(eq(gameStates.id, state.id), or(isNull(gameStates.lastOracleAt), lt(gameStates.lastOracleAt, cutoff))))
       .returning();
     const last = updated?.lastOracleAt ?? state.lastOracleAt ?? new Date();
-    return { granted: !!updated, nextAvailableAt: new Date(last.getTime() + ORACLE_COOLDOWN_MS) };
+    const nextAvailableAt = new Date(last.getTime() + ORACLE_COOLDOWN_MS);
+    return updated ? { granted: true, nextAvailableAt, stick: stick.n, blessing } : { granted: false, nextAvailableAt };
+  }
+
+  /** Chọn Lì Xì: turns waiting free-spin units into spins at the multiplier the player picked */
+  async pickFreeSpins(userId: string, choice: FreeSpinChoice) {
+    const state = await this.ensureGameState(userId);
+    return db.transaction(async (tx) => {
+      const [row] = await tx.select().from(gameStates).where(eq(gameStates.id, state.id)).for("update");
+      if (!row || row.freeSpinUnits <= 0) return null;
+      const option = choice === "mystery" ? FREE_SPIN_OPTIONS[randomInt(FREE_SPIN_OPTIONS.length)] : FREE_SPIN_OPTIONS.find((o) => o.id === choice)!;
+      const spins = Math.floor(row.freeSpinUnits / option.mult);
+      const [gs] = await tx.update(gameStates)
+        .set({ freeSpins: sql`${gameStates.freeSpins} + ${spins}`, freeSpinMult: option.mult, freeSpinUnits: 0 })
+        .where(eq(gameStates.id, state.id)).returning();
+      return { choice: option.id, mystery: choice === "mystery", mult: option.mult, spins, freeSpins: gs.freeSpins ?? spins, freeSpinBet: gs.freeSpinBet ?? 0 };
+    });
+  }
+
+  /** One round of the Xóc Đĩa double-up on the last win (all of it, or half) */
+  async gamble(userId: string, pick: GamblePick, half: boolean) {
+    const state = await this.ensureGameState(userId);
+    return db.transaction(async (tx) => {
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for("update");
+      const [row] = await tx.select().from(gameStates).where(eq(gameStates.id, state.id)).for("update");
+      if (!row || row.gambleAmount <= 0) return { error: "nothing_to_gamble" as const };
+      if (row.gambleRounds >= GAMBLE_MAX_ROUNDS) return { error: "no_more_rounds" as const };
+      const stake = half ? Math.floor(row.gambleAmount / 2) : row.gambleAmount;
+      if (stake <= 0) return { error: "nothing_to_gamble" as const };
+      if (stake > GAMBLE_MAX_STAKE) return { error: "too_big" as const };
+      const [paid] = await tx.update(users).set({ balance: sql`${users.balance} - ${stake}` })
+        .where(and(eq(users.id, userId), sql`${users.balance} >= ${stake}`)).returning({ id: users.id });
+      if (!paid) return { error: "nothing_to_gamble" as const };
+      const coins = [0, 1, 2, 3].map(() => randomInt(2) === 1); // true = red
+      const reds = coins.filter(Boolean).length;
+      const won = gambleWins(pick, reds);
+      const payout = won ? stake * GAMBLE_PAYS[pick] : 0;
+      const [u] = await tx.update(users).set({
+        balance: sql`${users.balance} + ${payout}`,
+        maxWin: sql`greatest(${users.maxWin}, ${payout})`,
+      }).where(eq(users.id, userId)).returning();
+      const rounds = row.gambleRounds + 1;
+      const next = won ? payout : 0;
+      await tx.update(gameStates).set({ gambleAmount: next, gambleRounds: rounds }).where(eq(gameStates.id, state.id));
+      return { coins, reds, pick, half, stake, won, payout, kept: row.gambleAmount - stake, gambleAmount: next, rounds, canContinue: next > 0 && rounds < GAMBLE_MAX_ROUNDS && next <= GAMBLE_MAX_STAKE, balance: u.balance };
+    });
+  }
+
+  async collectGamble(userId: string) {
+    const state = await this.ensureGameState(userId);
+    await db.update(gameStates).set({ gambleAmount: 0 }).where(eq(gameStates.id, state.id));
   }
 
   async claimDailyBonus(userId: string): Promise<{ granted: boolean; balance: number; nextAvailableAt: Date }> {

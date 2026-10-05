@@ -2,9 +2,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, RotateCw, Volume2, VolumeX, Wand2, Gift, Info, Crown, Lock } from "lucide-react";
 import {
-  BET_OPTIONS, PAYLINES, SLOT_SYMBOLS, SCATTER_PAYS, WILD_ID, SCATTER_ID, REPEATER_MULTIPLIERS,
-  JACKPOT_LINE, JACKPOT_FULL_BET, jackpotShare,
+  BET_OPTIONS, PAYLINES, SLOT_SYMBOLS, SCATTER_PAYS, WILD_ID, SCATTER_ID, REPEATER_MULTIPLIERS, REPEATER_PEARLS,
+  JACKPOT_FULL_BET, jackpotShare, REELS, ROWS, FREE_SPIN_OPTIONS,
 } from "@shared/schema";
+import { GAMBLE_PAYS } from "@shared/gamble";
+import { XocDia } from "@/components/slot/XocDia";
+import { FreeSpinPicker, type PickResult } from "@/components/slot/FreeSpinPicker";
+import { Oracle } from "@/components/slot/Oracle";
 import { useGameState, useSpin, useSetBalance, useJackpot, JACKPOT_KEY, type SpinResponse, type JackpotResponse } from "@/hooks/use-game";
 import { useLang } from "@/lib/lang-context";
 import { soundManager } from "@/lib/sound";
@@ -28,12 +32,16 @@ const GLOW: Record<string, string> = {
   coin: "drop-shadow(0 0 8px #facc15)",
   envelope: "drop-shadow(0 0 12px #ef4444)",
 };
-const LINE_COLORS = ["#facc15", "#f97316", "#22d3ee", "#e879f9", "#4ade80", "#f87171", "#60a5fa", "#fbbf24", "#a3e635"];
+/** One colour per payline, spread round the colour wheel */
+const LINE_COLORS = PAYLINES.map((_, i) => `hsl(${(i * 137.5 + 45) % 360} 95% 62%)`);
+const REEL_IDX = Array.from({ length: REELS }, (_, i) => i);
+const ROW_IDX = Array.from({ length: ROWS }, (_, i) => i);
+const emptyCells = () => REEL_IDX.map(() => ROW_IDX.map(() => false));
 const BULB_COLORS = ["#facc15", "#ef4444", "#f472b6", "#22d3ee"];
 const IDS = SLOT_SYMBOLS.map((s) => s.id);
 const randomSymbol = () => IDS[Math.floor(Math.random() * IDS.length)];
 
-const REEL_STOP_MS = [520, 820, 1120];
+const REEL_STOP_MS = [420, 620, 820, 1020, 1220];
 /** Each Repeater step: cells spin for RESPIN_MS, then the result shows until the next step */
 const STEP_MS = 1500;
 const RESPIN_MS = 750;
@@ -91,7 +99,7 @@ function FlickerSymbol({ fast = true }: { fast?: boolean }) {
   }, [fast]);
   return (
     <span
-      className="text-5xl sm:text-6xl select-none"
+      className="text-[2.1rem] sm:text-5xl select-none"
       style={{ filter: fast ? "blur(2px) brightness(1.15)" : "brightness(1.1)", transform: fast ? `translateY(${jitter ? 6 : -6}px)` : undefined }}
     >
       {EMOJI[s]}
@@ -120,11 +128,11 @@ function ScrollingStrip({ spinId }: { spinId: number }) {
     return () => cancelAnimationFrame(raf);
   }, []);
   return (
-    <div className="absolute inset-0 overflow-hidden rounded-2xl bg-white/5 border border-white/10">
+    <div className="absolute inset-0 overflow-hidden rounded-xl sm:rounded-2xl bg-white/5 border border-white/10">
       <div ref={ref} className="absolute inset-x-0 top-0 will-change-transform" style={{ height: "400%", filter: "blur(2px) brightness(1.15)" }}>
         {strip.map((s, i) => (
           <div key={i} className="flex items-center justify-center" style={{ height: `${100 / strip.length}%` }}>
-            <span className="text-5xl sm:text-6xl select-none">{EMOJI[s]}</span>
+            <span className="text-[2.1rem] sm:text-5xl select-none">{EMOJI[s]}</span>
           </div>
         ))}
       </div>
@@ -145,7 +153,7 @@ function Reel({ col, symbols, spinning, cellSpinning, spinId, lineCells, scatter
 }) {
   return (
     <div className="relative" data-testid="reel">
-      <div className={`flex flex-col gap-2 sm:gap-3 ${spinning && !reducedMotion ? "opacity-0" : spinning ? "" : "reel-land"}`} key={`land-${spinId}-${spinning}`}>
+      <div className={`flex flex-col gap-1.5 sm:gap-2 ${spinning && !reducedMotion ? "opacity-0" : spinning ? "" : "reel-land"}`} key={`land-${spinId}-${spinning}`}>
         {symbols.map((s, r) => {
           const onLine = lineCells.has(r);
           const scatter = scatterRows.has(r);
@@ -154,7 +162,7 @@ function Reel({ col, symbols, spinning, cellSpinning, spinId, lineCells, scatter
           return (
             <div
               key={r}
-              className={`relative flex items-center justify-center aspect-square rounded-2xl border transition-colors duration-300 overflow-hidden ${
+              className={`relative flex items-center justify-center aspect-square rounded-xl sm:rounded-2xl border transition-colors duration-300 overflow-hidden ${
                 respinning ? "bg-white/10 border-white/20"
                   : held ? "bg-purple-500/25 border-purple-300 shadow-[0_0_22px_rgba(192,132,252,0.7)]"
                   : scatter ? "bg-red-500/25 border-red-400 shadow-[0_0_24px_rgba(239,68,68,0.6)]"
@@ -167,13 +175,13 @@ function Reel({ col, symbols, spinning, cellSpinning, spinId, lineCells, scatter
                 <FlickerSymbol fast={!reducedMotion} />
               ) : (
                 <span
-                  className={`text-5xl sm:text-6xl select-none ${scatter ? "scatter-hit" : onLine ? "symbol-winning" : ""} ${s === WILD_ID ? "wild-glow" : ""}`}
+                  className={`text-[2.1rem] sm:text-5xl select-none ${scatter ? "scatter-hit" : onLine ? "symbol-winning" : ""} ${s === WILD_ID ? "wild-glow" : ""}`}
                   style={{ filter: GLOW[s] }}
                 >
                   {EMOJI[s]}
                 </span>
               )}
-              {held && !respinning && <Lock className="absolute top-1 right-1 w-3.5 h-3.5 text-purple-200" aria-hidden />}
+              {held && !respinning && <Lock className="absolute top-0.5 right-0.5 w-3 h-3 text-purple-200" aria-hidden />}
             </div>
           );
         })}
@@ -229,15 +237,22 @@ export function SlotMachine() {
   const balance = state?.balance ?? 0;
   const freeSpins = state?.freeSpins ?? 0;
 
-  const [grid, setGrid] = useState<string[][]>([["dragon", "pearl", "lotus"], ["envelope", "pearl", "lantern"], ["lotus", "pearl", "dragon"]]);
-  const [colSpinning, setColSpinning] = useState([false, false, false]);
-  const [cellSpinning, setCellSpinning] = useState<boolean[][]>([[false, false, false], [false, false, false], [false, false, false]]);
+  const [grid, setGrid] = useState<string[][]>([
+    ["dragon", "lotus", "coin"], ["envelope", "dragon", "lantern"], ["lotus", "pearl", "dragon"], ["koi", "dragon", "drum"], ["dragon", "lantern", "envelope"],
+  ]);
+  const [colSpinning, setColSpinning] = useState(REEL_IDX.map(() => false));
+  const [cellSpinning, setCellSpinning] = useState<boolean[][]>(emptyCells);
   const [spinId, setSpinId] = useState(0);
   const [busy, setBusy] = useState(false);
   const [bet, setBet] = useState(BET_OPTIONS[0]);
   const [result, setResult] = useState<SpinResponse | null>(null);
   // What is lit up while a spin plays out, step by step
   const [shownLines, setShownLines] = useState<number[]>([]);
+  /** How many cells of each shown line are part of the win (from the left) */
+  const [lineCounts, setLineCounts] = useState<Record<number, number>>({});
+  const [showPicker, setShowPicker] = useState(false);
+  const [showGamble, setShowGamble] = useState(false);
+  const [showOracle, setShowOracle] = useState(false);
   const [held, setHeld] = useState<Set<string>>(new Set());
   const [chips, setChips] = useState<Chip[]>([]);
   const [showScatter, setShowScatter] = useState(false);
@@ -246,6 +261,8 @@ export function SlotMachine() {
   // The last big win stays shareable until the next one (or the player closes it)
   const [brag, setBrag] = useState<{ amount: number; multiple: number; jackpot: boolean; tier: WinTier } | null>(null);
   const [scatterBanner, setScatterBanner] = useState<SpinResponse | null>(null);
+  const scatterBannerRef = useRef(false);
+  scatterBannerRef.current = !!scatterBanner;
   const [shaking, setShaking] = useState(false);
   const [autoSpin, setAutoSpin] = useState(false);
   const [muted, setMuted] = useState(soundManager.isMuted());
@@ -261,7 +278,14 @@ export function SlotMachine() {
     if (affordable) setBet(affordable);
   }, [balance, bet, busy, freeSpins, state]);
 
-  const canSpin = !busy && !!state && (freeSpins > 0 || balance >= bet);
+  const pendingUnits = state?.pendingFreeSpinUnits ?? 0;
+  const gambleAmount = state?.gambleAmount ?? 0;
+  const canSpin = !busy && !!state && pendingUnits === 0 && (freeSpins > 0 || balance >= bet);
+
+  // Free spins won earlier (or before a reload) and still waiting for the pick
+  useEffect(() => {
+    if (pendingUnits > 0 && !busy && !scatterBannerRef.current) setShowPicker(true);
+  }, [pendingUnits, busy]);
 
   const later = (fn: () => void, ms: number) => {
     timers.current.push(window.setTimeout(fn, ms));
@@ -274,12 +298,18 @@ export function SlotMachine() {
     setHeld(new Set());
     setBalance(res.newBalance, {
       freeSpins: res.totalFreeSpins,
-      freeSpinBet: res.isFreeSpin || res.freeSpinsAwarded ? res.bet : state?.freeSpinBet ?? 0,
+      freeSpinBet: res.isFreeSpin || res.freeSpinUnits ? res.bet : state?.freeSpinBet ?? 0,
+      ...(res.isFreeSpin ? {} : { freeSpinMult: 1 }),
+      pendingFreeSpinUnits: res.pendingFreeSpinUnits,
+      gambleAmount: res.gambleAmount,
+      gambleRounds: 0,
       streak: res.streak,
       totalWins: res.totalWins,
       maxWin: res.maxWin,
       gamesPlayed: res.gamesPlayed,
       blessed: false,
+      blessing: 1,
+      oracleStick: null,
     });
     if (res.jackpotPool != null) {
       queryClient.setQueryData<JackpotResponse>(JACKPOT_KEY, (old) => (old ? { ...old, amount: res.jackpotPool! } : old));
@@ -308,14 +338,18 @@ export function SlotMachine() {
       soundManager.lossComfort();
     }
 
-    if (res.freeSpinsAwarded) {
+    if (res.freeSpinUnits) {
       later(() => {
         setScatterBanner(res);
         soundManager.freeSpin();
         soundManager.bonus();
         if (tier === "none" || tier === "small" || tier === "win") luckyRain(2400);
       }, OVERLAY_MS[tier] ? OVERLAY_MS[tier] - 400 : 150);
-      later(() => setScatterBanner(null), (OVERLAY_MS[tier] || 0) + 2600);
+      later(() => {
+        setScatterBanner(null);
+        // Won in the base game: the player picks how to take them
+        if (res.pendingFreeSpinUnits > 0) { setAutoSpin(false); setShowPicker(true); }
+      }, (OVERLAY_MS[tier] || 0) + 2600);
     }
     res.newAchievements.forEach((a) => toast({ title: `🏆 ${a.badgeName}`, description: a.description }));
   }, [setBalance, state?.freeSpinBet, toast]);
@@ -325,24 +359,23 @@ export function SlotMachine() {
     const step = res.steps[i];
     setGrid(step.grid);
     if (step.lineWins.length) {
-      setShownLines((l) => [...l, ...step.lineWins.map((w) => w.line)]);
-      setHeld((h) => {
-        const next = new Set(h);
-        step.lineWins.forEach((w) => PAYLINES[w.line].forEach((row, col) => next.add(`${col}-${row}`)));
-        return next;
-      });
+      setShownLines((l) => [...l.filter((x) => !step.lineWins.some((w) => w.line === x)), ...step.lineWins.map((w) => w.line)]);
+      setLineCounts((m) => ({ ...m, ...Object.fromEntries(step.lineWins.map((w) => [w.line, w.count])) }));
       setChips((c) => [
         ...c,
         ...step.lineWins.map((w) => ({
           key: `${i}-${w.line}`,
-          label: `${EMOJI[w.symbol].repeat(3)}${w.withWild ? " 🔮" : ""}`,
-          amount: w.amount * (res.blessed ? 2 : 1),
+          label: `${w.upgrade ? "⬆ " : ""}${EMOJI[w.symbol]}×${w.count}${w.withWild ? " 🔮" : ""}`,
+          amount: Math.floor(w.amount * (res.blessing || 1)) * (res.freeSpinMult || 1),
           color: LINE_COLORS[w.line],
           mult: step.multiplier,
         })),
       ]);
       if (i > 0) soundManager.multiplierHit(step.multiplier);
     }
+    // What stays locked for the next repeat (winning cells and sticky pearls)
+    const next = res.steps[i + 1];
+    if (next) setHeld(new Set(next.held));
     if (i === 0 && res.scatterCount >= 3) {
       setShowScatter(true);
       setChips((c) => [...c, { key: "scatter", label: `🧧×${res.scatterCount}`, amount: res.scatterWin, color: "#f87171", mult: 1 }]);
@@ -364,11 +397,13 @@ export function SlotMachine() {
     setScatterBanner(null);
     setRepeaterBanner(null);
     setShownLines([]);
+    setLineCounts({});
     setHeld(new Set());
     setChips([]);
     setShowScatter(false);
+    setShowGamble(false);
     setSpinId((n) => n + 1);
-    setColSpinning([true, true, true]);
+    setColSpinning(REEL_IDX.map(() => true));
     soundManager.spinStart();
     if (freeSpins === 0) setBalance(balance - bet); // show the stake leaving straight away
 
@@ -383,7 +418,7 @@ export function SlotMachine() {
         soundManager.reelStop();
       }, wait + ms));
 
-      const t0 = wait + REEL_STOP_MS[2] + 380;
+      const t0 = wait + REEL_STOP_MS[REELS - 1] + 380;
       later(() => showStep(res, 0), t0);
 
       // Repeater: each step locks the winners, re-spins the rest, then shows what it paid
@@ -393,11 +428,11 @@ export function SlotMachine() {
         later(() => {
           setRepeaterBanner(step.multiplier);
           const heldSet = new Set(step.held);
-          setCellSpinning([0, 1, 2].map((c) => [0, 1, 2].map((r) => !heldSet.has(`${c}-${r}`))));
+          setCellSpinning(REEL_IDX.map((c) => ROW_IDX.map((r) => !heldSet.has(`${c}-${r}`))));
           soundManager.spinStart();
         }, at);
         later(() => {
-          setCellSpinning([[false, false, false], [false, false, false], [false, false, false]]);
+          setCellSpinning(emptyCells());
           soundManager.reelStop();
           showStep(res, i);
         }, at + RESPIN_MS);
@@ -405,10 +440,11 @@ export function SlotMachine() {
       const end = res.steps.length > 1 ? t0 + 700 + (res.steps.length - 1) * STEP_MS - 300 : t0 + 150;
       later(() => finish(res), end);
     } catch (e) {
-      setColSpinning([false, false, false]);
+      setColSpinning(REEL_IDX.map(() => false));
       setBusy(false);
       setAutoSpin(false);
       queryClient.invalidateQueries({ queryKey: ["/api/game/state"] });
+      if (e instanceof ApiError && e.status === 409) { setShowPicker(true); return; }
       const msg = e instanceof ApiError && e.status === 400 ? t.insufficientBalanceDesc : (e as Error).message;
       toast({ title: t.error, description: msg, variant: "destructive" });
     }
@@ -434,21 +470,16 @@ export function SlotMachine() {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleSpin]);
 
-  const consultOracle = async () => {
+  const consultOracle = () => {
     soundManager.buttonClick();
-    try {
-      const r = await (await apiRequest("POST", "/api/game/oracle")).json();
-      if (r.granted) {
-        soundManager.bonus();
-        queryClient.setQueryData(["/api/game/state"], (old: any) => (old ? { ...old, blessed: true, lastOracleAt: new Date().toISOString() } : old));
-        toast({ title: `🐉 ${t.oracle}`, description: t.oracleBlessed });
-      } else {
-        const at = new Date(r.nextAvailableAt).toLocaleTimeString(lang === "vi" ? "vi-VN" : "en-GB", { hour: "2-digit", minute: "2-digit" });
-        toast({ title: `🐉 ${t.oracle}`, description: `${t.oracleCooldown} ${at}` });
-      }
-    } catch (e) {
-      toast({ title: t.error, description: (e as Error).message, variant: "destructive" });
-    }
+    setAutoSpin(false);
+    setShowOracle(true);
+  };
+
+  const onPicked = (r: PickResult) => {
+    setShowPicker(false);
+    queryClient.setQueryData(["/api/game/state"], (old: any) => (old ? { ...old, freeSpins: r.freeSpins, freeSpinBet: r.freeSpinBet || old.freeSpinBet, freeSpinMult: r.mult, pendingFreeSpinUnits: 0 } : old));
+    toast({ title: `🧧 ${r.spins} ${t.freeSpinsLeft} ×${r.mult}` });
   };
 
   const toggleMute = () => {
@@ -457,11 +488,11 @@ export function SlotMachine() {
   };
 
   // Which cells to light up, per column
-  const lineCellsByCol = [new Set<number>(), new Set<number>(), new Set<number>()];
-  shownLines.forEach((l) => PAYLINES[l].forEach((row, col) => lineCellsByCol[col].add(row)));
-  const scatterRowsByCol = [new Set<number>(), new Set<number>(), new Set<number>()];
+  const lineCellsByCol = REEL_IDX.map(() => new Set<number>());
+  shownLines.forEach((l) => PAYLINES[l].slice(0, lineCounts[l] ?? REELS).forEach((row, col) => lineCellsByCol[col].add(row)));
+  const scatterRowsByCol = REEL_IDX.map(() => new Set<number>());
   if (showScatter) grid.forEach((col, c) => col.forEach((s, r) => { if (s === SCATTER_ID) scatterRowsByCol[c].add(r); }));
-  const heldByCol = [new Set<number>(), new Set<number>(), new Set<number>()];
+  const heldByCol = REEL_IDX.map(() => new Set<number>());
   if (repeaterBanner !== null) held.forEach((k) => { const [c, r] = k.split("-").map(Number); heldByCol[c].add(r); });
 
   const lockedBet = freeSpins > 0 ? state?.freeSpinBet || bet : bet;
@@ -487,7 +518,7 @@ export function SlotMachine() {
         <div className="flex items-center gap-2">
           {state?.blessed && (
             <span className="text-[10px] sm:text-xs bg-purple-600 px-2 py-1 rounded-full text-white font-black animate-pulse" data-testid="badge-blessed">
-              {t.blessedBadge}
+              ✨ ×{state.blessing ?? 2} {t.blessedBadge}
             </span>
           )}
           <div className="text-right">
@@ -512,11 +543,11 @@ export function SlotMachine() {
 
         {freeSpins > 0 && (
           <div className="absolute left-1/2 -translate-x-1/2 -top-4 z-10 flex items-center gap-1 bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-1 rounded-full text-white text-xs font-black shadow-lg border-2 border-yellow-300" data-testid="badge-free-spins">
-            <Gift className="w-3.5 h-3.5" /> {t.freeSpinsMode} · {freeSpins}
+            <Gift className="w-3.5 h-3.5" /> {t.freeSpinsMode} · {freeSpins}{(state?.freeSpinMult ?? 1) > 1 ? ` · ×${state?.freeSpinMult}` : ""}
           </div>
         )}
 
-        <div className="relative grid grid-cols-3 gap-2 sm:gap-3 bg-black/60 rounded-[1.5rem] p-2 sm:p-3 my-2 border border-white/5 overflow-hidden">
+        <div className="relative grid grid-cols-5 gap-1.5 sm:gap-2 bg-black/60 rounded-[1.5rem] p-1.5 sm:p-3 my-2 border border-white/5 overflow-hidden">
           {grid.map((col, c) => (
             <Reel
               key={c}
@@ -533,14 +564,14 @@ export function SlotMachine() {
           ))}
 
           {/* Payline overlay: each winning line drawn as it pays */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 300" preserveAspectRatio="none">
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 500 300" preserveAspectRatio="none">
             {shownLines.map((l, i) => (
               <motion.polyline
-                key={`${spinId}-${l}`}
-                points={PAYLINES[l].map((row, col) => `${50 + col * 100},${50 + row * 100}`).join(" ")}
+                key={`${spinId}-${l}-${lineCounts[l]}`}
+                points={PAYLINES[l].slice(0, lineCounts[l] ?? REELS).map((row, col) => `${50 + col * 100},${50 + row * 100}`).join(" ")}
                 fill="none"
                 stroke={LINE_COLORS[l]}
-                strokeWidth={l === JACKPOT_LINE ? 7 : 6}
+                strokeWidth={l === 0 ? 7 : 5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 style={{ filter: `drop-shadow(0 0 6px ${LINE_COLORS[l]})` }}
@@ -622,7 +653,11 @@ export function SlotMachine() {
             >
               <div className="text-4xl">🧧🧧🧧</div>
               <div className="text-2xl sm:text-3xl font-black text-yellow-300 tracking-tight">{t.scatterWin}</div>
-              <div className="text-white font-black text-lg">+{scatterBanner.freeSpinsAwarded} {t.freeSpinsLeft}</div>
+              <div className="text-white font-black text-lg">
+                {scatterBanner.isFreeSpin
+                  ? `+${Math.floor(scatterBanner.freeSpinUnits / Math.max(1, scatterBanner.freeSpinMult))} ${t.freeSpinsLeft} ×${scatterBanner.freeSpinMult}`
+                  : lang === "vi" ? "🧧 Chọn lì xì của bạn!" : "🧧 Pick your envelope!"}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -633,7 +668,7 @@ export function SlotMachine() {
         {result && !busy ? (
           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="font-black text-lg">
             {result.winAmount > result.bet ? (
-              <span className="text-green-400">{t.youWon} {result.winAmount.toLocaleString()} 🪙{result.blessed ? " (×2)" : ""}</span>
+              <span className="text-green-400">{t.youWon} {result.winAmount.toLocaleString()} 🪙{result.blessing > 1 ? ` (✨×${result.blessing})` : ""}{result.freeSpinMult > 1 ? ` (🧧×${result.freeSpinMult})` : ""}</span>
             ) : result.winAmount > 0 ? (
               <span className="text-yellow-200/70">{t.smallWin} +{result.winAmount.toLocaleString()} · {t.bet} {result.bet.toLocaleString()}</span>
             ) : (
@@ -681,6 +716,20 @@ export function SlotMachine() {
             </button>
           ))}
         </div>
+        {gambleAmount > 0 && !busy && freeSpins === 0 && (
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => { setAutoSpin(false); setShowGamble(true); soundManager.buttonClick(); }}
+            className="w-full mb-3 py-2.5 rounded-2xl bg-gradient-to-r from-red-700 via-red-600 to-red-700 border-2 border-yellow-300 text-white font-black shadow-[0_0_20px_rgba(239,68,68,0.5)] flex items-center justify-center gap-2"
+            data-testid="button-gamble"
+          >
+            <span className="text-xl">🥣</span>
+            {lang === "vi" ? `Xóc Đĩa: nhân đôi ${gambleAmount.toLocaleString()}?` : `Xóc Đĩa: double ${gambleAmount.toLocaleString()}?`}
+            <span className="text-xs bg-yellow-300 text-black rounded-full px-2 py-0.5">×{GAMBLE_PAYS.chan} / ×{GAMBLE_PAYS.tu_do}</span>
+          </motion.button>
+        )}
         <div className="flex gap-3">
           <Button
             onClick={handleSpin}
@@ -704,7 +753,6 @@ export function SlotMachine() {
           </Button>
           <Button
             onClick={consultOracle}
-            disabled={state?.blessed}
             aria-label={t.oracle}
             className="h-16 w-16 sm:w-20 rounded-2xl bg-purple-900/40 border-2 border-purple-500/50 text-purple-300 hover:bg-purple-800/50 flex-col gap-0"
             data-testid="button-oracle"
@@ -730,6 +778,26 @@ export function SlotMachine() {
         </div>
       )}
 
+      {showPicker && pendingUnits > 0 && (
+        <FreeSpinPicker units={pendingUnits} bet={state?.freeSpinBet || bet} onPicked={onPicked} />
+      )}
+      {showGamble && gambleAmount > 0 && (
+        <XocDia
+          amount={gambleAmount}
+          rounds={state?.gambleRounds ?? 0}
+          onBalance={(b, amount, rounds) => setBalance(b, { gambleAmount: amount, gambleRounds: rounds })}
+          onClose={() => { setShowGamble(false); queryClient.setQueryData(["/api/game/state"], (old: any) => (old ? { ...old, gambleAmount: 0 } : old)); }}
+        />
+      )}
+      {showOracle && (
+        <Oracle
+          lastOracleAt={state?.lastOracleAt ?? null}
+          waitingStick={state?.blessed ? state?.oracleStick ?? null : null}
+          onBlessed={(stick, blessing) => queryClient.setQueryData(["/api/game/state"], (old: any) => (old ? { ...old, blessed: true, blessing, oracleStick: stick, lastOracleAt: new Date().toISOString() } : old))}
+          onClose={() => setShowOracle(false)}
+        />
+      )}
+
       <Dialog open={showPaytable} onOpenChange={setShowPaytable}>
         <DialogContent className="bg-[#140a2e] border-yellow-500/30 text-yellow-50 max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -737,22 +805,28 @@ export function SlotMachine() {
             <DialogDescription className="text-yellow-100/70">{t.paytableIntro}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
+            <div className="grid grid-cols-[1fr_repeat(3,minmax(0,4.5rem))] gap-x-2 text-[10px] font-black text-yellow-100/50 uppercase px-3">
+              <span>{t.bet} {fmtBet(lockedBet)}</span><span className="text-right">×3</span><span className="text-right">×4</span><span className="text-right">×5</span>
+            </div>
             {SLOT_SYMBOLS.filter((s) => s.kind !== "scatter").map((s) => (
-              <div key={s.id} className={`flex items-center justify-between rounded-xl px-4 py-2 ${s.kind === "wild" ? "bg-purple-500/20 border border-purple-400/40" : "bg-white/5"}`}>
-                <span className="text-2xl tracking-widest">
-                  {EMOJI[s.id].repeat(3)}
-                  {s.kind === "wild" && <span className="ml-2 text-[10px] font-black tracking-normal text-purple-200 align-middle">{t.wild}</span>}
+              <div key={s.id} className={`grid grid-cols-[1fr_repeat(3,minmax(0,4.5rem))] gap-x-2 items-center rounded-xl px-3 py-2 ${s.kind === "wild" ? "bg-purple-500/20 border border-purple-400/40" : "bg-white/5"}`}>
+                <span className="text-2xl">
+                  {EMOJI[s.id]}
+                  {s.kind === "wild" && <span className="ml-1.5 text-[10px] font-black text-purple-200 align-middle">{t.wild}</span>}
                 </span>
-                <span className="text-right">
-                  <span className="block font-mono font-black text-yellow-400">{Math.floor(s.pays * lockedBet).toLocaleString()}</span>
-                  <span className="block text-[10px] text-yellow-100/50">×{s.pays} · {t.bet} {fmtBet(lockedBet)}</span>
-                </span>
+                {s.pays.map((m, k) => (
+                  <span key={k} className="text-right leading-tight">
+                    <span className="block font-mono font-black text-yellow-400 text-sm">{Math.floor(m * lockedBet).toLocaleString()}</span>
+                    <span className="block text-[9px] text-yellow-100/40">×{m}</span>
+                  </span>
+                ))}
               </div>
             ))}
           </div>
           <p className="text-sm text-purple-200/90">{t.paytableWild}</p>
 
           <p className="text-sm text-fuchsia-200/90 mt-1">{t.paytableRepeater}</p>
+          <div className="text-center text-xl tracking-widest">{"🔮".repeat(REPEATER_PEARLS)} → 🐉</div>
           <div className="flex justify-center gap-1.5">
             {REPEATER_MULTIPLIERS.map((m) => (
               <span key={m} className="px-2.5 py-1 rounded-lg bg-fuchsia-600/30 border border-fuchsia-400/50 font-black text-yellow-200 text-sm">×{m}</span>
@@ -762,7 +836,7 @@ export function SlotMachine() {
           <p className="text-sm text-yellow-200/90 mt-1">{t.paytableJackpot}</p>
           <div className="flex items-center justify-center gap-2 rounded-xl bg-red-800/40 border border-yellow-400/40 py-1.5">
             <span className="text-xs text-yellow-100/70">{t.jackpotName}</span>
-            <span className="text-xl tracking-widest">🔮🔮🔮</span>
+            <span className="text-xl tracking-widest">🔮🔮🔮⬜⬜</span>
             <span className="text-[10px] text-yellow-100/60">{fmtBet(JACKPOT_FULL_BET)} = 100%</span>
           </div>
 
@@ -771,19 +845,20 @@ export function SlotMachine() {
             {[...SCATTER_PAYS].reverse().map((tier) => (
               <div key={tier.count} className="flex items-center justify-between bg-red-500/15 border border-red-400/30 rounded-xl px-4 py-1.5">
                 <span className="text-xl">{"🧧".repeat(tier.count)}<span className="text-[10px] text-red-200 ml-1">{tier.count === 5 ? "5+" : ""}</span></span>
-                <span className="font-mono font-black text-yellow-400 text-sm">×{tier.pays} + {tier.freeSpins} 🎁</span>
+                <span className="font-mono font-black text-yellow-400 text-sm">×{tier.pays} + 🎁 {FREE_SPIN_OPTIONS.map((o) => `${tier.units / o.mult}×${o.mult}`).join(" / ")}</span>
               </div>
             ))}
           </div>
           <div className="grid grid-cols-5 gap-2 my-2">
             {PAYLINES.map((line, l) => (
-              <svg key={l} viewBox="0 0 30 30" className="w-full bg-white/5 rounded">
-                {[0, 1, 2].flatMap((c) => [0, 1, 2].map((r) => <rect key={`${c}${r}`} x={c * 10 + 1} y={r * 10 + 1} width={8} height={8} rx={1.5} fill={line[c] === r ? LINE_COLORS[l] : "rgba(255,255,255,0.1)"} />))}
+              <svg key={l} viewBox="0 0 50 30" className="w-full bg-white/5 rounded">
+                {REEL_IDX.flatMap((c) => ROW_IDX.map((r) => <rect key={`${c}${r}`} x={c * 10 + 1} y={r * 10 + 1} width={8} height={8} rx={1.5} fill={line[c] === r ? LINE_COLORS[l] : "rgba(255,255,255,0.1)"} />))}
               </svg>
             ))}
           </div>
           <p className="text-sm text-yellow-100/70">{t.paytableFree}</p>
-          <p className="text-sm text-yellow-100/70">{t.oracleBlessed}.</p>
+          <p className="text-sm text-yellow-100/70">🎋 {t.oracleBlessed}.</p>
+          <p className="text-sm text-yellow-100/70">🥣 {lang === "vi" ? `Xóc Đĩa nhân đôi: sau mỗi lượt thắng, bạn có thể đặt tiền thắng (hoặc một nửa) vào bốn đồng xu: Chẵn/Lẻ ×${GAMBLE_PAYS.chan}, Tứ Đỏ/Tứ Trắng ×${GAMBLE_PAYS.tu_do}, tối đa 5 lần. Tỷ lệ công bằng tuyệt đối.` : `Xóc Đĩa double-up: after a win you can stake it (or half) on four coins: even/odd ×${GAMBLE_PAYS.chan}, four of a colour ×${GAMBLE_PAYS.tu_do}, up to 5 times. Exactly fair odds.`}</p>
           <p className="text-xs text-yellow-100/50">{t.rtpNote}</p>
         </DialogContent>
       </Dialog>

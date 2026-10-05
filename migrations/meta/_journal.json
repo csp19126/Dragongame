@@ -57,6 +57,13 @@
       "when": 1791143762717,
       "tag": "0007_tournaments",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791168155917,
+      "tag": "0008_slot_features",
+      "breakpoints": true
     }
   ]
 }

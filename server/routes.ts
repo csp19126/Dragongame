@@ -8,10 +8,12 @@ import { publicView } from "./blackjack";
 import { registerPoolRoutes } from "./pool";
 import { registerCommunityRoutes, applyReferral, communityStats } from "./community";
 import { registerTournamentRoutes } from "./tournament";
+import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
+import { GRADE_BLESSING } from "@shared/oracle";
 import {
   BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
-  ORACLE_WIN_MULTIPLIER, DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, BASE_RTP, TOTAL_RTP,
-  JACKPOT_LINE, JACKPOT_CONTRIBUTION, JACKPOT_FULL_BET, JACKPOT_SEED, type User, type PublicUser,
+  DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, REPEATER_PEARLS, BASE_RTP, TOTAL_RTP, FREE_SPIN_OPTIONS,
+  JACKPOT_ROW, JACKPOT_CONTRIBUTION, JACKPOT_FULL_BET, JACKPOT_SEED, type User, type PublicUser,
 } from "@shared/schema";
 
 declare module "express-session" {
@@ -134,10 +136,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       scatterPays: SCATTER_PAYS,
       bets: BET_OPTIONS,
       repeaterMultipliers: REPEATER_MULTIPLIERS,
-      jackpot: { line: JACKPOT_LINE, contribution: JACKPOT_CONTRIBUTION, fullBet: JACKPOT_FULL_BET, seed: JACKPOT_SEED },
+      repeaterPearls: REPEATER_PEARLS,
+      freeSpinOptions: FREE_SPIN_OPTIONS,
+      jackpot: { row: JACKPOT_ROW, contribution: JACKPOT_CONTRIBUTION, fullBet: JACKPOT_FULL_BET, seed: JACKPOT_SEED },
       maxWinMultiple: MAX_WIN_MULTIPLE,
       rtp: { base: BASE_RTP, total: TOTAL_RTP },
-      oracleMultiplier: ORACLE_WIN_MULTIPLIER,
+      oracleBlessings: GRADE_BLESSING,
+      gamblePays: GAMBLE_PAYS,
     });
   });
 
@@ -164,6 +169,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       freeSpins: state?.freeSpins ?? 0,
       freeSpinBet: state?.freeSpinBet ?? 0,
       blessed: (state?.activeModifier ?? 100) > 100,
+      blessing: (state?.activeModifier ?? 100) > 100 ? (state?.activeModifier ?? 100) / 100 : 1,
+      oracleStick: (state?.activeModifier ?? 100) > 100 ? state?.oracleStick ?? null : null,
+      freeSpinMult: state?.freeSpinMult ?? 1,
+      pendingFreeSpinUnits: state?.freeSpinUnits ?? 0,
+      gambleAmount: state?.gambleAmount ?? 0,
+      gambleRounds: state?.gambleRounds ?? 0,
       lastOracleAt: state?.lastOracleAt ?? null,
       lastDailyBonusAt: user.lastDailyBonusAt,
     });
@@ -176,6 +187,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const result = await storage.spin(user.id, bet);
     if ("error" in result) {
+      if (result.error === "pick_free_spins") return res.status(409).json({ message: "Pick your free spins first", code: result.error });
       return res.status(400).json({ message: "Insufficient balance", code: result.error });
     }
     const multiple = result.winAmount / result.bet;
@@ -253,6 +265,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/game/oracle", requireUser, async (_req, res) => {
     const r = await storage.consultOracle(res.locals.user.id);
     res.json(r);
+  });
+
+  // Chọn Lì Xì: how to take the free spins just won
+  app.post("/api/game/free-spins/pick", requireUser, async (req, res) => {
+    const choice = req.body?.choice;
+    if (!["steady", "bold", "daring", "mystery"].includes(choice)) return res.status(400).json({ message: "Invalid choice" });
+    const r = await storage.pickFreeSpins(res.locals.user.id, choice);
+    if (!r) return res.status(409).json({ message: "No free spins to pick" });
+    res.json(r);
+  });
+
+  // Xóc Đĩa double-up on the last win
+  app.post("/api/game/gamble", requireUser, async (req, res) => {
+    const pick = req.body?.pick;
+    if (!GAMBLE_PICKS.includes(pick)) return res.status(400).json({ message: "Invalid pick" });
+    const r = await storage.gamble(res.locals.user.id, pick, req.body?.half === true);
+    if ("error" in r) {
+      const msg = ({ nothing_to_gamble: "Nothing to double up", no_more_rounds: "That's the last round", too_big: "That's over the double-up limit" } as Record<string, string>)[r.error as string];
+      return res.status(409).json({ message: msg, code: r.error });
+    }
+    if (r.won) recordBigWin(res.locals.user, r.payout, r.stake);
+    res.json(r);
+  });
+
+  app.post("/api/game/gamble/collect", requireUser, async (_req, res) => {
+    await storage.collectGamble(res.locals.user.id);
+    res.json({ ok: true });
   });
 
   app.get("/api/game/leaderboard", async (_req, res) => {
