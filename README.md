@@ -121,19 +121,23 @@ and are never in this repository. A link like `/auth?code=VN888-XXXX-XXXX` pre-f
 
 ## The game
 
-- **5 reels × 3 rows, 20 paylines.** 3, 4 or 5 of a kind in a row from the leftmost reel pays the
-  multiple of the bet in the in-game paytable (🐉 ×2 / ×12 / ×100, 🥁 ×0.8 / ×4 / ×20, 🌸, 🏮, 🐟, 🪙).
-  Every amount is a multiple of the bet, so a 1M bet pays 1,000 times what a 1K bet pays.
+- **5 reels × 3 rows, 10 paylines.** 3, 4 or 5 of a kind in a row from the leftmost reel pays the
+  multiple of the bet in the in-game paytable. The smallest prize is about the bet (🐟/🪙 ×0.8-1), so
+  almost every win gives at least the stake back: 29% of spins pay, 21% are a profit.
+- **🔒 GIỮ CUỘN (HOLD), like a pub fruit machine:** after a losing paid spin, 1 time in 5 the player
+  may hold up to 2 reels for the next spin at the same bet (so it can't be farmed by raising the
+  bet). Holds never follow a win or a held spin. Choices matter: `bestHold()` works out the exact
+  value of every hold, and the published RTP is for those best holds.
 - **🔮 Dragon Pearl (wild):** stands in for any symbol on a line, and a run of pearls pays by itself
   (×8 / ×40 / ×400); a line pays whichever reading is worth more.
-- **🐉 Rồng Lặp (Repeater):** 3 or more 🔮 anywhere wake the dragon (about 1 spin in 160). The pearls
+- **🐉 Rồng Lặp (Repeater):** 3 or more 🔮 anywhere wake the dragon (about 1 spin in 350). The pearls
   stick, winning cells lock and every other cell re-spins for free. Each new winning line, or a line
   that grows longer (it pays the extra), pays ×2, then ×3, ×5, ×8, ×12; the chain continues while
   each repeat adds something. Pearls that land during repeats stick too.
 - **🏺 Hũ Rồng progressive jackpot:** 1% of every paid bet feeds a shared pot that never drops below
   100,000,000. Three 🔮 on the middle row of reels 1-3, on the spin or any repeat, wins a share that
   grows with the bet: bet ÷ 1M of the pot (1K → 0.1%, 100K → 10%, 1M → the whole pot).
-- **🧧 Red envelope (scatter) and Chọn Lì Xì:** pays anywhere: 3 → ×1, 4 → ×4, 5+ → ×20, plus 12 / 24 / 40
+- **🧧 Red envelope (scatter) and Chọn Lì Xì:** pays anywhere: 3 → ×1, 4 → ×4, 5+ → ×20, plus 8 / 16 / 32
   free-spin units. The player picks how to take them: all the spins at ×1, half at ×2, a quarter at
   ×4, or a mystery envelope (one of those at random). Spins × multiplier is the same, so every pick
   is worth the same on average. More envelopes during free spins add spins at the same multiplier.
@@ -147,11 +151,11 @@ and are never in this repository. A link like `/auth?code=VN888-XXXX-XXXX` pre-f
 - 50,000 coins on sign-up, 50,000 more every 20 hours, plus admin-created promo codes.
 - Every cell is drawn independently with Node's `crypto.randomInt`. No near-miss forcing, no
   per-player tuning.
-- **Return to player: 96.0% from the game + 1% through the jackpot = 97.0%.** Measured over 40M
-  simulated spins (±0.2%) and re-checked against the real engine (`npm run rtp`); tests check the
-  first-spin line pays against the exact value worked out from the paytable, and the whole game
-  against the published figure. About 48% of spins pay something, 13% are a profit, 1 in 140 pays
-  10× or more, max seen about 9,800×.
+- **Return to player: 96.6% with the best holds (87.7% never holding) + 1% through the jackpot.**
+  Measured over 40M simulated spins each way (±0.1%) and re-checked against the real engine
+  (`npm run rtp`); tests check the hold maths against full enumeration, the first-spin line pays
+  against the exact value from the paytable, and the whole game against both published figures.
+  1 in 94 spins pays 10× or more; max seen about 4,300×.
 - Celebrations scale with the win (coin pop → BIG WIN fireworks → MEGA WIN → DRAGON FORTUNE →
   NỔ HŨ for the jackpot). Spins that pay back less than the bet are labelled honestly as small
   wins and are not celebrated. Reels are animated from JavaScript, so they spin even on phones

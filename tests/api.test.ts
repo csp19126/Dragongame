@@ -966,13 +966,15 @@ describe.skipIf(!TEST_DB)("API", () => {
       const user = await p.register();
       const r = await storage.spin(user.id, 10000, (bet, o) => spin(bet, { ...o, startGrid: LINE_WIN, rng: envelopesRng() }));
       if ("error" in r) throw new Error(r.error);
-      expect(r.winAmount).toBe(3000); // 3 lanterns x 0.3
-      expect(r.gambleAmount).toBe(3000);
-      expect((await p.state()).gambleAmount).toBe(3000);
+      const { payOf } = await import("../shared/schema");
+      const lanterns = Math.floor(payOf("lantern", 3) * 10000);
+      expect(r.winAmount).toBe(lanterns); // 3 lanterns on the middle line
+      expect(r.gambleAmount).toBe(lanterns);
+      expect((await p.state()).gambleAmount).toBe(lanterns);
       expect((await p.req("POST", "/api/game/gamble", { pick: "red" })).status).toBe(400);
 
       let balance = (await p.state()).balance;
-      let pot = 3000;
+      let pot = lanterns;
       let rounds = 0;
       // Keep going (half stakes) until a loss or the round limit
       while (true) {
@@ -1019,6 +1021,42 @@ describe.skipIf(!TEST_DB)("API", () => {
       }
       // Binomial(400, 1/2): 5 standard deviations is +-50
       expect(Math.abs(wins - N / 2)).toBeLessThan(50);
+    });
+  });
+  describe("GIỮ CUỘN (HOLD)", () => {
+    it("is offered only after a losing paid spin, and a held spin keeps the held reels at the same bet", async () => {
+      const p = new Player();
+      const user = await p.register();
+      await setBalance(p.username, 10_000_000);
+      let offers = 0;
+      for (let i = 0; i < 60; i++) {
+        const r = (await p.play(BET)).body;
+        if (r.holdOffer) {
+          offers++;
+          expect(r.winAmount).toBe(0);
+          expect(r.isFreeSpin).toBe(false);
+          expect(r.holdBet).toBe(BET);
+        }
+      }
+      expect(offers).toBeGreaterThan(0);
+
+      // Offer a known grid
+      const grid = [["dragon", "pearl", "lotus"], ["koi", "pearl", "drum"], ["lotus", "drum", "koi"], ["drum", "lotus", "lantern"], ["lantern", "koi", "dragon"]];
+      await pool.query("update game_states set hold_grid = $1, hold_bet = $2, free_spins = 0, free_spin_units = 0 where user_id = $3", [JSON.stringify(grid), 5000, user.id]);
+      expect((await p.state())).toMatchObject({ holdOffer: true, holdBet: 5000 });
+      expect((await p.req("POST", "/api/game/spin", { betAmount: 1000, hold: [0, 1] })).body.code).toBe("bad_hold"); // must be the same bet
+      expect((await p.req("POST", "/api/game/spin", { betAmount: 5000, hold: [0, 1, 2] })).body.code).toBe("bad_hold"); // at most 2 reels
+      expect((await p.req("POST", "/api/game/spin", { betAmount: 5000, hold: [0, 0] })).body.code).toBe("bad_hold");
+      expect((await p.req("POST", "/api/game/spin", { betAmount: 5000, hold: [7] })).body.code).toBe("bad_hold");
+      const before = (await p.state()).balance;
+      const held = await p.req("POST", "/api/game/spin", { betAmount: 5000, hold: [0, 1] });
+      expect(held.status).toBe(200);
+      expect(held.body.heldReels).toEqual([0, 1]);
+      expect(held.body.steps[0].grid[0]).toEqual(grid[0]);
+      expect(held.body.steps[0].grid[1]).toEqual(grid[1]);
+      expect(held.body.newBalance).toBe(before - 5000 + held.body.winAmount);
+      expect(held.body.holdOffer).toBe(false); // never straight after a held spin
+      expect((await p.req("POST", "/api/game/spin", { betAmount: 5000, hold: [0] })).body.code).toBe("no_hold");
     });
   });
 });

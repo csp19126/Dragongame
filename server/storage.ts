@@ -4,7 +4,7 @@ import {
   chatMessages, chatReports, userStickers, stickerRewards, tournamentPlayers,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
-  JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare, FREE_SPIN_OPTIONS, type FreeSpinChoice,
+  JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare, FREE_SPIN_OPTIONS, HOLD_CHANCE, HOLD_MAX_REELS, REELS, type FreeSpinChoice,
 } from "@shared/schema";
 import { GAMBLE_MAX_ROUNDS, GAMBLE_MAX_STAKE, GAMBLE_PAYS, gambleWins, type GamblePick } from "@shared/gamble";
 import { STICKS, GRADE_BLESSING } from "@shared/oracle";
@@ -61,6 +61,11 @@ export interface SpinResult extends SpinOutcome {
   pendingFreeSpinUnits: number;
   /** The win that can be taken to the Xóc Đĩa double-up (0 when it can't) */
   gambleAmount: number;
+  /** HOLD is offered for the next spin, at this bet */
+  holdOffer: boolean;
+  holdBet: number | null;
+  /** Reels held for this spin */
+  heldReels: number[];
   newBalance: number;
   totalFreeSpins: number;
   streak: number;
@@ -70,7 +75,7 @@ export interface SpinResult extends SpinOutcome {
   newAchievements: Achievement[];
 }
 
-export type SpinError = { error: "insufficient_balance" | "no_user" | "pick_free_spins" };
+export type SpinError = { error: "insufficient_balance" | "no_user" | "pick_free_spins" | "no_hold" | "bad_hold" };
 
 export interface TableStats {
   newBalance: number;
@@ -136,7 +141,7 @@ export class DatabaseStorage {
    * stake without paying the win.
    */
   /** `play` is only overridden by tests (to force a specific grid); the game always uses the real RNG. */
-  async spin(userId: string, requestedBet: number, play: typeof runSpin = runSpin): Promise<SpinResult | SpinError> {
+  async spin(userId: string, requestedBet: number, play: typeof runSpin = runSpin, holdReels: number[] = []): Promise<SpinResult | SpinError> {
     const state = await this.ensureGameState(userId);
 
     return db.transaction(async (tx) => {
@@ -147,6 +152,13 @@ export class DatabaseStorage {
       const [row] = await tx.select().from(gameStates).where(eq(gameStates.id, state.id)).for("update");
       // Free spins won but not yet picked: the player chooses before spinning again
       if (row.freeSpinUnits > 0) return { error: "pick_free_spins" } as SpinError;
+      // HOLD: only when one was offered, on a paid spin, at the bet it was offered at
+      const holding = holdReels.length > 0;
+      if (holding) {
+        if (!row.holdGrid || (row.freeSpins ?? 0) > 0) return { error: "no_hold" } as SpinError;
+        const ok = holdReels.length <= HOLD_MAX_REELS && new Set(holdReels).size === holdReels.length && holdReels.every((r) => Number.isInteger(r) && r >= 0 && r < REELS);
+        if (!ok || requestedBet !== row.holdBet) return { error: "bad_hold" } as SpinError;
+      }
 
       // 1. Pay for the spin: free spin first, otherwise stake from balance
       let isFreeSpin = false;
@@ -172,7 +184,8 @@ export class DatabaseStorage {
       const blessed = blessing > 1;
 
       // 3. Spin (Rồng Lặp included); free spins carry the multiplier the player picked
-      const outcome = play(bet, { blessing, freeSpinMult: isFreeSpin ? row.freeSpinMult : 1 });
+      const hold = holding && !isFreeSpin ? { grid: row.holdGrid!, reels: Array.from({ length: REELS }, (_, r) => holdReels.includes(r)) } : undefined;
+      const outcome = play(bet, { blessing, freeSpinMult: isFreeSpin ? row.freeSpinMult : 1, hold });
 
       // 3b. Jackpot: paid spins feed the pot; middle-row pearls win it
       const contribution = isFreeSpin ? 0 : Math.floor(bet * JACKPOT_CONTRIBUTION);
@@ -197,7 +210,11 @@ export class DatabaseStorage {
       const units = outcome.freeSpinUnits;
       // 4b. Double-up: a paid spin's win can be staked on Xóc Đĩa (not a jackpot, not mid-feature)
       const gambleAmount = !isFreeSpin && units === 0 && jackpotWin === 0 && outcome.winAmount > 0 ? outcome.winAmount : 0;
+      // 4c. HOLD offer for the next spin: now and then after a losing paid spin that wasn't itself held
+      const offerHold = !isFreeSpin && !hold && outcome.winAmount === 0 && units === 0 && jackpotWin === 0 && randomInt(HOLD_CHANCE) === 0;
       const [gs] = await tx.update(gameStates).set({
+        holdGrid: offerHold ? outcome.grid : null,
+        holdBet: offerHold ? bet : null,
         ...(retrigger ? { freeSpins: sql`${gameStates.freeSpins} + ${Math.floor(units / Math.max(1, row.freeSpinMult))}` } : {}),
         ...(!isFreeSpin && units > 0 ? { freeSpinUnits: units, freeSpinBet: bet } : {}),
         gambleAmount,
@@ -252,6 +269,9 @@ export class DatabaseStorage {
         blessed,
         pendingFreeSpinUnits: gs.freeSpinUnits,
         gambleAmount,
+        holdOffer: offerHold,
+        holdBet: offerHold ? bet : null,
+        heldReels: hold ? holdReels : [],
         newBalance: user.balance,
         totalFreeSpins: gs.freeSpins ?? 0,
         streak: user.streak,

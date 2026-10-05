@@ -23,6 +23,9 @@ export interface GameStateResponse {
   pendingFreeSpinUnits: number;
   gambleAmount: number;
   gambleRounds: number;
+  /** HOLD offered for the next spin, at this bet */
+  holdOffer: boolean;
+  holdBet: number | null;
   lastOracleAt: string | null;
   lastDailyBonusAt: string | null;
 }
@@ -63,6 +66,9 @@ export interface SpinResponse {
   freeSpinMult: number;
   blessing: number;
   gambleAmount: number;
+  holdOffer: boolean;
+  holdBet: number | null;
+  heldReels: number[];
   dragonLine: boolean;
   bet: number;
   isFreeSpin: boolean;
@@ -101,8 +107,8 @@ export function useSetBalance() {
 export function useSpin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (betAmount: number) =>
-      (await apiRequest("POST", "/api/game/spin", { betAmount })).json() as Promise<SpinResponse>,
+    mutationFn: async ({ betAmount, hold }: { betAmount: number; hold?: number[] }) =>
+      (await apiRequest("POST", "/api/game/spin", { betAmount, ...(hold?.length ? { hold } : {}) })).json() as Promise<SpinResponse>,
     onSuccess: (data) => {
       // Balance is applied by the slot machine once the reels stop, so the
       // header doesn't reveal the result before the animation does.

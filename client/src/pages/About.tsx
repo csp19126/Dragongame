@@ -10,7 +10,7 @@ export default function About() {
   const vi = lang === "vi";
 
   const stats = [
-    { value: vi ? "97,0%" : "97.0%", label: vi ? "Tỷ lệ hoàn trả" : "Return to player" },
+    { value: vi ? "97,6%" : "97.6%", label: vi ? "Tỷ lệ hoàn trả" : "Return to player" },
     { value: "9", label: vi ? "Hàng thưởng" : "Paylines" },
     { value: `${MAX_WIN_MULTIPLE.toLocaleString()}×`, label: vi ? "Thưởng tối đa" : "Max payout" },
     { value: "0đ", label: vi ? "Chi phí" : "Cost to play" },

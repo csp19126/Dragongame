@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { spin, lineWinsFor, scatterFor, pickSymbol, evalLine, pearlCount, type Rng } from "../server/game";
+import { spin, lineWinsFor, scatterFor, pickSymbol, evalLine, pearlCount, holdEV, bestHold, randomGrid, type Rng, type Hold } from "../server/game";
 import {
   SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, REPEATER_MULTIPLIERS, REPEATER_PEARLS, BASE_RTP, JACKPOT_ROW, REELS, ROWS,
-  FREE_SPIN_OPTIONS, payOf,
+  FREE_SPIN_OPTIONS, payOf, HOLD_CHANCE, HOLD_MAX_REELS, RTP_WITHOUT_HOLD,
 } from "../shared/schema";
 import { GAMBLE_PICKS, GAMBLE_PAYS, gambleWins } from "../shared/gamble";
 import { STICKS, GRADE_BLESSING, ADVICE, TOPICS } from "../shared/oracle";
@@ -40,9 +40,9 @@ const NOTHING = fromRows([
 ]);
 
 describe("reels and paylines", () => {
-  it("has 5 reels of 3 rows and 20 different paylines", () => {
-    expect(PAYLINES).toHaveLength(20);
-    expect(new Set(PAYLINES.map((l) => l.join(""))).size).toBe(20);
+  it("has 5 reels of 3 rows and 10 different paylines", () => {
+    expect(PAYLINES).toHaveLength(10);
+    expect(new Set(PAYLINES.map((l) => l.join(""))).size).toBe(10);
     for (const l of PAYLINES) {
       expect(l).toHaveLength(REELS);
       l.forEach((r) => expect([0, 1, 2]).toContain(r));
@@ -282,6 +282,64 @@ describe("Xin Xăm oracle", () => {
   });
 });
 
+describe("GIỮ CUỘN (HOLD)", () => {
+  /** Full enumeration of every symbol on the unheld cells of each line */
+  function enumerate(grid: string[][], reels: boolean[]): number {
+    const total = SLOT_SYMBOLS.reduce((a, s) => a + s.weight, 0);
+    return PAYLINES.reduce((sum, line) => {
+      let ev = 0;
+      const walk = (cells: string[], p: number) => {
+        const i = cells.length;
+        if (i === 5) { ev += p * (evalLine(cells)?.value ?? 0); return; }
+        if (reels[i]) return walk([...cells, grid[i][line[i]]], p);
+        for (const s of SLOT_SYMBOLS) walk([...cells, s.id], (p * s.weight) / total);
+      };
+      walk([], 1);
+      return sum + ev;
+    }, 0);
+  }
+  let seed = 4242;
+  const rng: Rng = (max) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % max; };
+
+  it("works out exactly what a hold is worth", () => {
+    for (let t = 0; t < 12; t++) {
+      const g = randomGrid(rng);
+      const reels = [0, 1, 2, 3, 4].map((i) => [[0], [0, 1], [1, 3], [2], [], [0, 4]][t % 6].includes(i));
+      expect(holdEV(g, reels)).toBeCloseTo(enumerate(g, reels), 10);
+    }
+  });
+
+  it(`picks the best of all holds of up to ${HOLD_MAX_REELS} reels`, () => {
+    for (let t = 0; t < 20; t++) {
+      const g = randomGrid(rng);
+      const best = bestHold(g);
+      expect(best.reels.filter(Boolean).length).toBeLessThanOrEqual(HOLD_MAX_REELS);
+      for (let mask = 0; mask < 32; mask++) {
+        const reels = [0, 1, 2, 3, 4].map((b) => !!(mask & (1 << b)));
+        if (reels.filter(Boolean).length <= HOLD_MAX_REELS) expect(holdEV(g, reels)).toBeLessThanOrEqual(best.ev + 1e-9);
+      }
+    }
+  });
+
+  it("held reels keep their symbols and the rest spin", () => {
+    const from = copy(NOTHING);
+    const hold: Hold = { grid: from, reels: [true, false, true, false, false] };
+    const r = spin(BET, { hold, rng: envelopes() });
+    expect(r.steps[0].grid[0]).toEqual(from[0]);
+    expect(r.steps[0].grid[2]).toEqual(from[2]);
+    for (const reel of [1, 3, 4]) expect(r.steps[0].grid[reel]).toEqual(["envelope", "envelope", "envelope"]);
+  });
+
+  it("holding two pearls is worth far more than not holding", () => {
+    const g = copy(NOTHING);
+    g[0][1] = "pearl"; g[1][1] = "pearl";
+    const none = holdEV(g, [false, false, false, false, false]);
+    const pearls = holdEV(g, [true, true, false, false, false]);
+    expect(pearls).toBeGreaterThan(3 * none);
+    expect(bestHold(g).reels).toEqual([true, true, false, false, false]);
+  });
+});
+
 describe("random draw", () => {
   it("draws each symbol in proportion to its weight", () => {
     const total = SLOT_SYMBOLS.reduce((a, s) => a + s.weight, 0);
@@ -312,16 +370,34 @@ describe("return to player", () => {
     expect(Math.abs(won / N / BET - exact)).toBeLessThan(0.012);
   }, 120_000);
 
-  it("the whole game (Rồng Lặp and free spins) matches the published RTP", () => {
+  /** Plays N spins the way script/rtp.ts does, with or without the best holds */
+  function play(N: number, smart: boolean) {
     let paid = 0, won = 0, pending = 0;
-    for (let i = 0; i < 1_000_000; i++) {
-      if (pending > 0) pending--; else paid += BET;
-      const r = spin(BET);
+    let offer: string[][] | null = null;
+    let n = 0;
+    for (let i = 0; i < N; i++) {
+      const free = pending > 0;
+      let hold: Hold | undefined;
+      if (free) pending--;
+      else {
+        paid += BET;
+        if (offer && smart) { const b = bestHold(offer); if (b.reels.some(Boolean)) hold = { grid: offer, reels: b.reels }; }
+      }
+      const r = spin(BET, { hold });
       won += r.winAmount;
       pending += r.freeSpinUnits; // played at x1; every pick has the same spins x multiplier
+      offer = !free && !hold && r.winAmount === 0 && r.freeSpinUnits === 0 && n++ % HOLD_CHANCE === 0 ? r.grid : null;
     }
-    // Rồng Lặp makes this a swingy game (1M spins have a standard error near 0.9%), so the
-    // band is wide; the 40M-spin figure behind BASE_RTP comes from script/rtp.ts
-    expect(Math.abs(won / paid - BASE_RTP)).toBeLessThan(0.04);
+    return won / paid;
+  }
+
+  // Rồng Lặp makes this a swingy game (1M spins have a standard error near 0.6%), so the
+  // bands are wide; the 40M-spin figures behind the published numbers come from script/rtp.ts
+  it("with the best holds the whole game matches the published RTP", () => {
+    expect(Math.abs(play(1_000_000, true) - BASE_RTP)).toBeLessThan(0.035);
+  }, 300_000);
+
+  it("never holding returns the published lower figure", () => {
+    expect(Math.abs(play(1_000_000, false) - RTP_WITHOUT_HOLD)).toBeLessThan(0.035);
   }, 300_000);
 });

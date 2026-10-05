@@ -279,8 +279,14 @@ export function SlotMachine() {
   }, [balance, bet, busy, freeSpins, state]);
 
   const pendingUnits = state?.pendingFreeSpinUnits ?? 0;
+  // GIỮ CUỘN: reels the player has chosen to hold for the next spin
+  const holdOffer = !!state?.holdOffer && freeSpins === 0 && !!state?.holdBet;
+  const [holdPicks, setHoldPicks] = useState<number[]>([]);
+  useEffect(() => { if (!holdOffer) setHoldPicks([]); }, [holdOffer]);
+  const holding = holdOffer && holdPicks.length > 0;
+  const spinBet = holding ? state!.holdBet! : bet;
   const gambleAmount = state?.gambleAmount ?? 0;
-  const canSpin = !busy && !!state && pendingUnits === 0 && (freeSpins > 0 || balance >= bet);
+  const canSpin = !busy && !!state && pendingUnits === 0 && (freeSpins > 0 || balance >= spinBet);
 
   // Free spins won earlier (or before a reload) and still waiting for the pick
   useEffect(() => {
@@ -310,7 +316,10 @@ export function SlotMachine() {
       blessed: false,
       blessing: 1,
       oracleStick: null,
+      holdOffer: res.holdOffer,
+      holdBet: res.holdBet,
     });
+    if (res.holdOffer) { setAutoSpin(false); soundManager.bonus(); }
     if (res.jackpotPool != null) {
       queryClient.setQueryData<JackpotResponse>(JACKPOT_KEY, (old) => (old ? { ...old, amount: res.jackpotPool! } : old));
     }
@@ -403,13 +412,15 @@ export function SlotMachine() {
     setShowScatter(false);
     setShowGamble(false);
     setSpinId((n) => n + 1);
-    setColSpinning(REEL_IDX.map(() => true));
+    const heldNow = holding ? [...holdPicks] : [];
+    setColSpinning(REEL_IDX.map((c) => !heldNow.includes(c)));
+    setHoldPicks([]);
     soundManager.spinStart();
-    if (freeSpins === 0) setBalance(balance - bet); // show the stake leaving straight away
+    if (freeSpins === 0) setBalance(balance - spinBet, { holdOffer: false }); // show the stake leaving straight away
 
     const started = Date.now();
     try {
-      const res = await spinMutation.mutateAsync(bet);
+      const res = await spinMutation.mutateAsync({ betAmount: spinBet, hold: heldNow });
       const first = res.steps[0];
       const wait = Math.max(0, 300 - (Date.now() - started));
       REEL_STOP_MS.forEach((ms, col) => later(() => {
@@ -448,7 +459,7 @@ export function SlotMachine() {
       const msg = e instanceof ApiError && e.status === 400 ? t.insufficientBalanceDesc : (e as Error).message;
       toast({ title: t.error, description: msg, variant: "destructive" });
     }
-  }, [balance, bet, canSpin, finish, freeSpins, setBalance, showStep, spinMutation, state, t, toast]);
+  }, [balance, bet, spinBet, holding, holdPicks, canSpin, finish, freeSpins, setBalance, showStep, spinMutation, state, t, toast]);
 
   // Auto-spin: queue the next spin once the machine is idle and any celebration has played
   useEffect(() => {
@@ -494,8 +505,9 @@ export function SlotMachine() {
   if (showScatter) grid.forEach((col, c) => col.forEach((s, r) => { if (s === SCATTER_ID) scatterRowsByCol[c].add(r); }));
   const heldByCol = REEL_IDX.map(() => new Set<number>());
   if (repeaterBanner !== null) held.forEach((k) => { const [c, r] = k.split("-").map(Number); heldByCol[c].add(r); });
+  if (holdOffer && !busy) holdPicks.forEach((c) => ROW_IDX.forEach((r) => heldByCol[c].add(r)));
 
-  const lockedBet = freeSpins > 0 ? state?.freeSpinBet || bet : bet;
+  const lockedBet = freeSpins > 0 ? state?.freeSpinBet || bet : holding ? state!.holdBet! : bet;
   const bulbMode = busy && !shownLines.length ? "spin" : overlay || scatterBanner || repeaterBanner || (result && result.winAmount > result.bet) ? "win" : busy ? "spin" : "idle";
   const tierTitle = (tier: WinTier) => (tier === "jackpot" ? t.jackpotWin : tier === "epic" ? t.megaWin : tier === "mega" ? t.hugeWin : t.bigWin);
   const runningTotal = chips.reduce((a, c) => a + c.amount, 0);
@@ -602,6 +614,27 @@ export function SlotMachine() {
             )}
           </AnimatePresence>
         </div>
+
+        {holdOffer && !busy && (
+          <div className="px-1.5 sm:px-3 -mt-1 mb-1" data-testid="hold-row">
+            <div className="text-center text-[11px] font-black text-yellow-200 mb-1 tracking-wide">
+              🔒 {lang === "vi" ? `GIỮ CUỘN! Chọn tối đa 2 cuộn để giữ (cược ${fmtBet(state!.holdBet!)})` : `HOLD! Pick up to 2 reels to keep (bet ${fmtBet(state!.holdBet!)})`}
+            </div>
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+              {REEL_IDX.map((c) => {
+                const on = holdPicks.includes(c);
+                return (
+                  <button key={c} type="button"
+                    onClick={() => { soundManager.buttonClick(); setHoldPicks((h) => (h.includes(c) ? h.filter((x) => x !== c) : h.length >= 2 ? h : [...h, c])); }}
+                    className={`py-1.5 rounded-lg text-[11px] font-black border-2 transition active:scale-95 ${on ? "bg-yellow-400 text-black border-white shadow-[0_0_14px_rgba(250,204,21,0.8)]" : "bg-black/50 text-yellow-300 border-yellow-500/50 animate-pulse"}`}
+                    data-testid={`hold-${c}`}>
+                    {on ? (lang === "vi" ? "ĐÃ GIỮ" : "HELD") : (lang === "vi" ? "GIỮ" : "HOLD")}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <Bulbs mode={bulbMode} />
 
@@ -857,6 +890,7 @@ export function SlotMachine() {
             ))}
           </div>
           <p className="text-sm text-yellow-100/70">{t.paytableFree}</p>
+          <p className="text-sm text-yellow-100/70">🔒 {lang === "vi" ? "Giữ Cuộn: sau một lượt thua, đôi khi bạn được giữ tối đa 2 cuộn cho lượt quay tiếp theo (cùng mức cược). Chọn khéo thì lợi hơn: tỷ lệ hoàn trả 96,6% khi giữ đúng cuộn, chỉ 87,7% nếu không bao giờ giữ." : "Hold: after a losing spin you're sometimes offered a hold: keep up to 2 reels for your next spin (same bet). Choosing well pays: 96.6% return with the best holds, only 87.7% if you never hold."}</p>
           <p className="text-sm text-yellow-100/70">🎋 {t.oracleBlessed}.</p>
           <p className="text-sm text-yellow-100/70">🥣 {lang === "vi" ? `Xóc Đĩa nhân đôi: sau mỗi lượt thắng, bạn có thể đặt tiền thắng (hoặc một nửa) vào bốn đồng xu: Chẵn/Lẻ ×${GAMBLE_PAYS.chan}, Tứ Đỏ/Tứ Trắng ×${GAMBLE_PAYS.tu_do}, tối đa 5 lần. Tỷ lệ công bằng tuyệt đối.` : `Xóc Đĩa double-up: after a win you can stake it (or half) on four coins: even/odd ×${GAMBLE_PAYS.chan}, four of a colour ×${GAMBLE_PAYS.tu_do}, up to 5 times. Exactly fair odds.`}</p>
           <p className="text-xs text-yellow-100/50">{t.rtpNote}</p>
