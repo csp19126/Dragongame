@@ -100,7 +100,7 @@ export function InstallBanner() {
 
   return (
     <>
-      <div className="fixed bottom-3 inset-x-3 z-50 mx-auto max-w-md flex items-center gap-3 rounded-2xl border border-yellow-400/40 bg-[#1a0b35]/95 backdrop-blur-xl p-3 shadow-[0_8px_30px_rgba(0,0,0,0.6)]" data-testid="install-banner">
+      <div className="fixed bottom-3 above-nav inset-x-3 z-50 mx-auto max-w-md flex items-center gap-3 rounded-2xl border border-yellow-400/40 bg-[#1a0b35]/95 backdrop-blur-xl p-3 shadow-[0_8px_30px_rgba(0,0,0,0.6)]" data-testid="install-banner">
         <img src="/icons/icon-192.png" alt="" className="w-11 h-11 rounded-xl" />
         <div className="flex-1 min-w-0">
           <p className="font-black text-yellow-300 text-sm leading-tight">{t.installTitle}</p>

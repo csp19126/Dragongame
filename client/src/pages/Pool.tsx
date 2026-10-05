@@ -19,12 +19,16 @@ import { soundManager } from "@/lib/sound";
 import { coinBurst, fireworks } from "@/lib/celebrate";
 import { ME_KEY } from "@/hooks/use-auth";
 import { TournamentPromo } from "@/components/TournamentBits";
+import { League } from "@/components/pool/League";
+import { LEAGUE_WIN, LEAGUE_LOSS } from "@shared/league";
 import { ShareButton } from "@/components/ShareCard";
 import { roundName } from "@shared/tournament";
 
 const TXT = {
   vi: {
     title: "Bi-a 8 bóng", subtitle: "Chơi trực tuyến với bạn bè", practice: "Chơi với máy", practiceSub: "Luyện tập miễn phí",
+    tabPlay: "Chơi", tabLeague: "Bảng xếp hạng", quick: "Chơi nhanh", quickSub: "Tìm đối thủ ngay · tính điểm league",
+    leaguePts: (n: number) => `+${n} điểm league`, notCounted: "Trận này không tính điểm league", dailyBonus: (n: string) => `🎁 Thắng đầu ngày +${n}`,
     create: "Tạo bàn", stake: "Mức cược", free: "Miễn phí", open: "Bàn đang chờ", live: "Đang thi đấu", none: "Chưa có bàn nào. Hãy tạo bàn và mời bạn bè!",
     join: "Vào chơi", watch: "Xem", back: "Quay lại bàn của bạn", waiting: "Đang chờ đối thủ…", invite: "Mời bạn bè", copy: "Sao chép link", copied: "Đã sao chép!",
     cancel: "Huỷ bàn", resign: "Đầu hàng", resignAsk: "Đầu hàng và thua ván này?", you: "Bạn", computer: "Máy", yourTurn: "Lượt của bạn", theirTurn: "Lượt đối thủ",
@@ -38,6 +42,8 @@ const TXT = {
   },
   en: {
     title: "8-Ball Pool", subtitle: "Play your mates online", practice: "Play the computer", practiceSub: "Free practice",
+    tabPlay: "Play", tabLeague: "League", quick: "Quick match", quickSub: "Find an opponent now · earns league points",
+    leaguePts: (n: number) => `+${n} league point${n === 1 ? "" : "s"}`, notCounted: "This game doesn't count for the league", dailyBonus: (n: string) => `🎁 First win today +${n}`,
     create: "Create table", stake: "Stake", free: "Free", open: "Open tables", live: "Playing now", none: "No tables yet. Create one and invite your mates!",
     join: "Join", watch: "Watch", back: "Back to your table", waiting: "Waiting for an opponent…", invite: "Invite a friend", copy: "Copy link", copied: "Copied!",
     cancel: "Close table", resign: "Resign", resignAsk: "Resign and lose this game?", you: "You", computer: "Computer", yourTurn: "Your turn", theirTurn: "Their turn",
@@ -148,9 +154,45 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: typeof TXT.v
   const stakes = tables.data?.stakes ?? [0, 1000, 10000, 50000, 100000, 500000, 1000000];
   const balance = state?.balance ?? 0;
   const mine = tables.data?.mine;
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const tab = new URLSearchParams(search).get("tab") === "league" ? "league" : "play";
+  // Quick match: sit at the first free open table, or open one and wait
+  const quick = useMutation({
+    mutationFn: async () => {
+      const fresh = await (await apiRequest("GET", "/api/pool/tables")).json() as { open: PoolTable[]; mine: string | null };
+      if (fresh.mine) return { code: fresh.mine };
+      const free = fresh.open.find((t) => t.stake === 0);
+      if (free) {
+        try { return await (await apiRequest("POST", `/api/pool/tables/${free.code}/join`)).json() as { code: string }; } catch { /* someone beat us to it */ }
+      }
+      return await (await apiRequest("POST", "/api/pool/tables", { stake: 0 })).json() as { code: string };
+    },
+    onSuccess: (r) => onOpen(r.code),
+    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const tabs = (
+    <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-black/40 border border-white/10">
+      {(["play", "league"] as const).map((t) => (
+        <button key={t} type="button" onClick={() => setLocation(t === "league" ? "/pool?tab=league" : "/pool")}
+          className={`py-2 rounded-xl text-sm font-black transition ${tab === t ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black" : "text-white/70"}`} data-testid={`pool-tab-${t}`}>
+          {t === "play" ? `🎱 ${L.tabPlay}` : `🏆 ${L.tabLeague}`}
+        </button>
+      ))}
+    </div>
+  );
+  if (tab === "league") return <div className="w-full max-w-md flex flex-col gap-3">{tabs}<League /></div>;
 
   return (
     <div className="w-full max-w-md flex flex-col gap-3" data-testid="pool-lobby">
+      {tabs}
+      <button type="button" onClick={() => quick.mutate()} disabled={quick.isPending}
+        className="w-full flex items-center gap-3 rounded-3xl p-4 bg-gradient-to-r from-yellow-300 via-amber-400 to-orange-500 text-left shadow-[0_8px_30px_rgba(245,158,11,0.35)] active:scale-[0.98] transition" data-testid="button-pool-quick">
+        <span className="text-4xl">⚡</span>
+        <span className="flex-1"><span className="block font-black text-black text-xl leading-tight">{L.quick}</span><span className="block text-xs text-black/70 font-bold">{L.quickSub}</span></span>
+        {quick.isPending && <Loader2 className="w-6 h-6 animate-spin text-black" />}
+      </button>
       <TournamentPromo />
       {mine && (
         <button type="button" onClick={() => onOpen(mine)} className="w-full rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500" data-testid="button-pool-back">{L.back} ({mine})</button>
@@ -272,7 +314,7 @@ function EndBanner({ title, sub, actions, extra }: { title: string; sub: string;
       <div className="w-full max-w-xs rounded-3xl p-6 text-center bg-gradient-to-b from-[#2a0f4f] to-[#140726] border-2 border-yellow-400/60 shadow-[0_0_50px_rgba(250,204,21,0.35)]">
         <p className="text-5xl mb-2">🎱</p>
         <p className="font-display text-4xl text-yellow-300">{title}</p>
-        {sub && <p className="mt-2 text-white/80 font-bold">{sub}</p>}
+        {sub && <p className="mt-2 text-white/80 font-bold whitespace-pre-line">{sub}</p>}
         {extra && <div className="mt-4">{extra}</div>}
         <div className="mt-5 flex gap-2">
           {actions.map((a) => <button key={a.label} type="button" onClick={a.onClick} className="flex-1 py-2.5 rounded-xl font-black text-black bg-gradient-to-b from-yellow-300 to-orange-500">{a.label}</button>)}
@@ -444,7 +486,7 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; cod
       {ended && !playback && (
         <EndBanner
           title={seat === null ? `${names[ended.winner]} ${L.winnerIs}` : ended.winner === seat ? L.won : L.lost}
-          sub={`${ended.payout ? `${ended.winner === seat ? "+" : ""}${fmt(ended.payout)} 🪙 ` : ""}${L.reason[ended.reason] ?? ""}`}
+          sub={`${ended.payout ? `${ended.winner === seat ? "+" : ""}${fmt(ended.payout)} 🪙 ` : ""}${L.reason[ended.reason] ?? ""}${seat !== null && ended.league ? `\n${ended.league.counted ? `🏆 ${L.leaguePts(ended.winner === seat ? LEAGUE_WIN : LEAGUE_LOSS)}` : L.notCounted}${ended.winner === seat && ended.league.bonus ? ` · ${L.dailyBonus(fmt(ended.league.bonus))}` : ""}` : ""}`}
           actions={tour ? [{ label: L.bracket, onClick: () => nav("/tournament") }] : [{ label: L.lobby, onClick: onExit }]}
           extra={seat !== null && ended.winner === seat ? (
             <ShareButton what={{

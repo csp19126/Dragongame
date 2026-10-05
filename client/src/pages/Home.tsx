@@ -9,7 +9,8 @@ import { Header } from "@/components/Header";
 import { StreakDisplay } from "@/components/StreakDisplay";
 import { AchievementBadge } from "@/components/AchievementBadge";
 import { useLang } from "@/lib/lang-context";
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
+import Lobby from "@/pages/Lobby";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
@@ -46,7 +47,7 @@ function FloatingSymbols() {
 }
 
 /** Real big wins (10x bet or more) from the server, newest first */
-function RecentWinsTicker() {
+export function RecentWinsTicker() {
   const { t } = useLang();
   const { data: wins = [] } = useRecentWins();
   const [i, setI] = useState(0);
@@ -201,7 +202,21 @@ function Landing() {
   );
 }
 
+/** "/": the landing page for visitors, the lobby for players */
 export default function Home() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" data-testid="loading-spinner" />
+      </div>
+    );
+  }
+  return user ? <Lobby /> : <Landing />;
+}
+
+/** "/slot": the slot machine with its stats, achievements and top players */
+export function SlotPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const { data: gameState } = useGameState(!!user);
   const { data: achievements = [] } = useAchievements(user?.id);
@@ -220,7 +235,7 @@ export default function Home() {
     );
   }
 
-  if (!user) return <Landing />;
+  if (!user) return <Redirect to="/auth?next=%2Fslot" />;
 
   const stats = [
     { label: t.gamesPlayed, value: (gameState?.gamesPlayed ?? 0).toLocaleString(), Icon: Gamepad2, id: "games-played" },

@@ -8,7 +8,8 @@ import { InstallBanner } from "@/components/InstallApp";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/lib/lang-context";
 import { AuthProvider } from "@/hooks/use-auth";
-import Home from "@/pages/Home";
+import Home, { SlotPage } from "@/pages/Home";
+import { BottomNav } from "@/components/BottomNav";
 
 const RELOAD_FLAG = "chunk-reload-at";
 
@@ -94,6 +95,7 @@ function Router() {
     <Suspense fallback={<PageLoader />}>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/slot" component={SlotPage} />
         <Route path="/auth" component={Auth} />
         <Route path="/leaderboard" component={Leaderboard} />
         <Route path="/coins" component={Coins} />
@@ -125,6 +127,7 @@ export default function App() {
             <Toaster />
             <ErrorBoundary>
               <Router />
+              <BottomNav />
             </ErrorBoundary>
             <InstallBanner />
           </TooltipProvider>

@@ -8,6 +8,7 @@ import { publicView } from "./blackjack";
 import { registerPoolRoutes } from "./pool";
 import { registerCommunityRoutes, applyReferral, communityStats } from "./community";
 import { registerTournamentRoutes } from "./tournament";
+import { registerLeagueRoutes } from "./league";
 import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
 import {
@@ -239,6 +240,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerPoolRoutes(app, requireUser);
   registerCommunityRoutes(app, requireUser, requireAdmin);
   registerTournamentRoutes(app, requireUser, requireAdmin);
+  registerLeagueRoutes(app, requireUser);
 
   // Blackjack: the hand lives on the server; the browser only ever sees publicView()
   const BJ_MAX_BET = 1_000_000;

@@ -3,9 +3,10 @@ import type { Duplex } from "stream";
 import type { Express, NextFunction, Request, RequestHandler, Response } from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import { randomInt } from "crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "./db";
-import { poolMatches, users } from "@shared/schema";
+import { poolMatches, users, deposits } from "@shared/schema";
+import { MIN_SHOTS, MAX_PER_PAIR_PER_DAY, DAILY_WIN_BONUS, seasonOf, vnDay } from "@shared/league";
 import { newGame, playShot, cleanShot, type GameState, type Shot, type Side } from "@shared/pool/engine";
 import { POOL_STAKES, POOL_EMOTES, POOL_TURN_MS, TOURNAMENT_GRACE_MS, type PoolServerMsg, type PoolTable } from "@shared/pool/protocol";
 
@@ -34,7 +35,7 @@ interface Room {
   lastSeen: [number, number];
   timeouts: [number, number];
   clients: Set<Client>;
-  result?: { winner: Side; reason: string; payout: number };
+  result?: { winner: Side; reason: string; payout: number; league?: { counted: boolean; bonus: number } };
   /** A tournament match: both players are seated from the start and get a few minutes to arrive */
   tournament?: { id: number; matchId: number; name: string; round: number; rounds: number; graceUntil: number; seen: [boolean, boolean] };
 }
@@ -103,12 +104,28 @@ async function finish(room: Room, winner: Side, reason: string) {
   const payout = room.stake * 2;
   const winnerId = room.players[winner]!;
   const loserId = room.players[(1 - winner) as Side]!;
+  const now = new Date();
+  const shots = room.game?.shots ?? 0;
+  // Vietnam midnight today, in UTC
+  const dayStart = new Date(new Date(`${vnDay(now)}T00:00:00Z`).getTime() - 7 * 3600_000);
+  let counted = false;
+  let bonus = 0;
   await db.transaction(async (tx) => {
+    // League: a real game (both there, long enough), and not too many today between the same two
+    let counts = reason !== "no_show" && shots >= MIN_SHOTS;
+    if (counts) {
+      const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(poolMatches).where(and(
+        eq(poolMatches.counted, true), gte(poolMatches.finishedAt, dayStart),
+        or(and(eq(poolMatches.player1, winnerId), eq(poolMatches.player2, loserId)), and(eq(poolMatches.player1, loserId), eq(poolMatches.player2, winnerId))),
+      ));
+      counts = n < MAX_PER_PAIR_PER_DAY;
+    }
     const [m] = await tx.update(poolMatches)
-      .set({ status: "finished", winner: winnerId, reason, finishedAt: new Date() })
+      .set({ status: "finished", winner: winnerId, reason, finishedAt: now, shots, season: seasonOf(now), counted: counts })
       .where(and(eq(poolMatches.id, room.id), eq(poolMatches.status, "playing")))
       .returning({ id: poolMatches.id });
     if (!m) return; // already settled
+    counted = counts;
     await tx.update(users).set({
       balance: sql`${users.balance} + ${payout}`,
       gamesPlayed: sql`${users.gamesPlayed} + 1`,
@@ -116,8 +133,18 @@ async function finish(room: Room, winner: Side, reason: string) {
       maxWin: sql`greatest(${users.maxWin}, ${payout})`,
     }).where(eq(users.id, winnerId));
     await tx.update(users).set({ gamesPlayed: sql`${users.gamesPlayed} + 1` }).where(eq(users.id, loserId));
+    // The first counted win of the day earns a bonus
+    if (counted) {
+      const [b] = await tx.update(users).set({ balance: sql`${users.balance} + ${DAILY_WIN_BONUS}`, lastPoolBonusAt: now })
+        .where(and(eq(users.id, winnerId), or(isNull(users.lastPoolBonusAt), lt(users.lastPoolBonusAt, dayStart))))
+        .returning({ id: users.id });
+      if (b) {
+        bonus = DAILY_WIN_BONUS;
+        await tx.insert(deposits).values({ userId: winnerId, amount: DAILY_WIN_BONUS, method: "pool_daily_win" });
+      }
+    }
   });
-  room.result = { winner, reason, payout };
+  room.result = { winner, reason, payout, league: { counted, bonus } };
   for (const id of room.players) if (id && activeByUser.get(id) === room.code) activeByUser.delete(id);
   broadcastState(room);
   if (room.tournament && tournamentHook) {
