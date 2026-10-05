@@ -7,6 +7,7 @@ import { getSessionMiddleware } from "./session";
 import { db } from "./db";
 import { attachPoolSockets, recoverPoolMatches } from "./pool";
 import { startTournamentScheduler } from "./tournament";
+import { startLeagueScheduler } from "./league";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -67,6 +68,7 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   await recoverPoolMatches();
   attachPoolSockets(httpServer, sessionMiddleware);
   startTournamentScheduler(httpServer);
+  startLeagueScheduler(httpServer);
 
   // Errors always come back as JSON, never an HTML stack trace
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

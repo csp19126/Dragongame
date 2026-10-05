@@ -25,7 +25,7 @@ export type PoolServerMsg =
       turnMsLeft: number | null;
       online: [boolean, boolean];
       spectators: number;
-      result: { winner: Side; reason: string; payout: number } | null;
+      result: { winner: Side; reason: string; payout: number; league?: { counted: boolean; bonus: number } } | null;
       /** Set for a tournament match */
       tournament: { id: number; name: string; round: number; rounds: number } | null;
       /** False while a tournament match waits for both players to arrive (turnMsLeft then counts that down) */

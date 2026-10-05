@@ -27,7 +27,7 @@ export function TournamentAlert() {
   // Into <body>: the header's blur would otherwise pin a fixed element to the header
   return createPortal(
     <Link href={`/pool?table=${m.code}`}
-      className="fixed bottom-4 inset-x-3 z-50 mx-auto max-w-md rounded-2xl bg-gradient-to-r from-emerald-600 to-green-700 border-2 border-yellow-300 shadow-[0_8px_30px_rgba(0,0,0,0.6)] px-4 py-3 flex items-center gap-3"
+      className="fixed bottom-4 above-nav inset-x-3 z-50 mx-auto max-w-md rounded-2xl bg-gradient-to-r from-emerald-600 to-green-700 border-2 border-yellow-300 shadow-[0_8px_30px_rgba(0,0,0,0.6)] px-4 py-3 flex items-center gap-3"
       data-testid="tournament-alert">
       <span className="text-3xl animate-bounce">🎱</span>
       <span className="flex-1 leading-tight">

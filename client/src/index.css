@@ -552,3 +552,18 @@
     animation: none !important;
   }
 }
+
+
+/* ---- App shell (2026 refresh) ---- */
+body {
+  background-color: #0b0716;
+  background-image:
+    radial-gradient(60rem 40rem at 10% -10%, rgba(16, 185, 129, 0.10), transparent 60%),
+    radial-gradient(50rem 40rem at 110% 10%, rgba(139, 92, 246, 0.12), transparent 60%),
+    radial-gradient(40rem 30rem at 50% 120%, rgba(234, 179, 8, 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+/* Room at the bottom for the tab bar, and fixed pop-ups sit above it */
+body.has-bottom-nav { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); --nav-h: calc(4rem + env(safe-area-inset-bottom)); }
+.above-nav { bottom: calc(0.75rem + var(--nav-h, 0px)) !important; }
+.app-aurora { background-image: radial-gradient(40rem 24rem at 80% -5%, rgba(239, 68, 68, 0.18), transparent 60%), radial-gradient(36rem 24rem at 0% 30%, rgba(16, 185, 129, 0.12), transparent 60%); }

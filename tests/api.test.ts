@@ -1059,4 +1059,114 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await p.req("POST", "/api/game/spin", { betAmount: 5000, hold: [0] })).body.code).toBe("no_hold");
     });
   });
+  describe("pool league", () => {
+    async function connect(p: Player, code: string) {
+      const { WebSocket } = await import("ws");
+      const ws = new WebSocket(base.replace("http", "ws") + `/ws/pool?code=${code}`, { headers: { Cookie: p.cookie } });
+      const msgs: any[] = [];
+      ws.on("message", (m) => msgs.push(JSON.parse(String(m))));
+      await new Promise<void>((resolve, reject) => { ws.on("open", () => resolve()); ws.on("error", reject); });
+      const next = async (pred: (m: any) => boolean, ms = 5000) => {
+        const start = Date.now();
+        while (Date.now() - start < ms) {
+          const i = msgs.findIndex(pred);
+          if (i >= 0) return msgs.splice(0, i + 1)[i];
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        throw new Error("timed out waiting for a message");
+      };
+      return { ws, msgs, next };
+    }
+
+    /** A free table between two players: plays `shots` real shots (computer-chosen), then `loser` resigns */
+    async function playGame(a: Player, b: Player, shots: number, loser: "a" | "b") {
+      const { chooseAiShot } = await import("../shared/pool/ai");
+      const code = (await a.req("POST", "/api/pool/tables", { stake: 0 })).body.code;
+      const ca = await connect(a, code);
+      await b.req("POST", `/api/pool/tables/${code}/join`);
+      const cb = await connect(b, code);
+      let state = (await ca.next((m) => m.t === "state" && m.status === "playing")).game;
+      let n = 0;
+      for (let i = 0; i < shots && state.winner === null; i++) {
+        // Soft shots: legal, but too gentle to pot anything, so the game can't end on its own
+        const { shot, cue } = chooseAiShot(state, Math.random, 6);
+        (state.turn === 0 ? ca : cb).ws.send(JSON.stringify({ t: "shoot", shot: { ...shot, power: 0.06 }, cue }));
+        state = (await ca.next((m) => m.t === "shot")).state;
+        n++;
+      }
+      if (state.winner === null) (loser === "a" ? ca : cb).ws.send(JSON.stringify({ t: "resign" }));
+      const end = await ca.next((m) => m.t === "state" && m.status === "finished");
+      ca.ws.close(); cb.ws.close();
+      return { end, shots: n, code };
+    }
+    const league = (p: Player) => p.req("GET", "/api/pool/league").then((r) => r.body);
+
+    it("counts real games: 3 points a win, 1 a loss, a daily first-win bonus, and a short resign counts nothing", async () => {
+      const a = new Player(), b = new Player();
+      await a.register(); await b.register();
+      const short = await playGame(a, b, 2, "a");
+      expect(short.end.result.league).toEqual({ counted: false, bonus: 0 });
+      expect((await league(a)).me).toBeNull();
+
+      const g1 = await playGame(a, b, 8, "a");
+      expect(g1.shots).toBe(8);
+      expect(g1.end.result.reason).toBe("resign");
+      expect(g1.end.result.league).toEqual({ counted: true, bonus: 20_000 });
+      const winner = g1.end.names[g1.end.result.winner];
+      expect(winner).toBe(b.username);
+      expect((await b.state()).balance).toBe(50_000 + 20_000);
+      const g2 = await playGame(a, b, 8, "a");
+      expect(g2.end.result.league).toEqual({ counted: true, bonus: 0 }); // once a day
+      const vb = await league(b);
+      expect(vb.me).toMatchObject({ played: 2, won: 2, lost: 0, points: 6, rank: 1, form: ["W", "W"] });
+      expect(vb.todayBonusTaken).toBe(true);
+      const va = await league(a);
+      expect(va.me).toMatchObject({ played: 2, won: 0, lost: 2, points: 2 });
+      expect(va.table.map((r: any) => r.username)).toEqual(expect.arrayContaining([a.username, b.username]));
+      expect(va.table[0]).not.toHaveProperty("userId");
+
+      // The same two players: only 3 games a day count
+      const g3 = await playGame(a, b, 8, "b");
+      expect(g3.end.result.league.counted).toBe(true);
+      const g4 = await playGame(a, b, 8, "b");
+      expect(g4.end.result.league.counted).toBe(false);
+    }, 60_000);
+
+    it("pays a finished season once: prizes for the top and a reward for regulars", async () => {
+      const { settleSeason } = await import("../server/league");
+      const { LEAGUE_PRIZES, PARTICIPATION_PRIZE } = await import("../shared/league");
+      const ps = [new Player(), new Player(), new Player()];
+      const ids: string[] = [];
+      for (const p of ps) ids.push((await p.register()).id);
+      const add = (w: string, l: string, n: number) => pool.query(
+        "insert into pool_matches (code, player1, player2, stake, status, winner, reason, finished_at, shots, season, counted) select 'T' || md5(random()::text), $1, $2, 0, 'finished', $1, 'win', '2026-08-15', 10, '2026-08', true from generate_series(1, $3)",
+        [w, l, n]);
+      await add(ids[0], ids[1], 6); // p0: 6 wins
+      await add(ids[1], ids[2], 3); // p1: 3 wins, 6 losses
+      const before = await Promise.all(ps.map((p) => p.state().then((s) => s.balance)));
+      const r = await settleSeason("2026-08");
+      expect(r?.champion?.username).toBe(ps[0].username);
+      const after = await Promise.all(ps.map((p) => p.state().then((s) => s.balance)));
+      expect(after[0] - before[0]).toBe(LEAGUE_PRIZES[0]);
+      expect(after[1] - before[1]).toBe(LEAGUE_PRIZES[1]);
+      expect(after[2] - before[2]).toBe(LEAGUE_PRIZES[2]);
+      expect(await settleSeason("2026-08")).toBeNull(); // never twice
+      expect((await ps[0].state()).balance).toBe(after[0]);
+      const past = (await league(ps[0])).past;
+      expect(past.find((x: any) => x.season === "2026-08")).toMatchObject({ champion: ps[0].username, points: 18 });
+      expect(PARTICIPATION_PRIZE).toBeGreaterThan(0);
+    });
+
+    it("works out seasons in Vietnam time", async () => {
+      const { seasonOf, seasonEnd, previousSeason, tierOf, nextTier } = await import("../shared/league");
+      expect(seasonOf(new Date("2026-10-31T16:59:00Z"))).toBe("2026-10"); // 23:59 in Vietnam
+      expect(seasonOf(new Date("2026-10-31T17:00:00Z"))).toBe("2026-11"); // midnight in Vietnam
+      expect(seasonEnd("2026-10").toISOString()).toBe("2026-10-31T17:00:00.000Z");
+      expect(previousSeason("2027-01")).toBe("2026-12");
+      expect(tierOf(0).id).toBe("bronze");
+      expect(tierOf(80).id).toBe("gold");
+      expect(nextTier(25)).toMatchObject({ need: 5 });
+      expect(nextTier(200)).toBeNull();
+    });
+  });
 });

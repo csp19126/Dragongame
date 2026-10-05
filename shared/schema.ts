@@ -29,6 +29,8 @@ export const users = pgTable("users", {
   referralPaid: boolean("referral_paid").default(false).notNull(),
   // Sticker packs: when the free daily pack was last opened, and how many play packs were opened
   lastFreePackAt: timestamp("last_free_pack_at"),
+  /** Daily bonus for the first counted pool win of the day */
+  lastPoolBonusAt: timestamp("last_pool_bonus_at"),
   playPacksOpened: integer("play_packs_opened").default(0).notNull(),
   bonusPacks: integer("bonus_packs").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -131,6 +133,17 @@ export const poolMatches = pgTable("pool_matches", {
   reason: text("reason"),
   createdAt: timestamp("created_at").defaultNow(),
   finishedAt: timestamp("finished_at"),
+  /** League: shots played, the season (YYYY-MM, Vietnam time) and whether it counted */
+  shots: integer("shots"),
+  season: text("season"),
+  counted: boolean("counted").default(false).notNull(),
+}, (t) => [index("pool_matches_season").on(t.season, t.counted)]);
+
+// League seasons already settled (one row each, so prizes can only be paid once)
+export const leagueSeasons = pgTable("league_seasons", {
+  season: text("season").primaryKey(),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  summary: jsonb("summary").$type<{ username: string; points: number; prize: number }[]>().notNull(),
 });
 
 // Community chat. Text or a sticker; deleted messages stay for the moderation log.

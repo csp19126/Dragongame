@@ -105,6 +105,24 @@ alert on any page and have 5 minutes to sit down; whoever turns up wins a no-sho
 neither does). Everything is stored in the database, so a redeploy only restarts the frames being
 played: a watchdog reopens tables for matches that lost theirs. The champion is announced in chat.
 
+## Pool league (`/pool?tab=league`)
+
+One season per calendar month (Vietnam time). Every counted online game, casual or tournament,
+gives the winner 3 points and the loser 1, so turning up always counts. A game counts once it
+reaches 6 shots and isn't a no-show, and at most 3 games a day between the same two players
+count (so friends can't swap wins). Tiers: 🥉 Đồng → 🥈 Bạc (30) → 🥇 Vàng (80) → 💎 Kim Cương (150).
+The first counted win each day pays a 20,000 bonus. At month end a timer settles the season once
+(the season's row is inserted first): 10M / 5M / 3M / 1M for 4th-10th, and 100K for everyone else
+who played 10+ games; the champion is announced in chat. Quick Match sits you at the first free
+open table, or opens one.
+
+## Lobby and navigation
+
+Signed-in players land on a lobby (`/`): the featured slot with the live jackpot, daily gift,
+sticker packs and invites, every game as a card, the tournament and your league standing. The
+slot itself is at `/slot`. A bottom tab bar (Home · Slot · Pool · Social · Me) is on every page
+except sign-in and a pool table, where the table needs the room.
+
 ## Share cards
 
 Big slot wins, online pool wins, tournament places and completed sticker sets offer a "share" button.
