@@ -15,6 +15,14 @@ export interface GameStateResponse {
   freeSpins: number;
   freeSpinBet: number;
   blessed: boolean;
+  /** Multiplier the waiting blessing gives the next spin (1 when none) */
+  blessing: number;
+  oracleStick: number | null;
+  freeSpinMult: number;
+  /** Free-spin units won and waiting for the player's pick */
+  pendingFreeSpinUnits: number;
+  gambleAmount: number;
+  gambleRounds: number;
   lastOracleAt: string | null;
   lastDailyBonusAt: string | null;
 }
@@ -22,8 +30,10 @@ export interface GameStateResponse {
 export interface LineWin {
   line: number;
   symbol: string;
+  count: number;
   amount: number;
   withWild: boolean;
+  upgrade: boolean;
 }
 
 export interface SpinStep {
@@ -48,7 +58,11 @@ export interface SpinResponse {
   jackpotHit: boolean;
   jackpotWin: number;
   jackpotPool: number | null;
-  freeSpinsAwarded: number;
+  freeSpinUnits: number;
+  pendingFreeSpinUnits: number;
+  freeSpinMult: number;
+  blessing: number;
+  gambleAmount: number;
   dragonLine: boolean;
   bet: number;
   isFreeSpin: boolean;

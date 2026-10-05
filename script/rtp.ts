@@ -1,9 +1,11 @@
 /**
- * Return-to-player report for the real slot engine (Repeater, free spins and jackpot included).
+ * Return-to-player report for the real slot engine (Rồng Lặp, free spins and jackpot included).
+ * Free spins are played at x1; every Chọn Lì Xì pick has the same spins x multiplier.
  *   npx tsx script/rtp.ts            20 million spins
  *   npx tsx script/rtp.ts 100000000  any number of spins
  */
-import { BASE_RTP, JACKPOT_CONTRIBUTION, ORACLE_WIN_MULTIPLIER } from "../shared/schema";
+import { BASE_RTP, JACKPOT_CONTRIBUTION } from "../shared/schema";
+import { GRADE_BLESSING, STICKS } from "../shared/oracle";
 import { spin } from "../server/game";
 
 const N = Number(process.argv[2] ?? 20_000_000);
@@ -16,7 +18,7 @@ for (let i = 0; i < N; i++) {
   const r = spin(BET);
   won += r.winAmount;
   sumSq += (r.winAmount / BET) ** 2;
-  pending += r.freeSpinsAwarded;
+  pending += r.freeSpinUnits;
   repeats += r.repeats;
   if (r.winAmount > 0) hits++;
   if (r.winAmount > BET) profitable++;
@@ -30,4 +32,5 @@ console.log(`${N.toLocaleString()} spins: base RTP ${pct(rtp)} ± ${pct((2 * sd)
 console.log(`  + ${pct(JACKPOT_CONTRIBUTION)} of bets paid back through the jackpot = ${pct(rtp + JACKPOT_CONTRIBUTION)} total`);
 console.log(`  any win ${pct(hits / N)}, profitable ${pct(profitable / N)}, 10x+ 1 in ${(N / big).toFixed(0)}, ` +
   `repeats per spin ${(repeats / N).toFixed(3)}, jackpot 1 in ${jackpots ? (N / jackpots).toFixed(0) : "–"}, max ${maxWin / BET}x`);
-console.log(`  oracle-blessed spin returns ${pct(rtp * ORACLE_WIN_MULTIPLIER)} (once per hour)`);
+const avgBlessing = STICKS.reduce((a, s) => a + GRADE_BLESSING[s.grade], 0) / STICKS.length;
+console.log(`  oracle-blessed spin returns about ${pct(rtp * avgBlessing)} on average (once per hour)`);
