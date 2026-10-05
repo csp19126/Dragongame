@@ -7,6 +7,7 @@ import {
   SCATTER_ID,
   REPEATER_MULTIPLIERS,
   REPEATER_PEARLS,
+  HOLD_MAX_REELS,
   JACKPOT_ROW,
   REELS,
   ROWS,
@@ -64,6 +65,9 @@ export interface SpinOutcome {
 }
 
 export type Rng = (maxExclusive: number) => number;
+
+/** Reels the player chose to hold, and the grid they're held from */
+export interface Hold { grid: string[][]; reels: boolean[] }
 
 const cryptoRng: Rng = (max) => randomInt(max);
 
@@ -138,9 +142,11 @@ export const isJackpotGrid = (grid: string[][]) => [0, 1, 2].every((reel) => gri
  * weighted table: no near-miss forcing, no outcome steering, no per-player adjustment.
  * `startGrid` is for tests only (it replaces the first draw).
  */
-export function spin(bet: number, opts: { blessing?: number; freeSpinMult?: number; rng?: Rng; startGrid?: string[][] } = {}): SpinOutcome {
+export function spin(bet: number, opts: { blessing?: number; freeSpinMult?: number; rng?: Rng; startGrid?: string[][]; hold?: Hold } = {}): SpinOutcome {
   const rng = opts.rng ?? cryptoRng;
   let grid = opts.startGrid ?? randomGrid(rng);
+  // HOLD: the reels the player held keep last spin's symbols
+  if (opts.hold && !opts.startGrid) grid = grid.map((col, reel) => (opts.hold!.reels[reel] ? [...opts.hold!.grid[reel]] : col));
   const paid = new Map<number, number>();
 
   const first = lineWinsFor(grid, bet, 1, paid);
@@ -189,4 +195,70 @@ export function spin(bet: number, opts: { blessing?: number; freeSpinMult?: numb
     blessing,
     freeSpinMult,
   };
+}
+
+// ---------------- HOLD: what holding is worth ----------------
+
+const WEIGHTS = SLOT_SYMBOLS.map((s) => [s.id, s.weight / TOTAL_WEIGHT] as const);
+
+/**
+ * Exact expected line pays (x bet) of one line when some cells are fixed (held) and the rest
+ * are drawn at random. Walks the line from the left keeping the chance of every possible
+ * run so far: (wild prefix, run symbol, run length, run ended).
+ */
+function lineEV(cells: (string | null)[]): number {
+  type St = { wp: number; s: string | null; n: number; done: boolean };
+  let states = new Map<string, { st: St; p: number }>([["0||0|0", { st: { wp: 0, s: null, n: 0, done: false }, p: 1 }]]);
+  const step = (st: St, c: string): St => {
+    if (st.done) return st;
+    if (st.s === null) {
+      if (c === WILD_ID) return { wp: st.wp + 1, s: null, n: st.n + 1, done: false };
+      if (c === SCATTER_ID) return { ...st, done: true };
+      return { wp: st.wp, s: c, n: st.n + 1, done: false };
+    }
+    return c === st.s || c === WILD_ID ? { ...st, n: st.n + 1 } : { ...st, done: true };
+  };
+  for (const cell of cells) {
+    const next = new Map<string, { st: St; p: number }>();
+    const add = (st: St, p: number) => {
+      const k = `${st.wp}|${st.s}|${st.n}|${st.done ? 1 : 0}`;
+      const e = next.get(k);
+      if (e) e.p += p; else next.set(k, { st, p });
+    };
+    for (const { st, p } of states.values()) {
+      if (st.done) { add(st, p); continue; }
+      if (cell !== null) add(step(st, cell), p);
+      else for (const [id, q] of WEIGHTS) add(step(st, id), p * q);
+    }
+    states = next;
+  }
+  let ev = 0;
+  for (const { st, p } of states.values()) ev += p * Math.max(payOf(WILD_ID, st.wp), st.s ? payOf(st.s, st.n) : payOf(WILD_ID, st.n));
+  return ev;
+}
+
+// The same few patterns of held cells come up again and again, so remember their values
+const lineEVCache = new Map<string, number>();
+function cachedLineEV(cells: (string | null)[]): number {
+  const key = cells.join(",");
+  let v = lineEVCache.get(key);
+  if (v === undefined) { v = lineEV(cells); lineEVCache.set(key, v); }
+  return v;
+}
+
+/** Expected line pays (x bet) of the next spin if these reels are held */
+export function holdEV(grid: string[][], reels: boolean[]): number {
+  return PAYLINES.reduce((a, line) => a + cachedLineEV(line.map((row, reel) => (reels[reel] ? grid[reel][row] : null))), 0);
+}
+
+/** The best reels to hold (at most `max` of them), by expected line pays */
+export function bestHold(grid: string[][], max = HOLD_MAX_REELS): { reels: boolean[]; ev: number } {
+  let best = { reels: [false, false, false, false, false], ev: holdEV(grid, [false, false, false, false, false]) };
+  for (let mask = 1; mask < 31; mask++) {
+    const reels = [0, 1, 2, 3, 4].map((b) => !!(mask & (1 << b)));
+    if (reels.filter(Boolean).length > max) continue;
+    const ev = holdEV(grid, reels);
+    if (ev > best.ev + 1e-12) best = { reels, ev };
+  }
+  return best;
 }

@@ -12,7 +12,7 @@ import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
 import {
   BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
-  DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, REPEATER_PEARLS, BASE_RTP, TOTAL_RTP, FREE_SPIN_OPTIONS,
+  DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, REPEATER_PEARLS, HOLD_CHANCE, HOLD_MAX_REELS, RTP_WITHOUT_HOLD, BASE_RTP, TOTAL_RTP, FREE_SPIN_OPTIONS,
   JACKPOT_ROW, JACKPOT_CONTRIBUTION, JACKPOT_FULL_BET, JACKPOT_SEED, type User, type PublicUser,
 } from "@shared/schema";
 
@@ -137,10 +137,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       bets: BET_OPTIONS,
       repeaterMultipliers: REPEATER_MULTIPLIERS,
       repeaterPearls: REPEATER_PEARLS,
+      hold: { chance: HOLD_CHANCE, maxReels: HOLD_MAX_REELS },
       freeSpinOptions: FREE_SPIN_OPTIONS,
       jackpot: { row: JACKPOT_ROW, contribution: JACKPOT_CONTRIBUTION, fullBet: JACKPOT_FULL_BET, seed: JACKPOT_SEED },
       maxWinMultiple: MAX_WIN_MULTIPLE,
-      rtp: { base: BASE_RTP, total: TOTAL_RTP },
+      rtp: { base: BASE_RTP, total: TOTAL_RTP, withoutHold: RTP_WITHOUT_HOLD },
       oracleBlessings: GRADE_BLESSING,
       gamblePays: GAMBLE_PAYS,
     });
@@ -175,6 +176,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       pendingFreeSpinUnits: state?.freeSpinUnits ?? 0,
       gambleAmount: state?.gambleAmount ?? 0,
       gambleRounds: state?.gambleRounds ?? 0,
+      holdOffer: !!state?.holdGrid,
+      holdBet: state?.holdBet ?? null,
       lastOracleAt: state?.lastOracleAt ?? null,
       lastDailyBonusAt: user.lastDailyBonusAt,
     });
@@ -185,9 +188,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const bet = Number(req.body?.betAmount);
     if (!BET_OPTIONS.includes(bet)) return res.status(400).json({ message: "Invalid bet" });
 
-    const result = await storage.spin(user.id, bet);
+    const hold = Array.isArray(req.body?.hold) ? req.body.hold.map(Number) : [];
+    const result = await storage.spin(user.id, bet, undefined, hold);
     if ("error" in result) {
       if (result.error === "pick_free_spins") return res.status(409).json({ message: "Pick your free spins first", code: result.error });
+      if (result.error === "no_hold") return res.status(409).json({ message: "No hold to use", code: result.error });
+      if (result.error === "bad_hold") return res.status(400).json({ message: "Hold up to 2 reels, at the bet you lost on", code: result.error });
       return res.status(400).json({ message: "Insufficient balance", code: result.error });
     }
     const multiple = result.winAmount / result.bet;

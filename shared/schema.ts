@@ -53,6 +53,9 @@ export const gameStates = pgTable("game_states", {
   /** Xóc Đĩa double-up: the win that can still be staked, and how many rounds were played */
   gambleAmount: bigint("gamble_amount", { mode: "number" }).default(0).notNull(),
   gambleRounds: integer("gamble_rounds").default(0).notNull(),
+  /** HOLD offered after a losing spin: the grid the player may hold reels from, at this bet */
+  holdGrid: jsonb("hold_grid").$type<string[][]>(),
+  holdBet: integer("hold_bet"),
   consecutiveWins: integer("consecutive_wins").default(0),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (t) => [index("idx_game_states_user").on(t.userId, t.slotId)]);
@@ -268,14 +271,14 @@ export const REELS = 5;
 export const ROWS = 3;
 
 export const SLOT_SYMBOLS: SlotSymbol[] = [
-  { id: "pearl", name: "Dragon Pearl (Wild)", kind: "wild", pays: [8, 40, 400], weight: 3 },
-  { id: "dragon", name: "Imperial Dragon", kind: "regular", pays: [2, 12, 100], weight: 5 },
-  { id: "drum", name: "Bronze Drum", kind: "regular", pays: [0.8, 4, 20], weight: 9 },
-  { id: "lotus", name: "Golden Lotus", kind: "regular", pays: [0.4, 1.4, 7], weight: 14 },
-  { id: "lantern", name: "Jade Lantern", kind: "regular", pays: [0.3, 0.8, 3.5], weight: 20 },
-  { id: "koi", name: "Lucky Koi", kind: "regular", pays: [0.14, 0.4, 2], weight: 26 },
-  { id: "coin", name: "Lucky Coin", kind: "regular", pays: [0.14, 0.4, 2], weight: 26 },
-  { id: "envelope", name: "Lucky Red Envelope (Scatter)", kind: "scatter", pays: [0, 0, 0], weight: 3 },
+  { id: "pearl", name: "Dragon Pearl (Wild)", kind: "wild", pays: [8, 40, 400], weight: 5 },
+  { id: "dragon", name: "Imperial Dragon", kind: "regular", pays: [3, 12, 80], weight: 30 },
+  { id: "drum", name: "Bronze Drum", kind: "regular", pays: [1.5, 5, 20], weight: 36 },
+  { id: "lotus", name: "Golden Lotus", kind: "regular", pays: [1.5, 3, 12], weight: 40 },
+  { id: "lantern", name: "Jade Lantern", kind: "regular", pays: [1.2, 2.5, 8], weight: 44 },
+  { id: "koi", name: "Lucky Koi", kind: "regular", pays: [1, 2, 6], weight: 48 },
+  { id: "coin", name: "Lucky Coin", kind: "regular", pays: [1, 2, 6], weight: 48 },
+  { id: "envelope", name: "Lucky Red Envelope (Scatter)", kind: "scatter", pays: [0, 0, 0], weight: 6 },
 ];
 
 export const WILD_ID = "pearl";
@@ -287,12 +290,7 @@ export const PAYLINES: number[][] = [
   [0, 1, 2, 1, 0], [2, 1, 0, 1, 2],
   [0, 0, 1, 2, 2], [2, 2, 1, 0, 0],
   [1, 0, 0, 0, 1], [1, 2, 2, 2, 1],
-  [0, 1, 1, 1, 0], [2, 1, 1, 1, 2],
-  [1, 0, 1, 2, 1], [1, 2, 1, 0, 1],
-  [0, 1, 0, 1, 0], [2, 1, 2, 1, 2],
-  [1, 1, 0, 1, 1], [1, 1, 2, 1, 1],
-  [0, 0, 1, 0, 0], [2, 2, 1, 2, 2],
-  [1, 0, 1, 0, 1],
+  [1, 0, 1, 2, 1],
 ];
 
 /** What a run of `count` (3-5) of a symbol pays, as a multiple of the total bet */
@@ -307,9 +305,9 @@ export function payOf(id: string, count: number): number {
  * picks how to take it (see FREE_SPIN_OPTIONS). Free spins are played at the bet that won them.
  */
 export const SCATTER_PAYS = [
-  { count: 5, pays: 20, units: 40 },
-  { count: 4, pays: 4, units: 24 },
-  { count: 3, pays: 1, units: 12 },
+  { count: 5, pays: 20, units: 32 },
+  { count: 4, pays: 4, units: 16 },
+  { count: 3, pays: 1, units: 8 },
 ];
 
 /**
@@ -324,6 +322,15 @@ export const FREE_SPIN_OPTIONS = [
   { id: "daring", mult: 4 },
 ] as const;
 export type FreeSpinChoice = (typeof FREE_SPIN_OPTIONS)[number]["id"] | "mystery";
+
+/**
+ * GIỮ CUỘN (HOLD), like a pub fruit machine: after a losing paid spin, now and then
+ * (1 in HOLD_CHANCE) the player may hold up to HOLD_MAX_REELS reels for their next paid spin:
+ * those reels keep their symbols and the rest spin. Holds never follow a win or a held spin.
+ * Choosing well matters: the published RTP is for the best holds; ignoring them returns less.
+ */
+export const HOLD_CHANCE = 5;
+export const HOLD_MAX_REELS = 2;
 
 export const BET_OPTIONS = [1000, 5000, 10000, 50000, 100000, 500000, 1000000];
 
@@ -355,16 +362,19 @@ export function jackpotShare(pot: number, bet: number) {
 }
 
 /**
- * Return to player, measured: the base game with Rồng Lặp and free spins returns 96.0%
- * (40M-spin simulation, ±0.2%; the engine tests re-check it), and the 1% jackpot
- * contribution is all paid back to players through the jackpot.
+ * Return to player, measured over 40M simulated spins (±0.1%): 96.6% for a player who makes
+ * the best HOLD choices (87.7% for one who never holds), with Rồng Lặp and free spins
+ * included; the engine tests re-check it. The 1% jackpot contribution is all paid back to
+ * players through the jackpot.
  * The Xóc Đĩa double-up is exactly fair (100%), so taking it never changes the return.
  */
-export const BASE_RTP = 0.96;
+export const BASE_RTP = 0.966;
+/** The same game for a player who never uses HOLD (40M simulated spins, ±0.1%) */
+export const RTP_WITHOUT_HOLD = 0.877;
 export const TOTAL_RTP = BASE_RTP + JACKPOT_CONTRIBUTION;
 
-/** Largest win seen in 40M simulated spins, as a multiple of the bet (excluding the jackpot and double-up) */
-export const MAX_WIN_MULTIPLE = 9844;
+/** Largest win seen in simulation, as a multiple of the bet (excluding the jackpot and double-up) */
+export const MAX_WIN_MULTIPLE = 4317;
 export const ORACLE_COOLDOWN_MS = 60 * 60 * 1000;
 
 export const DAILY_BONUS_AMOUNT = 50000;

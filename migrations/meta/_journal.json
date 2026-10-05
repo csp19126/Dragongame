@@ -64,6 +64,13 @@
       "when": 1791168155917,
       "tag": "0008_slot_features",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791186411069,
+      "tag": "0009_hold",
+      "breakpoints": true
     }
   ]
 }
