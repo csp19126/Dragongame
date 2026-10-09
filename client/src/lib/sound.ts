@@ -242,6 +242,20 @@ class SoundManager {
     setTimeout(() => this.playTone(350, 0.2, 'sine', 0.03), 100);
   }
 
+  /** A clear "you lost" for a gamble: a falling two-note buzz and a low thud */
+  gambleLose() {
+    this.playSweep(420, 160, 0.45, 'sawtooth', 0.06);
+    this.playTone(90, 0.3, 'sine', 0.12, 0.05);
+    setTimeout(() => this.playTone(220, 0.25, 'triangle', 0.06), 260);
+    setTimeout(() => this.playTone(165, 0.4, 'triangle', 0.06), 420);
+  }
+
+  /** One coin flipping over */
+  coinFlip() {
+    this.playTone(1500, 0.03, 'triangle', 0.05);
+    this.playTone(2200, 0.02, 'sine', 0.03, 0.02);
+  }
+
   betChange() {
     this.playTone(800, 0.04, 'sine', 0.08);
     setTimeout(() => this.playTone(1000, 0.03, 'sine', 0.06), 25);

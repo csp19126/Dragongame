@@ -814,7 +814,8 @@ export function SlotMachine() {
       {showPicker && pendingUnits > 0 && (
         <FreeSpinPicker units={pendingUnits} bet={state?.freeSpinBet || bet} onPicked={onPicked} />
       )}
-      {showGamble && gambleAmount > 0 && (
+      {/* Stays open after a losing round (when the amount drops to 0) so the result can be seen */}
+      {showGamble && (
         <XocDia
           amount={gambleAmount}
           rounds={state?.gambleRounds ?? 0}
