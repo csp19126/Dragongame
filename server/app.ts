@@ -10,6 +10,7 @@ import { startTournamentScheduler } from "./tournament";
 import { startLeagueScheduler } from "./league";
 import { startLotoScheduler } from "./loto";
 import { startBancaLogger } from "./banca";
+import { attachCardTableSockets, recoverTableEscrows } from "./cardtables";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -69,6 +70,8 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   await registerRoutes(httpServer, app);
   await recoverPoolMatches();
   attachPoolSockets(httpServer, sessionMiddleware);
+  await recoverTableEscrows();
+  attachCardTableSockets(httpServer, sessionMiddleware);
   startTournamentScheduler(httpServer);
   startLeagueScheduler(httpServer);
   startLotoScheduler(httpServer);

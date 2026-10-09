@@ -1344,4 +1344,103 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await p.req("POST", "/api/banca/shoot", { level: 500, fish: "tep" })).status).toBe(400);
     });
   });
+
+  describe("live card tables", () => {
+    async function seatWs(p: Player, code: string) {
+      const { WebSocket } = await import("ws");
+      const ws = new WebSocket(base.replace("http", "ws") + `/ws/cards?code=${code}`, { headers: { Cookie: p.cookie } });
+      await new Promise<void>((resolve, reject) => { ws.on("open", () => resolve()); ws.on("error", reject); });
+      return ws;
+    }
+    const state = async (p: Player, code: string) => (await p.req("GET", `/api/cards/tables/${code}`)).body.state;
+    /** Waits until a round is dealt (or settled) */
+    async function until(p: Player, code: string, pred: (s: any) => boolean, ms = 8000) {
+      const start = Date.now();
+      for (;;) {
+        const s = await state(p, code);
+        if (pred(s)) return s;
+        if (Date.now() - start > ms) throw new Error("timed out: " + JSON.stringify({ phase: s.phase, msg: s.message }));
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    }
+    /** Plays my hand whenever it's my turn: hit below the line, then stand */
+    async function playOut(players: Player[], code: string, line: (s: any, me: number) => number) {
+      for (let i = 0; i < 80; i++) {
+        const s = await state(players[0], code);
+        if (s.phase === "settled") return s;
+        if (s.turn === null) { await new Promise((r) => setTimeout(r, 120)); continue; }
+        for (const p of players) {
+          const mine = await state(p, code);
+          if (mine.turn !== mine.you) continue;
+          const seat = mine.seats[mine.you];
+          await p.req("POST", `/api/cards/tables/${code}/act`, { action: seat.total < line(mine, mine.you) && seat.count < 5 ? "hit" : "stand" });
+        }
+      }
+      throw new Error("round never ended");
+    }
+
+    it("Bàn Chung: plays a round against the dealer, holds the stake, and pays exactly", async () => {
+      const { dropAllTablesForTest } = await import("../server/cardtables");
+      dropAllTablesForTest();
+      const a = new Player();
+      const au = await a.register();
+      expect((await a.req("POST", "/api/cards/tables", { mode: "house", stake: 777 })).status).toBe(400);
+      const code = (await a.req("POST", "/api/cards/tables", { mode: "house", stake: 10000 })).body.code;
+      const ws = await seatWs(a, code);
+      const dealt = await until(a, code, (s) => s.phase !== "waiting");
+      expect(dealt.round).toBe(1);
+      if (dealt.phase === "playing") {
+        // Mid-round: the most I could lose is held aside, and the dealer's second card is hidden
+        expect((await pool.query("select sum(amount)::int as n from table_escrows where code = $1", [code])).rows[0].n).toBe(20000);
+        expect(dealt.dealer.cards[1]).toBeNull();
+        expect((await a.state()).balance).toBe(50000 - 20000);
+      }
+      const end = await playOut([a], code, () => 17);
+      const me = end.seats[end.you];
+      expect(end.dealer.cards.every((c: any) => c)).toBe(true);
+      expect((await a.state()).balance).toBe(50000 + me.net);
+      expect((await pool.query("select count(*)::int as n from table_escrows where code = $1", [code])).rows[0].n).toBe(0);
+      const log = (await pool.query("select bet, payout from game_plays where user_id = $1 and game = 'bj_table'", [au.id])).rows;
+      expect(Number(log[0].payout) - Number(log[0].bet)).toBe(me.net);
+      ws.close();
+    });
+
+    it("Xì Dách: players play the banker, coins only change hands, and the banker seat moves round", async () => {
+      const { dropAllTablesForTest } = await import("../server/cardtables");
+      dropAllTablesForTest();
+      const a = new Player(), b = new Player(), c = new Player();
+      await a.register(); await b.register(); await c.register();
+      const code = (await a.req("POST", "/api/cards/tables", { mode: "banker", stake: 5000 })).body.code;
+      expect((await b.req("POST", `/api/cards/tables/${code}/sit`)).status).toBe(200);
+      expect((await c.req("POST", `/api/cards/tables/${code}/sit`)).status).toBe(200);
+      // A second table for the same player is refused
+      expect((await a.req("POST", "/api/cards/tables", { mode: "house", stake: 1000 })).status).toBe(409);
+      const sockets = [await seatWs(a, code), await seatWs(b, code), await seatWs(c, code)];
+      const dealt = await until(a, code, (s) => s.phase !== "waiting");
+      const banker1 = dealt.seats.findIndex((s: any) => s?.banker);
+      expect(banker1).toBeGreaterThanOrEqual(0);
+      if (dealt.phase === "playing") {
+        // Others' cards stay hidden until the end
+        const other = dealt.seats.find((s: any) => s && !s.you);
+        expect(other.cards).toBeNull();
+        // Standing under 16 is refused, for whoever is to play
+        for (const p of [a, b, c]) {
+          const mine = await state(p, code);
+          if (mine.turn === mine.you && mine.seats[mine.you].total < 16) {
+            expect((await p.req("POST", `/api/cards/tables/${code}/act`, { action: "stand" })).status).toBe(400);
+          }
+        }
+      }
+      const end = await playOut([a, b, c], code, (s, me) => (s.seats[me].banker ? 15 : 16));
+      const nets = end.seats.filter(Boolean).map((s: any) => s.net);
+      expect(nets.reduce((x: number, y: number) => x + y, 0)).toBe(0); // zero-sum: the game takes nothing
+      const balances = await Promise.all([a, b, c].map(async (p) => (await p.state()).balance));
+      expect(balances.reduce((x, y) => x + y, 0)).toBe(150000);
+      expect((await pool.query("select count(*)::int as n from table_escrows where code = $1", [code])).rows[0].n).toBe(0);
+      // Next round: the banker seat has moved on
+      const next = await until(a, code, (s) => s.round === 2 && s.phase !== "waiting", 15000);
+      expect(next.seats.findIndex((s: any) => s?.banker)).not.toBe(banker1);
+      for (const w of sockets) w.close();
+    }, 30000);
+  });
 });

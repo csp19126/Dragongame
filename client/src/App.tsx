@@ -56,6 +56,7 @@ const Tournament = lazyPage(() => import("@/pages/Tournament"));
 const Loto = lazyPage(() => import("@/pages/Loto"));
 const TienLen = lazyPage(() => import("@/pages/TienLen"));
 const Banca = lazyPage(() => import("@/pages/Banca"));
+const CardTables = lazyPage(() => import("@/pages/CardTables"));
 const NotFound = lazyPage(() => import("@/pages/not-found"));
 
 /** Last line of defence: never leave the player on a blank screen */
@@ -116,6 +117,7 @@ function Router() {
         <Route path="/loto" component={Loto} />
         <Route path="/tien-len" component={TienLen} />
         <Route path="/ban-ca" component={Banca} />
+        <Route path="/ban-bai" component={CardTables} />
         <Route path="/privacy" component={Privacy} />
         <Route path="/delete-account" component={Privacy} />
         <Route component={NotFound} />

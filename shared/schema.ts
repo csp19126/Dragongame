@@ -190,6 +190,16 @@ export const tienlenGames = pgTable("tienlen_games", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => [index("tienlen_games_user").on(t.userId, t.finished)]);
 
+// Coins set aside for a live card table round (what each player could lose), so they can't be
+// spent elsewhere mid-round. Settled rounds delete their rows; a restart refunds whatever is left.
+export const tableEscrows = pgTable("table_escrows", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  code: text("code").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("table_escrows_code").on(t.code)]);
+
 // League seasons already settled (one row each, so prizes can only be paid once)
 export const leagueSeasons = pgTable("league_seasons", {
   season: text("season").primaryKey(),
