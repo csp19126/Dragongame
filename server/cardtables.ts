@@ -24,7 +24,16 @@ const GONE_MS = 60_000; // a seat whose player has been away this long is freed 
 const EMPTY_MS = 120_000; // an empty table is closed
 const KIND_VI: Record<string, string> = { xiban: "Xì Bàn", xidach: "Xì Dách", nguLinh: "Ngũ Linh", quac: "Quắc", non: "Non" };
 
-interface Seat { userId: string; name: string; lastSeen: number; leaving: boolean }
+interface Seat { userId: string; name: string; lastSeen: number; leaving: boolean; bot?: boolean }
+
+// A computer player sits in at a Xì Dách table when only one person is there, so nobody waits.
+// It banks to 18 and plays to 16: with those, simulations show a person playing its best only
+// about breaks even against it over the banker rotation, so it isn't a free coin machine.
+const BOT_NAMES = ["Bà Tư", "Chú Sáu", "Anh Ba"];
+const BOT_BANKER_STOP = 18;
+const BOT_PLAYER_STOP = 16;
+const BOT_THINK_MS = 1200;
+const isBot = (s: Seat | null | undefined) => !!s?.bot;
 interface Hand { cards: Card[]; status: SeatStatus; doubled: boolean; hold: number; net: number | null; label: string | null }
 interface Client { ws: WebSocket; userId: string; lastEmote: number }
 interface Table {
@@ -71,7 +80,7 @@ function view(t: Table, userId: string | null): TableView {
     const mine = i === you;
     const open = !!h && (mine || reveal || t.mode === "house");
     return {
-      seat: i, username: s.name, you: mine, online: online.has(s.userId),
+      seat: i, username: s.name, you: mine, online: !!s.bot || online.has(s.userId), bot: !!s.bot,
       playing: !!h, banker: t.banker === i,
       cards: open ? h!.cards : null, count: h?.cards.length ?? 0, total: open ? handTotal(h!.cards) : null,
       status: h?.status ?? "out", doubled: h?.doubled ?? false,
@@ -107,10 +116,18 @@ async function balanceOf(userId: string) {
 async function startRound(t: Table): Promise<boolean> {
   // Only players who are actually at the table (connected) are dealt in, so nobody plays while away
   const here = new Set([...t.clients].map((c) => c.userId));
-  const seated = occupied(t).filter((i) => here.has(t.seats[i]!.userId));
-  if (seated.length < (t.mode === "house" ? 1 : 2)) { t.message = t.mode === "banker" ? "Waiting for at least 2 players" : null; return false; }
+  const humans = occupied(t).filter((i) => !isBot(t.seats[i]) && here.has(t.seats[i]!.userId));
+  if (t.mode === "banker") {
+    const botSeat = t.seats.findIndex((x) => isBot(x));
+    if (humans.length === 1 && botSeat < 0) {
+      const free = t.seats.findIndex((x) => !x);
+      if (free >= 0) t.seats[free] = { userId: `bot:${t.code}`, name: `${BOT_NAMES[t.round % BOT_NAMES.length]} 🤖`, lastSeen: Date.now(), leaving: false, bot: true };
+    } else if (humans.length !== 1 && botSeat >= 0) t.seats[botSeat] = null; // people to play with (or nobody): the computer steps aside
+  }
+  const seated = occupied(t).filter((i) => isBot(t.seats[i]) || here.has(t.seats[i]!.userId));
+  if (!humans.length || seated.length < (t.mode === "house" ? 1 : 2)) { t.message = t.mode === "banker" ? "need_players" : null; return false; }
   const bal = new Map<number, number>();
-  for (const i of seated) bal.set(i, await balanceOf(t.seats[i]!.userId));
+  for (const i of seated) bal.set(i, isBot(t.seats[i]) ? Number.MAX_SAFE_INTEGER : await balanceOf(t.seats[i]!.userId));
   let players: number[];
   let banker: number | null = null;
   const holds = new Map<number, number>();
@@ -125,13 +142,14 @@ async function startRound(t: Table): Promise<boolean> {
       const others = seated.filter((i) => i !== b && bal.get(i)! >= BANKER_HOLD * t.stake);
       if (others.length >= 1 && bal.get(b)! >= BANKER_HOLD * t.stake * others.length) { banker = b; players = others; break; }
     }
-    if (banker === null) { t.message = "Nobody has enough coins to be the banker"; return false; }
+    if (banker === null) { t.message = "banker_coins"; return false; }
     for (const i of players) holds.set(i, BANKER_HOLD * t.stake);
     holds.set(banker, BANKER_HOLD * t.stake * players.length);
   }
-  if (!players.length) { t.message = "Not enough coins to play this table"; return false; }
+  if (!players.length) { t.message = "no_coins"; return false; }
   const ok = await db.transaction(async (tx) => {
     for (const [i, amount] of holds) {
+      if (isBot(t.seats[i])) continue; // the computer's coins are the game's
       const userId = t.seats[i]!.userId;
       const [u] = await tx.update(users).set({ balance: sql`${users.balance} - ${amount}` })
         .where(and(eq(users.id, userId), sql`${users.balance} >= ${amount}`)).returning({ id: users.id });
@@ -178,7 +196,7 @@ async function advance(t: Table) {
   const next = order.find((i) => (t.turn === null || i > t.turn) && t.hands.get(i)!.status === "playing");
   if (next !== undefined && t.phase === "playing") {
     t.turn = next;
-    t.deadline = Date.now() + TURN_MS;
+    t.deadline = Date.now() + (isBot(t.seats[next]) ? BOT_THINK_MS : TURN_MS);
     if (t.seats[next]?.leaving) await autoPlay(t, next);
     return;
   }
@@ -196,7 +214,7 @@ async function advance(t: Table) {
   const bankerHand = t.hands.get(t.banker!)!;
   if (t.phase === "playing" && bankerHand.status === "playing") {
     t.phase = "dealer";
-    t.turn = t.banker; t.deadline = Date.now() + TURN_MS;
+    t.turn = t.banker; t.deadline = Date.now() + (isBot(t.seats[t.banker!]) ? BOT_THINK_MS : TURN_MS);
     if (t.seats[t.banker!]?.leaving) await autoPlay(t, t.banker!);
     return;
   }
@@ -239,7 +257,8 @@ async function autoPlay(t: Table, seat: number) {
   while (t.turn === seat && guard++ < 10) {
     const h = t.hands.get(seat)!;
     const total = handTotal(h.cards);
-    const min = t.mode === "house" ? 17 : seat === t.banker ? BANKER_STAND_MIN : PLAYER_STAND_MIN;
+    const bot = isBot(t.seats[seat]);
+    const min = t.mode === "house" ? 17 : seat === t.banker ? (bot ? BOT_BANKER_STOP : BANKER_STAND_MIN) : bot ? BOT_PLAYER_STOP : PLAYER_STAND_MIN;
     await act(t, seat, total < min && h.cards.length < 5 ? "hit" : "stand");
   }
 }
@@ -280,6 +299,7 @@ async function settle(t: Table) {
   for (const h of t.hands.values()) h.status = "done";
   await db.transaction(async (tx: Tx) => {
     for (const [i, h] of t.hands) {
+      if (isBot(t.seats[i])) continue;
       const userId = t.seats[i]?.userId ?? null;
       const owner = userId ?? (await ownerOfHold(tx, t.code, h.hold));
       if (!owner) continue;
@@ -326,7 +346,7 @@ async function tick() {
       // Away too long, between rounds: the seat is freed
       if (t.phase === "waiting" || t.phase === "settled") {
         t.seats.forEach((s, i) => {
-          if (s && now - s.lastSeen > GONE_MS && ![...t.clients].some((c) => c.userId === s.userId)) { seatedAt.delete(s.userId); t.seats[i] = null; }
+          if (s && !s.bot && now - s.lastSeen > GONE_MS && ![...t.clients].some((c) => c.userId === s.userId)) { seatedAt.delete(s.userId); t.seats[i] = null; }
         });
       }
       if ((t.phase === "playing" || t.phase === "dealer") && t.deadline && now > t.deadline && t.turn !== null) {
@@ -337,7 +357,7 @@ async function tick() {
         if (await startRound(t)) broadcast(t);
         else { t.nextRoundAt = now + 3000; if (t.message !== before) broadcast(t); if (t.phase === "settled") { t.phase = "waiting"; broadcast(t); } }
       }
-      const empty = t.seats.every((s) => !s) && t.clients.size === 0;
+      const empty = t.seats.every((s) => !s || s.bot) && t.clients.size === 0;
       if (empty) { t.emptySince ??= now; if (now - t.emptySince > EMPTY_MS) tables.delete(t.code); }
       else t.emptySince = null;
     } catch (e) {

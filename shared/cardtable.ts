@@ -92,6 +92,8 @@ export interface SeatView {
   username: string;
   you: boolean;
   online: boolean;
+  /** A computer player, sitting in so one person can still play Xì Dách */
+  bot: boolean;
   /** In this round */
   playing: boolean;
   banker: boolean;
@@ -119,6 +121,7 @@ export interface TableView {
   nextRoundAt: number | null;
   you: number | null;
   serverNow: number;
+  /** Why a round isn't starting: "need_players" | "banker_coins" | "no_coins" */
   message: string | null;
   round: number;
 }

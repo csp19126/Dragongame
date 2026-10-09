@@ -1369,12 +1369,16 @@ describe.skipIf(!TEST_DB)("API", () => {
         const s = await state(players[0], code);
         if (s.phase === "settled") return s;
         if (s.turn === null) { await new Promise((r) => setTimeout(r, 120)); continue; }
+        let moved = false;
         for (const p of players) {
           const mine = await state(p, code);
           if (mine.turn !== mine.you) continue;
           const seat = mine.seats[mine.you];
           await p.req("POST", `/api/cards/tables/${code}/act`, { action: seat.total < line(mine, mine.you) && seat.count < 5 ? "hit" : "stand" });
+          moved = true;
         }
+        // Someone else (or the computer) is thinking
+        if (!moved) await new Promise((r) => setTimeout(r, 150));
       }
       throw new Error("round never ended");
     }
@@ -1404,6 +1408,31 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(Number(log[0].payout) - Number(log[0].bet)).toBe(me.net);
       ws.close();
     });
+
+    it("Xì Dách on your own: a computer player sits in, plays fairly, and steps aside when a friend arrives", async () => {
+      const { dropAllTablesForTest } = await import("../server/cardtables");
+      dropAllTablesForTest();
+      const a = new Player(), b = new Player();
+      await a.register(); await b.register();
+      const code = (await a.req("POST", "/api/cards/tables", { mode: "banker", stake: 5000 })).body.code;
+      const wa = await seatWs(a, code);
+      const dealt = await until(a, code, (s) => s.phase !== "waiting");
+      const bot = dealt.seats.find((x: any) => x?.bot);
+      expect(bot).toBeTruthy();
+      expect(bot.username).toMatch(/🤖/);
+      const end = await playOut([a], code, (st, me) => (st.seats[me].banker ? 15 : 16));
+      const mine = end.seats[end.you];
+      // Only the person's coins move; nothing is held afterwards
+      expect((await a.state()).balance).toBe(50000 + mine.net);
+      expect((await pool.query("select count(*)::int as n from table_escrows where code = $1", [code])).rows[0].n).toBe(0);
+      // A friend sits down: from the next round it's people only
+      expect((await b.req("POST", `/api/cards/tables/${code}/sit`)).status).toBe(200);
+      const wb = await seatWs(b, code);
+      const next = await until(a, code, (st) => st.round >= 2 && st.phase !== "waiting", 15000);
+      expect(next.seats.some((x: any) => x?.bot)).toBe(false);
+      expect(next.seats.filter((x: any) => x?.playing).length).toBe(2);
+      wa.close(); wb.close();
+    }, 30000);
 
     it("Xì Dách: players play the banker, coins only change hands, and the banker seat moves round", async () => {
       const { dropAllTablesForTest } = await import("../server/cardtables");
