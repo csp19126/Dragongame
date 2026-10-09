@@ -1,13 +1,14 @@
 import { db } from "./db";
 import {
   users, gameStates, achievements, deposits, giftCards, jackpot, appSettings, blackjackHands,
-  chatMessages, chatReports, userStickers, stickerRewards, tournamentPlayers,
+  chatMessages, chatReports, userStickers, stickerRewards, tournamentPlayers, gamePlays, userDays,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
   JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare, FREE_SPIN_OPTIONS, HOLD_CHANCE, HOLD_MAX_REELS, REELS, type FreeSpinChoice,
 } from "@shared/schema";
 import { GAMBLE_MAX_ROUNDS, GAMBLE_MAX_STAKE, GAMBLE_PAYS, gambleWins, type GamblePick } from "@shared/gamble";
 import { STICKS, GRADE_BLESSING } from "@shared/oracle";
+import { vnDay } from "@shared/league";
 import { eq, desc, sql, and, or, isNull, lt, count, sum } from "drizzle-orm";
 import { randomInt } from "crypto";
 import { spin as runSpin, type SpinOutcome } from "./game";
@@ -87,6 +88,11 @@ export interface TableStats {
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/** Records one game played, inside the same transaction that paid for it */
+export async function logPlay(tx: Tx, userId: string, game: string, bet: number, payout: number) {
+  await tx.insert(gamePlays).values({ userId, game, bet, payout });
+}
+
 export class DatabaseStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -108,7 +114,9 @@ export class DatabaseStorage {
   }
 
   async touch(userId: string): Promise<void> {
-    await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
+    const now = new Date();
+    await db.update(users).set({ lastSeenAt: now }).where(eq(users.id, userId));
+    await db.insert(userDays).values({ userId, day: vnDay(now) }).onConflictDoNothing();
   }
 
   async updatePassword(userId: string, hashedPassword: string): Promise<void> {
@@ -233,6 +241,7 @@ export class DatabaseStorage {
         maxWin: sql`greatest(${users.maxWin}, ${totalWin})`,
       }).where(eq(users.id, userId)).returning();
       if (!user) throw new Error("User vanished mid-spin");
+      await logPlay(tx, userId, "slot", isFreeSpin ? 0 : bet, totalWin);
 
       // 6. Achievements
       const earned: BadgeId[] = [];
@@ -304,7 +313,7 @@ export class DatabaseStorage {
    * conditional UPDATE, plays, and pays out, all in one transaction.
    */
   async playTable<T extends { totalBet: number; winAmount: number }>(
-    userId: string, totalBet: number, play: () => T,
+    userId: string, game: string, totalBet: number, play: () => T,
   ): Promise<(T & TableStats) | SpinError> {
     return db.transaction(async (tx) => {
       const [paid] = await tx.update(users)
@@ -324,6 +333,7 @@ export class DatabaseStorage {
         maxWin: sql`greatest(${users.maxWin}, ${outcome.winAmount})`,
       }).where(eq(users.id, userId)).returning();
       if (!user) throw new Error("User vanished mid-round");
+      await logPlay(tx, userId, game, totalBet, outcome.winAmount);
 
       const earned: BadgeId[] = [];
       if (won) earned.push("first_win");
@@ -360,6 +370,7 @@ export class DatabaseStorage {
       totalWins: won ? sql`${users.totalWins} + 1` : users.totalWins,
       maxWin: sql`greatest(${users.maxWin}, ${s.payout})`,
     }).where(eq(users.id, userId)).returning();
+    await logPlay(tx, userId, "blackjack", s.totalBet, s.payout);
     const earned: BadgeId[] = [];
     if (won) earned.push("first_win");
     if (s.totalBet >= 100000) earned.push("high_roller");
@@ -473,6 +484,7 @@ export class DatabaseStorage {
         balance: sql`${users.balance} + ${payout}`,
         maxWin: sql`greatest(${users.maxWin}, ${payout})`,
       }).where(eq(users.id, userId)).returning();
+      await logPlay(tx, userId, "xocdia", stake, payout);
       const rounds = row.gambleRounds + 1;
       const next = won ? payout : 0;
       await tx.update(gameStates).set({ gambleAmount: next, gambleRounds: rounds }).where(eq(gameStates.id, state.id));

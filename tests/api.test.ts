@@ -1176,4 +1176,50 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(nextTier(200)).toBeNull();
     });
   });
+
+  describe("admin analytics", () => {
+    it("records every play and adds it up for the admin, who alone can see it", async () => {
+      const admin = new Player(), p = new Player();
+      const au = await admin.register(); const pu = await p.register();
+      await pool.query("update users set is_admin = true where id = $1", [au.id]);
+      expect((await p.req("GET", "/api/admin/analytics")).status).toBe(403);
+
+      const before = (await admin.req("GET", "/api/admin/analytics?days=1")).body;
+      let staked = 0, paid = 0;
+      for (let i = 0; i < 5; i++) {
+        const r = await p.spin(BET);
+        expect(r.status).toBe(200);
+        staked += BET; paid += r.body.winAmount;
+        if (r.body.pendingFreeSpinUnits) await p.req("POST", "/api/game/free-spins/pick", { choice: "steady" });
+      }
+      const bc = await p.req("POST", "/api/games/baucua", { bets: { cua: 2000 } });
+      expect(bc.status).toBe(200);
+
+      const rows = (await pool.query("select game, bet, payout from game_plays where user_id = $1 order by id", [pu.id])).rows;
+      const slot = rows.filter((r: any) => r.game === "slot" && Number(r.bet) > 0);
+      expect(slot.length).toBe(5);
+      expect(slot.reduce((a: number, r: any) => a + Number(r.bet), 0)).toBe(staked);
+      expect(rows.find((r: any) => r.game === "baucua")).toMatchObject({ bet: "2000", payout: String(bc.body.winAmount) });
+
+      const after = (await admin.req("GET", "/api/admin/analytics?days=1")).body;
+      expect(after.kpis.playsToday - before.kpis.playsToday).toBe(rows.length);
+      expect(after.kpis.wageredToday - before.kpis.wageredToday).toBe(staked + 2000);
+      expect(after.games.find((g: any) => g.game === "baucua").plays).toBeGreaterThanOrEqual(1);
+      expect(after.hideAdmins).toBe(true);
+      expect(after.topPlayers.map((t: any) => t.username)).not.toContain(admin.username);
+
+      const detail = (await admin.req("GET", `/api/admin/players/${pu.id}`)).body;
+      expect(detail.username).toBe(p.username);
+      expect(detail.games.find((g: any) => g.game === "slot").plays).toBeGreaterThanOrEqual(5);
+      expect(detail.activeDays.length).toBeGreaterThanOrEqual(0);
+
+      // A gift adds to the balance and shows up with the bonuses
+      const bal = (await p.state()).balance;
+      expect((await admin.req("POST", `/api/admin/players/${pu.id}/gift`, { amount: 5 })).status).toBe(400);
+      const g = await admin.req("POST", `/api/admin/players/${pu.id}/gift`, { amount: 25000 });
+      expect(g.body.balance).toBe(bal + 25000);
+      expect((await p.req("POST", `/api/admin/players/${pu.id}/gift`, { amount: 25000 })).status).toBe(403);
+      expect((await admin.req("GET", `/api/admin/players/${pu.id}`)).body.bonuses[0]).toMatchObject({ method: "admin_gift", amount: 25000 });
+    });
+  });
 });

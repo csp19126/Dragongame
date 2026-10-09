@@ -5,6 +5,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { randomInt } from "crypto";
 import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "./db";
+import { logPlay } from "./storage";
 import { poolMatches, users, deposits } from "@shared/schema";
 import { MIN_SHOTS, MAX_PER_PAIR_PER_DAY, DAILY_WIN_BONUS, seasonOf, vnDay } from "@shared/league";
 import { newGame, playShot, cleanShot, type GameState, type Shot, type Side } from "@shared/pool/engine";
@@ -133,6 +134,8 @@ async function finish(room: Room, winner: Side, reason: string) {
       maxWin: sql`greatest(${users.maxWin}, ${payout})`,
     }).where(eq(users.id, winnerId));
     await tx.update(users).set({ gamesPlayed: sql`${users.gamesPlayed} + 1` }).where(eq(users.id, loserId));
+    await logPlay(tx, winnerId, "pool", room.stake, payout);
+    await logPlay(tx, loserId, "pool", room.stake, 0);
     // The first counted win of the day earns a bonus
     if (counted) {
       const [b] = await tx.update(users).set({ balance: sql`${users.balance} + ${DAILY_WIN_BONUS}`, lastPoolBonusAt: now })

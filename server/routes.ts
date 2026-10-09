@@ -9,6 +9,7 @@ import { registerPoolRoutes } from "./pool";
 import { registerCommunityRoutes, applyReferral, communityStats } from "./community";
 import { registerTournamentRoutes } from "./tournament";
 import { registerLeagueRoutes } from "./league";
+import { registerAnalyticsRoutes } from "./analytics";
 import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
 import {
@@ -220,7 +221,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!parsed.success) return res.status(400).json({ message: firstError(parsed.error) });
     const bets = parsed.data.bets;
     const total = Object.values(bets).reduce((a, n) => a + n, 0);
-    const result = await storage.playTable(res.locals.user.id, total, () => playBauCua(bets));
+    const result = await storage.playTable(res.locals.user.id, "baucua", total, () => playBauCua(bets));
     if ("error" in result) return res.status(400).json({ message: "Insufficient balance", code: result.error });
     recordBigWin(res.locals.user, result.winAmount, total);
     res.json(result);
@@ -231,7 +232,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!parsed.success) return res.status(400).json({ message: firstError(parsed.error) });
     const bets = parsed.data.bets;
     const total = bets.reduce((a, b) => a + b.amount, 0);
-    const result = await storage.playTable(res.locals.user.id, total, () => playRoulette(bets));
+    const result = await storage.playTable(res.locals.user.id, "roulette", total, () => playRoulette(bets));
     if ("error" in result) return res.status(400).json({ message: "Insufficient balance", code: result.error });
     recordBigWin(res.locals.user, result.winAmount, total);
     res.json(result);
@@ -241,6 +242,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerCommunityRoutes(app, requireUser, requireAdmin);
   registerTournamentRoutes(app, requireUser, requireAdmin);
   registerLeagueRoutes(app, requireUser);
+  registerAnalyticsRoutes(app, requireAdmin);
 
   // Blackjack: the hand lives on the server; the browser only ever sees publicView()
   const BJ_MAX_BET = 1_000_000;
