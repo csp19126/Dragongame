@@ -1,11 +1,15 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence, useAnimationControls } from "framer-motion";
 import { Loader2, X } from "lucide-react";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { useLang } from "@/lib/lang-context";
 import { soundManager } from "@/lib/sound";
-import { coinBurst } from "@/lib/celebrate";
+import { coinBurst, fireworks } from "@/lib/celebrate";
 import { GAMBLE_PAYS, GAMBLE_MAX_ROUNDS, GAMBLE_MAX_STAKE, type GamblePick } from "@shared/gamble";
+
+const FLIP_GAP = 220; // ms between coins turning over
+const REVEAL_MS = 250 + 3 * FLIP_GAP + 450; // the verdict lands just after the last coin
+const STAMP_MS = 2200; // how long the big WIN / LOST stays over the plate
 
 interface Result { coins: boolean[]; reds: number; won: boolean; payout: number; stake: number; kept: number; gambleAmount: number; rounds: number; canContinue: boolean; balance: number }
 
@@ -34,12 +38,44 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
   const [phase, setPhase] = useState<"pick" | "shake" | "reveal">("pick");
   const [res, setRes] = useState<Result | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [picked, setPicked] = useState<GamblePick | null>(null);
+  // The verdict waits until every coin has turned over, so the result builds up then lands
+  const [verdict, setVerdict] = useState(false);
+  // The big stamp over the plate, cleared after a moment so the coins can be seen
+  const [stamp, setStamp] = useState(false);
+  const card = useAnimationControls();
   const stake = half ? Math.floor(pot / 2) : pot;
-  const finished = res !== null && !res.canContinue;
+  const finished = res !== null && !res.canContinue && verdict;
+  const busy = phase === "shake" || (phase === "reveal" && !verdict);
+  const pickInfo = PICKS.find((p) => p.id === picked);
+
+  useEffect(() => {
+    if (phase !== "reveal" || !res) return;
+    const flips = [0, 1, 2, 3].map((i) => window.setTimeout(() => soundManager.coinFlip(), 250 + i * FLIP_GAP));
+    const land = window.setTimeout(() => {
+      setVerdict(true);
+      setStamp(true);
+      if (res.won) {
+        const big = res.payout >= 16 * res.stake;
+        soundManager.win(big);
+        coinBurst();
+        if (big) { soundManager.bigWinFanfare(); fireworks(2500, 1.2); }
+      } else {
+        soundManager.gambleLose();
+        navigator.vibrate?.([80, 60, 160]);
+        void card.start({ x: [0, -14, 14, -10, 10, -5, 5, 0], transition: { duration: 0.5 } });
+      }
+    }, REVEAL_MS);
+    const clear = window.setTimeout(() => setStamp(false), REVEAL_MS + STAMP_MS);
+    return () => { flips.forEach(clearTimeout); clearTimeout(land); clearTimeout(clear); };
+  }, [phase, res, card]);
 
   const play = async (pick: GamblePick) => {
-    if (phase === "shake") return;
+    if (busy) return;
     setErr(null);
+    setPicked(pick);
+    setVerdict(false);
+    setStamp(false);
     setPhase("shake");
     setRes(null);
     soundManager.tension();
@@ -52,7 +88,6 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
       setPot(r.gambleAmount);
       setRounds(r.rounds);
       onBalance(r.balance, r.gambleAmount, r.rounds);
-      if (r.won) { soundManager.win(r.payout >= 16 * r.stake); coinBurst(); } else soundManager.lossComfort();
     } catch (e) {
       setPhase("pick");
       setErr(e instanceof ApiError ? e.message : String(e));
@@ -66,7 +101,8 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3" data-testid="xoc-dia">
-      <div className="relative w-full max-w-sm rounded-[2rem] bg-gradient-to-b from-[#3b0d0d] via-[#1f0a2e] to-[#0a051a] border-2 border-yellow-400/70 shadow-[0_0_50px_rgba(250,204,21,0.25)] p-4 flex flex-col items-center gap-3">
+      <motion.div animate={card} className={`relative w-full max-w-sm rounded-[2rem] bg-gradient-to-b from-[#3b0d0d] via-[#1f0a2e] to-[#0a051a] border-2 p-4 flex flex-col items-center gap-3 transition-[border-color,box-shadow] duration-300 ${
+        verdict && res ? (res.won ? "border-yellow-300 shadow-[0_0_70px_rgba(250,204,21,0.6)]" : "border-red-500 shadow-[0_0_70px_rgba(239,68,68,0.55)]") : "border-yellow-400/70 shadow-[0_0_50px_rgba(250,204,21,0.25)]"}`}>
         <button type="button" onClick={() => (finished ? onClose(false) : collect())} className="absolute top-3 right-3 text-white/50" aria-label="Close"><X className="w-5 h-5" /></button>
         <div className="text-center">
           <div className="font-display text-3xl text-yellow-300 leading-none">Xóc Đĩa</div>
@@ -78,7 +114,10 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
           <div className="absolute inset-0 rounded-full bg-gradient-to-b from-slate-100 to-slate-300 shadow-[inset_0_-8px_20px_rgba(0,0,0,0.25),0_10px_30px_rgba(0,0,0,0.6)] border-4 border-yellow-500/70" />
           <div className="relative grid grid-cols-2 gap-3">
             {(res?.coins ?? [true, false, true, false]).map((red, i) => (
-              <motion.div key={`${i}-${res?.rounds ?? 0}`} initial={{ scale: 0.6 }} animate={{ scale: 1 }}
+              <motion.div key={`${i}-${res ? `${res.rounds}-${res.reds}-${res.won}` : "idle"}`}
+                initial={res ? { rotateY: 180, scale: 0.8 } : { scale: 0.6 }}
+                animate={{ rotateY: 0, scale: 1 }}
+                transition={res ? { delay: 0.25 + (i * FLIP_GAP) / 1000, duration: 0.35 } : { duration: 0.2 }}
                 className={`w-14 h-14 rounded-full border-4 shadow-md ${red ? "bg-gradient-to-br from-red-500 to-red-700 border-red-300" : "bg-gradient-to-br from-white to-slate-200 border-slate-300"}`}
                 data-testid={`coin-${i}`} />
             ))}
@@ -97,19 +136,60 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
               </motion.div>
             )}
           </AnimatePresence>
+          <AnimatePresence>
+            {stamp && res && (res.won ? (
+              <motion.div key="win" className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" data-testid="xoc-verdict-win"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <motion.div className="absolute -inset-10 rounded-full opacity-70"
+                  style={{ background: "repeating-conic-gradient(from 0deg, rgba(253,224,71,0.55) 0deg 10deg, transparent 10deg 30deg)" }}
+                  animate={{ rotate: 360 }} transition={{ duration: 6, repeat: Infinity, ease: "linear" }} />
+                <div className="absolute inset-6 rounded-full bg-[radial-gradient(circle,rgba(250,204,21,0.55),transparent_70%)]" />
+                <motion.div initial={{ scale: 0.2, rotate: -10 }} animate={{ scale: [0.2, 1.25, 1], rotate: 0 }} transition={{ duration: 0.55 }}
+                  className="relative font-display text-6xl text-yellow-300 drop-shadow-[0_4px_0_#7c2d12] [-webkit-text-stroke:2px_#7c2d12]">
+                  {vi ? "THẮNG!" : "WIN!"}
+                </motion.div>
+                <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
+                  className="relative mt-1 rounded-full bg-black/70 px-4 py-1 font-mono font-black text-2xl text-green-300 border-2 border-yellow-300">
+                  +{res.payout.toLocaleString()} 🪙
+                </motion.div>
+                <div className="relative mt-1 rounded-full bg-yellow-400 px-3 text-black font-black text-sm">×{Math.round(res.payout / res.stake)}</div>
+              </motion.div>
+            ) : (
+              <motion.div key="lose" className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" data-testid="xoc-verdict-lose"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <motion.div className="absolute inset-0 rounded-full bg-red-950/60" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 0.75] }} transition={{ duration: 0.5 }} />
+                <motion.div initial={{ scale: 3, opacity: 0, rotate: -25 }} animate={{ scale: 1, opacity: 1, rotate: -12 }} transition={{ type: "spring", stiffness: 420, damping: 18 }}
+                  className="relative rounded-2xl border-[6px] border-red-500 bg-black/60 px-5 py-1 font-display text-6xl text-red-500 tracking-wider shadow-[0_0_30px_rgba(239,68,68,0.7)]">
+                  {vi ? "THUA" : "LOST"}
+                </motion.div>
+                <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.35 }}
+                  className="relative mt-3 rounded-full bg-black/75 px-4 py-1 font-mono font-black text-xl text-red-200 border-2 border-red-500">
+                  −{res.stake.toLocaleString()} 🪙
+                </motion.div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
 
         {/* What happened */}
         <div className="min-h-[3rem] text-center" aria-live="polite" data-testid="xoc-dia-result">
           {res && phase === "reveal" ? (
-            res.won ? (
-              <div className="text-green-400 font-black text-xl">{vi ? "THẮNG" : "WIN"} +{res.payout.toLocaleString()} 🪙
-                <div className="text-xs text-white/60 font-bold">{res.reds} {vi ? "đỏ" : "red"} · {4 - res.reds} {vi ? "trắng" : "white"}</div>
-              </div>
+            !verdict ? (
+              <div className="text-yellow-200 font-black text-lg animate-pulse">{vi ? "Đang mở bát…" : "Lifting the bowl…"}</div>
             ) : (
-              <div className="text-red-300 font-black text-xl">{vi ? "Thua" : "Lost"} {res.stake.toLocaleString()}
-                <div className="text-xs text-white/60 font-bold">{res.reds} {vi ? "đỏ" : "red"} · {4 - res.reds} {vi ? "trắng" : "white"}{res.kept > 0 ? ` · ${vi ? "giữ lại" : "kept"} ${res.kept.toLocaleString()}` : ""}</div>
-              </div>
+              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className={`font-black text-base ${res.won ? "text-green-300" : "text-red-300"}`}>
+                <div>
+                  {res.won ? "✅ " : "❌ "}{vi ? "Bạn chọn" : "You picked"} <span className="text-white">{pickInfo ? (vi ? pickInfo.vi : pickInfo.en) : "?"}</span>
+                  {" · "}{vi ? "Ra" : "It came"} <span className="text-white">{res.reds} {vi ? "đỏ" : "red"}, {4 - res.reds} {vi ? "trắng" : "white"}</span>
+                </div>
+                <div className="text-xs text-white/70 font-bold">
+                  {res.won
+                    ? (vi ? `Tiền thắng giờ là ${res.gambleAmount.toLocaleString()} 🪙` : `Your win is now ${res.gambleAmount.toLocaleString()} 🪙`)
+                    : res.kept > 0
+                      ? (vi ? `Còn giữ lại ${res.kept.toLocaleString()} 🪙 (nửa kia an toàn)` : `You kept ${res.kept.toLocaleString()} 🪙 (the safe half)`)
+                      : (vi ? "Mất hết tiền thắng lần này" : "This win is gone")}
+                </div>
+              </motion.div>
             )
           ) : (
             <div className="text-yellow-200">
@@ -125,7 +205,7 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
             {pot > 0 && (
               <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-black/40 w-full">
                 {[false, true].map((h) => (
-                  <button key={String(h)} type="button" disabled={phase === "shake"} onClick={() => setHalf(h)}
+                  <button key={String(h)} type="button" disabled={busy} onClick={() => setHalf(h)}
                     className={`py-1.5 rounded-lg text-xs font-black ${half === h ? "bg-yellow-400 text-black" : "text-white/70"}`} data-testid={h ? "xoc-half" : "xoc-all"}>
                     {h ? (vi ? `Một nửa (${Math.floor(pot / 2).toLocaleString()})` : `Half (${Math.floor(pot / 2).toLocaleString()})`) : (vi ? `Tất cả (${pot.toLocaleString()})` : `All (${pot.toLocaleString()})`)}
                   </button>
@@ -134,7 +214,7 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
             )}
             <div className="grid grid-cols-2 gap-2 w-full">
               {PICKS.map((p) => (
-                <button key={p.id} type="button" disabled={phase === "shake" || stake <= 0 || stake > GAMBLE_MAX_STAKE} onClick={() => play(p.id)}
+                <button key={p.id} type="button" disabled={busy || stake <= 0 || stake > GAMBLE_MAX_STAKE} onClick={() => play(p.id)}
                   className={`rounded-2xl border-2 bg-gradient-to-b ${p.cls} py-2 font-black shadow-lg active:scale-95 disabled:opacity-40 ${p.cls.includes("text-black") ? "" : "text-white"}`}
                   data-testid={`xoc-${p.id}`}>
                   <div className="text-lg leading-none">{vi ? p.vi : p.en} <span className="text-sm">×{GAMBLE_PAYS[p.id]}</span></div>
@@ -142,8 +222,8 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
                 </button>
               ))}
             </div>
-            <button type="button" disabled={phase === "shake"} onClick={collect} className="w-full py-3 rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-700 text-white font-black text-lg disabled:opacity-40" data-testid="xoc-collect">
-              {phase === "shake" ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (vi ? `Lấy ${pot.toLocaleString()} 🪙` : `Collect ${pot.toLocaleString()} 🪙`)}
+            <button type="button" disabled={busy} onClick={collect} className="w-full py-3 rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-700 text-white font-black text-lg disabled:opacity-40" data-testid="xoc-collect">
+              {busy ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (vi ? `Lấy ${pot.toLocaleString()} 🪙` : `Collect ${pot.toLocaleString()} 🪙`)}
             </button>
             <div className="text-[10px] text-white/40 text-center">
               {vi ? `Lượt ${rounds}/${GAMBLE_MAX_ROUNDS} · tỷ lệ công bằng tuyệt đối: Chẵn/Lẻ 8/16, Tứ Đỏ/Tứ Trắng 1/16` : `Round ${rounds}/${GAMBLE_MAX_ROUNDS} · exactly fair odds: even/odd 8 in 16, four of a colour 1 in 16`}
@@ -154,7 +234,7 @@ export function XocDia({ amount, rounds: startRounds, onBalance, onClose }: {
             {res?.won ? (vi ? "Tuyệt vời! Tiếp tục quay" : "Brilliant! Back to the reels") : (vi ? "Quay tiếp" : "Back to the reels")}
           </button>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }
