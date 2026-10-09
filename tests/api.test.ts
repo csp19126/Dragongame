@@ -1017,6 +1017,8 @@ describe.skipIf(!TEST_DB)("API", () => {
     it("the double-up is fair over many rounds (about half of even/odd bets win)", async () => {
       const p = new Player();
       const user = await p.register();
+      // Each round really stakes 1,000 from the balance: enough coins that a losing streak can't run it dry
+      await setBalance(p.username, 10_000_000);
       let wins = 0;
       const N = 400;
       for (let i = 0; i < N; i++) {
@@ -1185,11 +1187,12 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await p.req("GET", "/api/admin/analytics")).status).toBe(403);
 
       const before = (await admin.req("GET", "/api/admin/analytics?days=1")).body;
-      let staked = 0, paid = 0;
-      for (let i = 0; i < 5; i++) {
+      // Five paid spins; any free spins won along the way are played too (they cost nothing)
+      let staked = 0, paidSpins = 0;
+      for (let guard = 0; paidSpins < 5 && guard < 100; guard++) {
         const r = await p.spin(BET);
         expect(r.status).toBe(200);
-        staked += BET; paid += r.body.winAmount;
+        if (!r.body.isFreeSpin) { staked += BET; paidSpins++; }
         if (r.body.pendingFreeSpinUnits) await p.req("POST", "/api/game/free-spins/pick", { choice: "steady" });
       }
       const bc = await p.req("POST", "/api/games/baucua", { bets: { cua: 2000 } });
