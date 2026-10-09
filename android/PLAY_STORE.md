@@ -98,7 +98,7 @@ VnSlot 888 – Long Phát Tài: ba trò chơi phong cách Việt, chung một v�
 🦀 BẦU CUA TÔM CÁ: trò chơi ngày Tết quen thuộc. Đặt cược Bầu, Cua, Tôm, Cá, Gà, Nai rồi lắc ba xúc xắc.
 🎡 ROULETTE: bàn châu Âu một số 0, cược số, tá, cột, đỏ/đen, chẵn/lẻ.
 
-✨ Hoàn toàn miễn phí: nhận 50.000 xu khi đăng ký và thêm xu miễn phí mỗi ngày.
+✨ Hoàn toàn miễn phí: nhận 100.000 xu khi đăng ký và thêm xu miễn phí mỗi ngày.
 🎲 Công bằng: mọi kết quả do máy chủ chọn ngẫu nhiên, tỷ lệ hoàn trả được công bố trong từng trò chơi.
 🏆 Thành tích, bảng xếp hạng và hiệu ứng pháo hoa khi thắng lớn.
 
@@ -118,7 +118,7 @@ VnSlot 888 – Dragon Fortune: three Vietnamese-style games on one coin balance.
 🦀 BẦU CUA TÔM CÁ: the Tết dice game. Bet on the gourd, crab, shrimp, fish, rooster or deer and roll three dice.
 🎡 ROULETTE: European single zero. Numbers, dozens, columns, red/black, odd/even.
 
-✨ Completely free: 50,000 coins when you sign up, plus free coins every day.
+✨ Completely free: 100,000 coins when you sign up, plus free coins every day.
 🎲 Fair: every result is drawn on the server, and each game publishes its return to player.
 🏆 Achievements, leaderboard and fireworks for big wins.
 

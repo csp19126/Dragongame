@@ -1,4 +1,6 @@
 import QRCode from "qrcode";
+import { STARTING_BALANCE } from "@shared/schema";
+import { REFERRAL_WELCOME } from "@shared/stickers";
 
 /**
  * Brag cards: a 1080x1920 picture (phone story / TikTok size) drawn on a canvas in the browser.
@@ -158,8 +160,10 @@ export async function renderShareCard(d: ShareCardData): Promise<Blob> {
   const tx = px + qrSize + 70, tw = pw - qrSize - 100;
   fitFont(ctx, vi ? "Chơi miễn phí!" : "Play free!", display, "", 76, tw);
   ctx.fillStyle = "#facc15"; ctx.fillText(vi ? "Chơi miễn phí!" : "Play free!", tx, py + 115);
-  fitFont(ctx, vi ? "Quét mã: +50.000 xu" : "Scan: +50,000 coins", body, "bold", 44, tw);
-  ctx.fillStyle = "#ffffff"; ctx.fillText(vi ? "Quét mã: +50.000 xu" : "Scan: +50,000 coins", tx, py + 185);
+  const welcome = STARTING_BALANCE + REFERRAL_WELCOME;
+  const scan = vi ? `Quét mã: +${welcome.toLocaleString("vi-VN")} xu` : `Scan: +${welcome.toLocaleString("en-US")} coins`;
+  fitFont(ctx, scan, body, "bold", 44, tw);
+  ctx.fillStyle = "#ffffff"; ctx.fillText(scan, tx, py + 185);
   fitFont(ctx, location.host, body, "bold", 42, tw);
   ctx.fillStyle = "#fde68a"; ctx.fillText(location.host, tx, py + 250);
   ctx.textAlign = "center";
