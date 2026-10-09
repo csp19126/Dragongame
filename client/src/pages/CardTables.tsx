@@ -79,7 +79,7 @@ function Lobby({ onOpen }: { onOpen: (code: string) => void }) {
     },
   });
   const modes: { id: TableMode; title: string; desc: string; icon: string }[] = [
-    { id: "banker", icon: "🀄", title: vi ? "Xì Dách · Nhà cái" : "Xì Dách · Banker", desc: vi ? "Đấu với nhau: mỗi ván một người làm cái, xoay vòng. Không thu phí." : "Play each other: one player is the banker each round, taking turns. No house cut." },
+    { id: "banker", icon: "🀄", title: vi ? "Xì Dách · Nhà cái" : "Xì Dách · Banker", desc: vi ? "Đấu với nhau: mỗi ván một người làm cái, xoay vòng. Không thu phí. Chơi một mình cũng được: máy sẽ vào ngồi cùng cho tới khi bạn bè tới." : "Play each other: one player is the banker each round, taking turns. No house cut. On your own? A computer player sits in until a friend arrives." },
     { id: "house", icon: "🃏", title: vi ? "Bàn Chung" : "Shared table", desc: vi ? "Cùng bàn, cùng xem bài nhau, mỗi người đấu với nhà cái máy." : "Sit together and see each other's cards; everyone plays the dealer." },
   ];
   return (
@@ -172,6 +172,14 @@ function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
   }, [s, setBalance]);
 
   const now = clock + offset.current;
+  const hold = s ? (s.mode === "banker" ? s.stake * XI_BAN_PAYS : s.stake * 2) : 0;
+  const messageText = (m: string | null) => {
+    if (!m || !s) return null;
+    if (m === "banker_coins") return vi ? `Chưa ai đủ xu làm nhà cái. Mỗi người cần ${fmt(hold)} xu, nhà cái cần ${fmt(hold)} xu cho mỗi người chơi.` : `Nobody has enough coins to be the banker. Each player needs ${fmt(hold)}, and the banker ${fmt(hold)} per player.`;
+    if (m === "no_coins") return vi ? `Bạn cần ít nhất ${fmt(hold)} xu để vào ván bàn này.` : `You need at least ${fmt(hold)} coins to play a round here.`;
+    if (m === "need_players") return vi ? "Đang chờ người chơi…" : "Waiting for players…";
+    return m;
+  };
   const me = s && s.you !== null ? s.seats[s.you] : null;
   const myTurn = !!s && s.you !== null && s.turn === s.you && (s.phase === "playing" || s.phase === "dealer");
   const left = s?.deadline ? Math.max(0, Math.ceil((s.deadline - now) / 1000)) : null;
@@ -187,18 +195,29 @@ function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
   if (!s) return <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-yellow-400" /></div>;
   const others = order.slice(1);
   const inviteUrl = `${location.origin}/ban-bai?table=${s.code}`;
+  const invite = async () => {
+    const text = vi ? `Vào chơi Xì Dách với mình trên VnSlot 888! ${inviteUrl}` : `Come and play cards with me on VnSlot 888! ${inviteUrl}`;
+    try {
+      if (navigator.share) { await navigator.share({ title: "VnSlot 888", text, url: inviteUrl }); return; }
+    } catch { /* closed the share sheet */ return; }
+    void navigator.clipboard?.writeText(inviteUrl);
+    toast({ title: vi ? "Đã chép link mời bạn" : "Invite link copied" });
+  };
 
   const seatBox = (i: number) => {
     const p = s.seats[i];
     const emote = emotes.filter((e) => e.from === i).slice(-1)[0];
     if (!p) return (
-      <div key={i} className="rounded-2xl border border-dashed border-white/15 p-2 min-h-[5.5rem] flex items-center justify-center text-[11px] text-white/35">{vi ? "Ghế trống" : "Empty seat"}</div>
+      <button key={i} type="button" onClick={invite} className="rounded-2xl border border-dashed border-white/15 p-2 min-h-[5.5rem] flex flex-col items-center justify-center text-[11px] text-white/45 active:bg-white/5">
+        <span className="text-lg leading-none">＋</span>{vi ? "Mời bạn" : "Invite a friend"}
+      </button>
     );
     const turn = s.turn === i && (s.phase === "playing" || s.phase === "dealer");
     return (
       <div key={i} className={`relative rounded-2xl p-2 min-h-[5.5rem] ${turn ? "bg-yellow-400/20 ring-2 ring-yellow-300" : "bg-black/30"} ${!p.online ? "opacity-60" : ""}`} data-testid={`seat-${i}`}>
         <div className="flex items-center gap-1 text-[11px] font-black text-white truncate">
           {p.banker && <Crown className="w-3.5 h-3.5 text-yellow-300 shrink-0" />}<span className="truncate">{p.username}</span>
+          {p.bot && <span className="shrink-0 rounded-full bg-white/15 px-1.5 text-[9px] text-white/80">{vi ? "máy" : "computer"}</span>}
         </div>
         <div className="flex -space-x-4 mt-1">
           {p.playing ? (p.cards ?? Array(p.count).fill(null)).map((c: Card | null, k: number) => <PlayingCard key={k} c={c} small i={k} />) : <span className="text-[10px] text-white/45">{vi ? "Chờ ván sau" : "Next round"}</span>}
@@ -232,7 +251,7 @@ function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
         <div className="grid grid-cols-2 gap-2">{others.map(seatBox)}</div>
         <div className="text-center text-xs font-black text-yellow-200 min-h-[1rem]">
           {s.phase === "waiting" || s.phase === "settled"
-            ? (s.message ? s.message : s.nextRoundAt ? (vi ? `Ván mới sau ${Math.max(0, Math.ceil((s.nextRoundAt - now) / 1000))}s` : `Next round in ${Math.max(0, Math.ceil((s.nextRoundAt - now) / 1000))}s`) : (vi ? "Đang chờ người chơi" : "Waiting for players"))
+            ? (s.message ? messageText(s.message) : s.nextRoundAt ? (vi ? `Ván mới sau ${Math.max(0, Math.ceil((s.nextRoundAt - now) / 1000))}s` : `Next round in ${Math.max(0, Math.ceil((s.nextRoundAt - now) / 1000))}s`) : (vi ? "Đang chờ người chơi" : "Waiting for players"))
             : s.turn !== null && s.seats[s.turn] ? `${s.turn === s.you ? (vi ? "Lượt bạn" : "Your turn") : s.seats[s.turn]!.username}${left !== null ? ` · ${left}s` : ""}`
               : (vi ? "Nhà cái đang rút…" : "Dealer playing…")}
         </div>
@@ -267,8 +286,9 @@ function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
       <div className="flex justify-center gap-2">
         {EMOTES.map((e) => <button key={e} type="button" onClick={() => send({ t: "emote", e })} className="w-10 h-10 rounded-full bg-white/5 text-xl">{e}</button>)}
       </div>
-      <button type="button" onClick={() => { void navigator.clipboard?.writeText(inviteUrl); toast({ title: vi ? "Đã chép link mời bạn" : "Invite link copied" }); }}
-        className="text-xs text-sky-300 underline">{vi ? "Chép link mời bạn vào bàn" : "Copy an invite link to this table"}</button>
+      <button type="button" onClick={invite} className="w-full py-2.5 rounded-2xl bg-sky-500/20 border border-sky-300/40 text-sky-100 text-sm font-black" data-testid="invite">
+        {vi ? "📲 Mời bạn bè vào bàn" : "📲 Invite friends to this table"}
+      </button>
 
       <details className="rounded-2xl p-3 bg-white/[0.04] border border-white/10 text-xs text-white/75">
         <summary className="font-black text-yellow-300 cursor-pointer">{vi ? "Luật chơi" : "Rules"}</summary>
@@ -279,6 +299,7 @@ function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
             <li>{vi ? `Người chơi cần ${PLAYER_STAND_MIN} điểm để dằn, nhà cái ${BANKER_STAND_MIN}. Quá 21 là quắc: thua kể cả khi nhà cái cũng quắc.` : `Players need ${PLAYER_STAND_MIN} to stand, the banker ${BANKER_STAND_MIN}. Over 21 is quắc and loses, even if the banker goes over too.`}</li>
             <li>{vi ? "Còn lại: điểm cao hơn thắng; bằng điểm hoà. Hai Ngũ Linh: ít điểm hơn thắng." : "Otherwise the higher total wins; a tie is a push. Two Ngũ Linh: the lower total wins."}</li>
             <li>{vi ? "Hết giờ thì máy đánh hộ (rút tới đủ điểm rồi dằn)." : "If your time runs out, your hand is played for you (draws to the minimum, then stands)."}</li>
+            <li>{vi ? "Chỉ có một mình? Một người chơi máy 🤖 sẽ vào ngồi cùng (làm cái theo lượt như người thật) và tự nhường ghế khi bạn bè vào." : "On your own? A computer player 🤖 sits in (taking its turn as banker like anyone else) and steps aside when friends join."}</li>
           </ul>
         ) : (
           <ul className="mt-1 list-disc pl-4 space-y-0.5">
