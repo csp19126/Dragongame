@@ -1222,4 +1222,51 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await admin.req("GET", `/api/admin/players/${pu.id}`)).body.bonuses[0]).toMatchObject({ method: "admin_gift", amount: 25000 });
     });
   });
+
+  describe("Lô Tô", () => {
+    it("sells real tickets only while buying is open, keeps the winning call secret, and pays it exactly once", async () => {
+      const { buyTickets, settleLoto, lotoView, roundDraws } = await import("../server/loto");
+      const L = await import("../shared/loto");
+      const p = new Player();
+      const pu = await p.register();
+      const user = (await pool.query("select * from users where id = $1", [pu.id])).rows[0];
+      // A round far in the future, so the live timer leaves it alone until we say
+      const t = L.lotoRoundTimes(L.lotoRoundAt(Date.now()).round + 1000);
+      const buying = t.start + 5000;
+
+      expect((await buyTickets(pu.id, { price: 7000, grids: [L.makeLotoGrid()] }, buying))).toHaveProperty("error");
+      const bad = L.makeLotoGrid(); bad[0] = bad[1];
+      expect((await buyTickets(pu.id, { price: 10000, grids: [bad] }, buying))).toHaveProperty("error");
+      expect((await buyTickets(pu.id, { price: 10000, grids: [L.makeLotoGrid()] }, t.drawStart))).toMatchObject({ code: "closed" });
+
+      const grids = [L.makeLotoGrid(), L.makeLotoGrid(), L.makeLotoGrid()];
+      const r = await buyTickets(pu.id, { price: 10000, grids }, buying);
+      expect(r).not.toHaveProperty("error");
+      expect((r as any).balance).toBe(50000 - 30000);
+      // Six a round at most
+      await buyTickets(pu.id, { price: 1000, grids: [L.makeLotoGrid(), L.makeLotoGrid(), L.makeLotoGrid()] }, buying);
+      expect((await buyTickets(pu.id, { price: 1000, grids: [L.makeLotoGrid()] }, buying))).toHaveProperty("error");
+
+      const draws = await roundDraws(t.round);
+      const expected = grids.map((g) => Math.round(10000 * L.lotoMultiplier(L.lotoKinhAt(g, draws))));
+      // Before the calls, nothing about the outcome is visible
+      const early = await lotoView(user, t.drawStart - 100);
+      expect(early.calls).toEqual([]);
+      expect(early.mine.every((x) => x.kinhAt === null && x.payout === null)).toBe(true);
+
+      // Nothing is paid early; everything is paid once the calls end, and only once
+      await settleLoto(t.drawStart - 100);
+      const mid = (await pool.query("select count(*)::int as n from loto_tickets where round = $1 and settled", [t.round])).rows[0].n;
+      expect(mid).toBe(0);
+      const before = (await p.state()).balance;
+      await settleLoto(t.callsEnd + 1000);
+      await settleLoto(t.callsEnd + 2000);
+      const small = (await pool.query("select payout from loto_tickets where round = $1 and price = 1000", [t.round])).rows.reduce((a: number, x: any) => a + Number(x.payout), 0);
+      expect((await p.state()).balance).toBe(before + expected.reduce((a, b) => a + b, 0) + small);
+      const plays = (await pool.query("select count(*)::int as n from game_plays where user_id = $1 and game = 'loto'", [pu.id])).rows[0].n;
+      expect(plays).toBe(6);
+      const after = await lotoView(user, t.callsEnd + 3000);
+      expect(after.calls).toEqual(draws.slice(0, L.LOTO_CALLS));
+    });
+  });
 });
