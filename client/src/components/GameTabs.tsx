@@ -6,6 +6,7 @@ const GAMES = [
   { href: "/bau-cua", icon: "🦀", key: "gameBauCua" },
   { href: "/roulette", icon: "🎡", key: "gameRoulette" },
   { href: "/blackjack", icon: "🃏", key: "gameBlackjack" },
+  { href: "/ban-bai", icon: "🀄", key: "gameCardTables" },
   { href: "/pool", icon: "🎱", key: "gamePool" },
   { href: "/loto", icon: "🎟️", key: "gameLoto" },
   { href: "/tien-len", icon: "🂡", key: "gameTienLen" },

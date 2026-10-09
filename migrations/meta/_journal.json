@@ -99,6 +99,13 @@
       "when": 1791567304372,
       "tag": "0013_tienlen",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791571222227,
+      "tag": "0014_card_tables",
+      "breakpoints": true
     }
   ]
 }

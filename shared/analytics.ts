@@ -10,6 +10,8 @@ export const GAME_NAMES: Record<string, { label: string; icon: string }> = {
   loto: { label: "Lô Tô", icon: "🎱" },
   tienlen: { label: "Tiến Lên", icon: "🂡" },
   banca: { label: "Bắn Cá", icon: "🐟" },
+  bj_table: { label: "Blackjack table", icon: "🃏" },
+  xidach: { label: "Xì Dách (banker)", icon: "🀄" },
 };
 
 export const BONUS_NAMES: Record<string, string> = {

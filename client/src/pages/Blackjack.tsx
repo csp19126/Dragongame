@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Redirect } from "wouter";
+import { Link, Redirect } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RotateCcw, Trash2 } from "lucide-react";
 import type { Achievement } from "@shared/schema";
@@ -254,6 +254,9 @@ export default function Blackjack() {
           <p className="text-[11px] sm:text-xs font-black tracking-[0.3em] text-yellow-500/80 uppercase mt-1">🃏 {L.subtitle} 🃏</p>
         </div>
         <GameTabs />
+        <Link href="/ban-bai" className="w-full max-w-md flex items-center gap-2 rounded-2xl px-3 py-2 bg-indigo-600/30 border border-indigo-300/40 text-white text-sm font-black" data-testid="link-card-tables">
+          <span className="text-xl">🀄</span><span className="flex-1">{lang === "vi" ? "Chơi với người thật: Xì Dách làm cái & Bàn Chung" : "Play real people: Xì Dách banker & shared tables"}</span><span>→</span>
+        </Link>
 
         <div className="w-full max-w-md flex items-center justify-between rounded-2xl bg-[#052e1f]/80 border border-emerald-400/20 px-4 py-2.5">
           <div>
