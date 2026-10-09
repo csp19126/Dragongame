@@ -17,7 +17,7 @@ import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
 import {
   BET_OPTIONS, credentialsSchema, SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, MAX_WIN_MULTIPLE,
-  DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, REPEATER_PEARLS, HOLD_CHANCE, HOLD_MAX_REELS, RTP_WITHOUT_HOLD, BASE_RTP, TOTAL_RTP, FREE_SPIN_OPTIONS,
+  DAILY_BONUS_AMOUNT, REPEATER_MULTIPLIERS, REPEATER_PEARLS, REPEATER_SMALL, REPEATER_BIG_PEARLS, HOLD_CHANCE, HOLD_MAX_REELS, RTP_WITHOUT_HOLD, BASE_RTP, TOTAL_RTP, FREE_SPIN_OPTIONS,
   JACKPOT_ROW, JACKPOT_CONTRIBUTION, JACKPOT_FULL_BET, JACKPOT_SEED, type User, type PublicUser,
 } from "@shared/schema";
 
@@ -142,6 +142,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       bets: BET_OPTIONS,
       repeaterMultipliers: REPEATER_MULTIPLIERS,
       repeaterPearls: REPEATER_PEARLS,
+      repeaterSmall: REPEATER_SMALL,
+      repeaterBigPearls: REPEATER_BIG_PEARLS,
       hold: { chance: HOLD_CHANCE, maxReels: HOLD_MAX_REELS },
       freeSpinOptions: FREE_SPIN_OPTIONS,
       jackpot: { row: JACKPOT_ROW, contribution: JACKPOT_CONTRIBUTION, fullBet: JACKPOT_FULL_BET, seed: JACKPOT_SEED },

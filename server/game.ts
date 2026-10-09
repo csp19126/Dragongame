@@ -5,8 +5,7 @@ import {
   SCATTER_PAYS,
   WILD_ID,
   SCATTER_ID,
-  REPEATER_MULTIPLIERS,
-  REPEATER_PEARLS,
+  repeaterLadder,
   HOLD_MAX_REELS,
   JACKPOT_ROW,
   REELS,
@@ -159,11 +158,12 @@ export function spin(bet: number, opts: { blessing?: number; freeSpinMult?: numb
   hold(first);
   holdPearls(grid);
 
-  // Rồng Lặp (Repeater): 3+ Dragon Pearls anywhere wake the dragon. Pearls and winning cells
+  // Rồng Lặp (Repeater): 2 Dragon Pearls anywhere wake a short repeater, 3+ the full ladder. Pearls and winning cells
   // lock; every other cell re-spins, while each repeat adds a new or longer winning line.
   // Pearls that land during repeats lock too.
-  if (pearlCount(grid) >= REPEATER_PEARLS) {
-    for (const multiplier of REPEATER_MULTIPLIERS) {
+  const ladder = repeaterLadder(pearlCount(grid));
+  if (ladder.length) {
+    for (const multiplier of ladder) {
       const lockedBefore = [...held];
       grid = grid.map((col, c) => col.map((s, r) => (held.has(`${c}-${r}`) ? s : pickSymbol(rng))));
       const wins = lineWinsFor(grid, bet, multiplier, paid);
