@@ -177,6 +177,19 @@ export const lotoTickets = pgTable("loto_tickets", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [index("loto_tickets_round").on(t.round, t.userId), index("loto_tickets_unsettled").on(t.settled, t.round)]);
 
+// Tiến Lên against three computer players: one game in progress per player
+export const tienlenGames = pgTable("tienlen_games", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  stake: integer("stake").notNull(),
+  state: jsonb("state").notNull(),
+  finished: boolean("finished").default(false).notNull(),
+  place: integer("place"),
+  payout: bigint("payout", { mode: "number" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [index("tienlen_games_user").on(t.userId, t.finished)]);
+
 // League seasons already settled (one row each, so prizes can only be paid once)
 export const leagueSeasons = pgTable("league_seasons", {
   season: text("season").primaryKey(),

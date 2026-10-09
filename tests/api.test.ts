@@ -1269,4 +1269,48 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(after.calls).toEqual(draws.slice(0, L.LOTO_CALLS));
     });
   });
+
+  describe("Tiến Lên", () => {
+    it("deals, checks every move, plays the computer players and pays by finishing place", async () => {
+      const T = await import("../shared/tienlen");
+      const p = new Player();
+      const pu = await p.register();
+      expect((await p.req("POST", "/api/tienlen/start", { stake: 1234 })).status).toBe(400);
+      const s0 = await p.req("POST", "/api/tienlen/start", { stake: 10000 });
+      expect(s0.status).toBe(200);
+      expect((await p.req("POST", "/api/tienlen/start", { stake: 10000 })).status).toBe(409); // one game at a time
+      let g = s0.body.game;
+      expect(g.hand.length + g.events.filter((e: any) => e.seat === 0 && e.play).length).toBe(13);
+      expect(g.counts.reduce((a: number, b: number) => a + b, 0) + g.events.filter((e: any) => e.play).reduce((a: number, e: any) => a + e.play.length, 0)).toBe(52);
+
+      // Cards you don't hold, and plays that aren't combinations, are refused
+      const notMine = Array.from({ length: 52 }, (_, i) => i).find((c) => !g.hand.includes(c))!;
+      expect((await p.req("POST", "/api/tienlen/move", { cards: [notMine] })).status).toBe(400);
+      const sorted = [...g.hand].sort((a: number, b: number) => a - b);
+      const junk = [sorted[0], sorted[sorted.length - 1]];
+      if (!T.classify(junk)) expect((await p.req("POST", "/api/tienlen/move", { cards: junk })).status).toBe(400);
+
+      let guard = 0;
+      while (!g.over && guard++ < 60) {
+        const row = (await pool.query("select state from tienlen_games where id = $1", [g.id])).rows[0];
+        const st = row.state;
+        expect(st.turn).toBe(0);
+        const h = T.hint(st, 0);
+        const r = h ? await p.req("POST", "/api/tienlen/move", { cards: h }) : await p.req("POST", "/api/tienlen/move", { pass: true });
+        expect(r.status).toBe(200);
+        g = r.body.game;
+      }
+      expect(g.over).toBe(true);
+      expect(g.payout).toBe(Math.round(10000 * T.TIENLEN_PAYS[g.place - 1]));
+      expect((await p.state()).balance).toBe(50000 - 10000 + g.payout);
+      expect((await pool.query("select bet, payout from game_plays where user_id = $1 and game = 'tienlen'", [pu.id])).rows)
+        .toEqual([{ bet: "10000", payout: String(g.payout) }]);
+      expect((await p.req("POST", "/api/tienlen/move", { pass: true })).status).toBe(404);
+
+      // Giving up is last place
+      await p.req("POST", "/api/tienlen/start", { stake: 1000 });
+      const gave = await p.req("POST", "/api/tienlen/resign");
+      expect(gave.body.game).toMatchObject({ over: true, place: 4, payout: 0 });
+    });
+  });
 });

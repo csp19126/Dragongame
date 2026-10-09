@@ -420,3 +420,38 @@ describe("Lô Tô", () => {
     expect(L.lotoMultiplier(51)).toBe(0);
   });
 });
+
+describe("Tiến Lên rules", () => {
+  it("knows the combinations, the chops, and pays back 95% between equal players", async () => {
+    const T = await import("../shared/tienlen");
+    const c = (...x: string[]) => x.map((n) => T.RANKS.indexOf(n.slice(0, -1)) * 4 + T.SUITS.indexOf(n.slice(-1)));
+    const cl = (...x: string[]) => T.classify(c(...x))!;
+    expect(cl("3♠", "4♣", "5♥").type).toBe("straight");
+    expect(T.classify(c("K♠", "A♠", "2♠"))).toBeNull(); // no 2 in a straight
+    expect(cl("3♠", "3♣", "4♠", "4♦", "5♣", "5♥").type).toBe("pairs");
+    expect(T.beats(cl("3♥"), cl("3♦"))).toBe(true); // hearts beat diamonds
+    expect(T.beats(cl("5♠", "5♣", "5♦", "5♥"), cl("2♠"))).toBe(true);
+    expect(T.beats(cl("3♠", "3♣", "4♠", "4♦", "5♣", "5♥"), cl("2♥"))).toBe(true);
+    expect(T.beats(cl("3♠", "3♣", "4♠", "4♦", "5♣", "5♥"), cl("2♠", "2♥"))).toBe(false);
+    expect(T.beats(cl("3♠", "3♣", "4♠", "4♦", "5♣", "5♥", "6♣", "6♥"), cl("2♠", "2♥"))).toBe(true);
+    expect(T.beats(cl("4♠", "5♠", "6♠"), cl("3♠", "4♣", "5♥", "6♦"))).toBe(false); // lengths must match
+    expect(T.TIENLEN_EVEN_RTP).toBeCloseTo(0.95, 10);
+    // Computer players finish games, play only legal moves, and every seat wins about as often
+    const rand = (n: number) => Math.floor(Math.random() * n);
+    const first = [0, 0, 0, 0];
+    for (let g = 0; g < 400; g++) {
+      const s = T.newGame(rand); s.allBots = true;
+      const ev: any[] = [];
+      let guard = 0;
+      while (!T.gameOver(s) && guard++ < 500) {
+        const seat = s.turn, m = T.botMove(s, seat, rand);
+        if (m) { expect(T.playError(s, seat, m)).toBeNull(); T.applyPlay(s, seat, m, ev); }
+        else if (s.table) T.applyPass(s, seat, ev);
+        else T.applyPlay(s, seat, T.legalPlays(s, seat)[0], ev);
+      }
+      expect(T.gameOver(s)).toBe(true);
+      first[s.finished[0]]++;
+    }
+    for (const n of first) expect(n).toBeGreaterThan(60);
+  });
+});
