@@ -1313,4 +1313,35 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(gave.body.game).toMatchObject({ over: true, place: 4, payout: 0 });
     });
   });
+
+  describe("Bắn Cá", () => {
+    it("charges each hit, pays catches, refuses made-up fish and too many shots, and logs the totals", async () => {
+      const { flushBancaLog } = await import("../server/banca");
+      const p = new Player();
+      const pu = await p.register();
+      expect((await p.req("POST", "/api/banca/shoot", { level: 500, fish: "kraken" })).status).toBe(400);
+      expect((await p.req("POST", "/api/banca/shoot", { level: 333, fish: "tep" })).status).toBe(400);
+      let expected = 50000, statuses: number[] = [], spent = 0, won = 0;
+      for (let i = 0; i < 10; i++) {
+        const r = await p.req("POST", "/api/banca/shoot", { level: 500, fish: "tep" });
+        statuses.push(r.status);
+        if (r.status === 200) {
+          expected += -500 + r.body.payout; spent += 500; won += r.body.payout;
+          expect(r.body.payout).toBe(r.body.caught ? 1000 : 0);
+          expect(r.body.balance).toBe(expected);
+        }
+      }
+      expect(statuses.filter((x) => x === 200).length).toBe(8); // eight a second
+      expect(statuses.filter((x) => x === 429).length).toBe(2);
+      expect((await p.state()).balance).toBe(expected);
+      await flushBancaLog();
+      // The log may have been written in more than one go (it flushes on a timer too): the totals must match
+      const [tot] = (await pool.query("select sum(bet)::int as bet, sum(payout)::int as payout from game_plays where user_id = $1 and game = 'banca'", [pu.id])).rows;
+      expect(tot).toEqual({ bet: spent, payout: won });
+      // Can't shoot with no coins
+      await setBalance(p.username, 100);
+      await new Promise((r) => setTimeout(r, 1100));
+      expect((await p.req("POST", "/api/banca/shoot", { level: 500, fish: "tep" })).status).toBe(400);
+    });
+  });
 });
