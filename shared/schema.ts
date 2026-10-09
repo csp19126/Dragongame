@@ -139,6 +139,23 @@ export const poolMatches = pgTable("pool_matches", {
   counted: boolean("counted").default(false).notNull(),
 }, (t) => [index("pool_matches_season").on(t.season, t.counted)]);
 
+// One row per game played (a spin, a hand, a round, a pool match), for the admin's numbers.
+// bet is what the play cost (0 for a free spin), payout what it paid back (stake included).
+export const gamePlays = pgTable("game_plays", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  game: text("game").notNull(),
+  bet: bigint("bet", { mode: "number" }).notNull(),
+  payout: bigint("payout", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("game_plays_created").on(t.createdAt), index("game_plays_user").on(t.userId, t.createdAt)]);
+
+// The days (Vietnam time) each player opened the game, for daily actives and retention
+export const userDays = pgTable("user_days", {
+  userId: varchar("user_id").notNull(),
+  day: text("day").notNull(), // YYYY-MM-DD
+}, (t) => [primaryKey({ columns: [t.userId, t.day] }), index("user_days_day").on(t.day)]);
+
 // League seasons already settled (one row each, so prizes can only be paid once)
 export const leagueSeasons = pgTable("league_seasons", {
   season: text("season").primaryKey(),

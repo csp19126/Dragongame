@@ -78,6 +78,13 @@
       "when": 1791187211232,
       "tag": "0010_league",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791555626846,
+      "tag": "0011_analytics",
+      "breakpoints": true
     }
   ]
 }

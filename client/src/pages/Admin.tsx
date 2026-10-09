@@ -14,6 +14,8 @@ import { Link } from "wouter";
 import { VouchersTab } from "@/components/admin/VouchersTab";
 import { CommunityTab } from "@/components/admin/CommunityTab";
 import { TournamentsTab } from "@/components/admin/TournamentsTab";
+import { OverviewTab } from "@/components/admin/OverviewTab";
+import { PlayerDrawer } from "@/components/admin/PlayerDrawer";
 
 function fmt(n: number) { return n?.toLocaleString() ?? "0"; }
 function fmtDate(d: string | null) {
@@ -141,6 +143,8 @@ function UsersTab() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [details, setDetails] = useState<string | null>(null);
+  const [sort, setSort] = useState<"seen" | "joined" | "balance" | "played">("seen");
 
   const { data: users = [], isLoading, refetch } = useQuery<any[]>({ queryKey: ["/api/admin/dashboard/users"] });
 
@@ -156,9 +160,14 @@ function UsersTab() {
     onError: (e: any) => toast({ title: e.message || "Delete failed", variant: "destructive" }),
   });
 
+  const time = (d: string | null | undefined) => (d ? new Date(d).getTime() : 0);
   const filtered = users.filter(u =>
     [u.username, u.firstName, u.lastName, u.email, u.id].some(v => v?.toLowerCase?.().includes(search.toLowerCase()))
-  );
+  ).sort((a, b) =>
+    sort === "seen" ? time(b.lastSeenAt) - time(a.lastSeenAt)
+      : sort === "joined" ? time(b.createdAt) - time(a.createdAt)
+        : sort === "balance" ? b.balance - a.balance
+          : (b.gamesPlayed ?? 0) - (a.gamesPlayed ?? 0));
 
   return (
     <div className="space-y-4">
@@ -172,6 +181,13 @@ function UsersTab() {
             className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-yellow-400/50 transition-colors"
           />
         </div>
+        <select value={sort} onChange={e => setSort(e.target.value as typeof sort)} aria-label="Sort players"
+          className="bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
+          <option value="seen">Last seen</option>
+          <option value="joined">Newest</option>
+          <option value="played">Most played</option>
+          <option value="balance">Richest</option>
+        </select>
         <button onClick={() => refetch()} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-yellow-400/60 hover:text-yellow-300 transition-colors">
           <RefreshCw className="w-4 h-4" />
         </button>
@@ -238,6 +254,12 @@ function UsersTab() {
                       </div>
                       <div className="flex gap-2">
                         <button
+                          onClick={() => setDetails(user.id)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-yellow-400/15 border border-yellow-400/30 text-yellow-200 font-bold text-sm hover:bg-yellow-400/25 transition-colors"
+                        >
+                          <BarChart3 className="w-4 h-4" /> Activity
+                        </button>
+                        <button
                           onClick={() => setEditing(user)}
                           className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-300 font-bold text-sm hover:bg-blue-500/30 transition-colors"
                         >
@@ -265,6 +287,7 @@ function UsersTab() {
         </div>
       )}
 
+      {details && <PlayerDrawer id={details} onClose={() => setDetails(null)} />}
       <AnimatePresence>
         {editing && (
           <EditUserModal
@@ -305,7 +328,7 @@ function StatsTab() {
 
 export default function Admin() {
   const { user, isLoading } = useAuth();
-  const [tab, setTab] = useState<"stats" | "users" | "cards" | "community" | "tournaments">("stats");
+  const [tab, setTab] = useState<"overview" | "stats" | "users" | "cards" | "community" | "tournaments">("overview");
 
   if (isLoading) {
     return (
@@ -352,7 +375,8 @@ export default function Admin() {
         </motion.div>
 
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          <TabBtn active={tab === "stats"} onClick={() => setTab("stats")}><BarChart3 className="w-4 h-4 inline mr-1.5" />Stats</TabBtn>
+          <TabBtn active={tab === "overview"} onClick={() => setTab("overview")}><Activity className="w-4 h-4 inline mr-1.5" />Overview</TabBtn>
+          <TabBtn active={tab === "stats"} onClick={() => setTab("stats")}><BarChart3 className="w-4 h-4 inline mr-1.5" />Totals</TabBtn>
           <TabBtn active={tab === "users"} onClick={() => setTab("users")}><Users className="w-4 h-4 inline mr-1.5" />Users</TabBtn>
           <TabBtn active={tab === "cards"} onClick={() => setTab("cards")}><Gift className="w-4 h-4 inline mr-1.5" />Promo Codes</TabBtn>
           <TabBtn active={tab === "community"} onClick={() => setTab("community")}><MessageCircle className="w-4 h-4 inline mr-1.5" />Community</TabBtn>
@@ -367,6 +391,7 @@ export default function Admin() {
           className="rounded-3xl p-5 sm:p-6"
           style={{ background: "linear-gradient(180deg,rgba(45,20,102,0.3) 0%,rgba(15,6,32,0.5) 100%)", border: "1px solid rgba(251,191,36,0.1)", backdropFilter: "blur(20px)" }}
         >
+          {tab === "overview" && <OverviewTab />}
           {tab === "stats" && <StatsTab />}
           {tab === "users" && <UsersTab />}
           {tab === "cards" && <VouchersTab />}
