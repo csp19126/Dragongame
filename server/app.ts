@@ -9,6 +9,7 @@ import { attachPoolSockets, recoverPoolMatches } from "./pool";
 import { startTournamentScheduler } from "./tournament";
 import { startLeagueScheduler } from "./league";
 import { startLotoScheduler } from "./loto";
+import { startBancaLogger } from "./banca";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -71,6 +72,7 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   startTournamentScheduler(httpServer);
   startLeagueScheduler(httpServer);
   startLotoScheduler(httpServer);
+  startBancaLogger(httpServer);
 
   // Errors always come back as JSON, never an HTML stack trace
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

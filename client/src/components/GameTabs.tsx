@@ -9,6 +9,7 @@ const GAMES = [
   { href: "/pool", icon: "🎱", key: "gamePool" },
   { href: "/loto", icon: "🎟️", key: "gameLoto" },
   { href: "/tien-len", icon: "🂡", key: "gameTienLen" },
+  { href: "/ban-ca", icon: "🐟", key: "gameBanca" },
 ] as const;
 
 /** Switch between the games; the coin balance is shared by all of them */

@@ -455,3 +455,15 @@ describe("Tiến Lên rules", () => {
     for (const n of first) expect(n).toBeGreaterThan(60);
   });
 });
+
+describe("Bắn Cá odds", () => {
+  it("every fish returns exactly 96% per hit", async () => {
+    const { FISH, BANCA_RTP, catchThreshold } = await import("../shared/banca");
+    for (const f of FISH) {
+      // The winning rolls out of the million possible, times the prize: an exact figure, not a sample
+      const threshold = catchThreshold(f.mult);
+      expect(Number.isInteger((BANCA_RTP * 1_000_000) / f.mult)).toBe(true);
+      expect((threshold * f.mult) / 1_000_000).toBeCloseTo(BANCA_RTP, 12);
+    }
+  });
+});

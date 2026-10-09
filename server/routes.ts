@@ -12,6 +12,7 @@ import { registerLeagueRoutes } from "./league";
 import { registerAnalyticsRoutes } from "./analytics";
 import { registerLotoRoutes } from "./loto";
 import { registerTienLenRoutes } from "./tienlen";
+import { registerBancaRoutes } from "./banca";
 import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
 import {
@@ -247,6 +248,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerAnalyticsRoutes(app, requireAdmin);
   registerLotoRoutes(app, requireUser);
   registerTienLenRoutes(app, requireUser);
+  registerBancaRoutes(app, requireUser);
 
   // Blackjack: the hand lives on the server; the browser only ever sees publicView()
   const BJ_MAX_BET = 1_000_000;
