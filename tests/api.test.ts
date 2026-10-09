@@ -5,6 +5,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Server } from "http";
 import type { AddressInfo } from "net";
+import { STARTING_BALANCE } from "../shared/schema";
+import { REFERRAL_WELCOME } from "../shared/stickers";
 
 const TEST_DB = process.env.TEST_DATABASE_URL;
 const BET = 1000;
@@ -33,9 +35,12 @@ class Player {
     return { status: res.status, body: json };
   }
 
+  /** Signs up, then sets the balance to TEST_START so the ledger sums below don't depend on the sign-up bonus */
   async register() {
     const r = await this.req("POST", "/api/register", { username: this.username, password: this.password });
     expect(r.status).toBe(200);
+    expect(r.body.balance).toBe(STARTING_BALANCE);
+    await setBalance(this.username, TEST_START);
     return r.body;
   }
   spin(betAmount = BET) { return this.req("POST", "/api/game/spin", { betAmount }); }
@@ -50,6 +55,8 @@ class Player {
   }
   state() { return this.req("GET", "/api/game/state").then((r) => r.body); }
 }
+
+const TEST_START = 50000;
 
 async function setBalance(username: string, balance: number) {
   await pool.query("update users set balance = $1 where username = $2", [balance, username]);
@@ -82,10 +89,10 @@ describe.skipIf(!TEST_DB)("API", () => {
   });
 
   describe("accounts", () => {
-    it("registers with 50,000 coins and never exposes the password hash", async () => {
+    it("registers with the sign-up bonus and never exposes the password hash", async () => {
       const p = new Player();
       const user = await p.register();
-      expect(user.balance).toBe(50000);
+      expect(user.balance).toBe(STARTING_BALANCE);
       expect(user).not.toHaveProperty("password");
       const me = await p.req("GET", "/api/me");
       expect(me.status).toBe(200);
@@ -768,9 +775,9 @@ describe.skipIf(!TEST_DB)("API", () => {
       await inviter.register();
       const f = await friend.req("POST", "/api/register", { username: friend.username, password: friend.password, ref: inviter.username.toUpperCase() });
       expect(f.status).toBe(200);
-      expect(f.body.balance).toBe(100_000); // 50,000 start + 50,000 welcome
+      expect(f.body.balance).toBe(STARTING_BALANCE + REFERRAL_WELCOME);
       const s = await stranger.req("POST", "/api/register", { username: stranger.username, password: stranger.password, ref: "nobody_by_that_name" });
-      expect(s.body.balance).toBe(50_000);
+      expect(s.body.balance).toBe(STARTING_BALANCE);
 
       let view = (await inviter.req("GET", "/api/referrals")).body;
       expect(view).toMatchObject({ code: inviter.username, paid: 0, claimable: 0 });

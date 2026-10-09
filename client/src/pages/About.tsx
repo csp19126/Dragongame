@@ -18,12 +18,12 @@ export default function About() {
 
   const features = vi ? [
     { icon: Dice5, title: "Kết quả ngẫu nhiên thật", desc: "Mỗi ô được chọn độc lập bằng bộ sinh số ngẫu nhiên mật mã của máy chủ. Không có \"suýt trúng\" giả, không điều chỉnh theo người chơi." },
-    { icon: Gift, title: "Hoàn toàn miễn phí", desc: "Bạn nhận 50.000 xu khi đăng ký và 50.000 xu mỗi ngày. Xu không thể mua bằng tiền và không đổi ra tiền." },
+    { icon: Gift, title: "Hoàn toàn miễn phí", desc: "Bạn nhận 100.000 xu khi đăng ký và 50.000 xu mỗi ngày. Xu không thể mua bằng tiền và không đổi ra tiền." },
     { icon: Shield, title: "Bảo mật", desc: "Mật khẩu được mã hoá bằng bcrypt, phiên đăng nhập chỉ dùng cookie httpOnly." },
     { icon: Globe, title: "Song ngữ", desc: "Tiếng Việt và tiếng Anh." },
   ] : [
     { icon: Dice5, title: "Genuinely random", desc: "Every cell is drawn independently by the server's cryptographic RNG. No fake near-misses, no per-player tuning." },
-    { icon: Gift, title: "Completely free", desc: "You get 50,000 coins when you sign up and 50,000 more every day. Coins can't be bought and can't be cashed out." },
+    { icon: Gift, title: "Completely free", desc: "You get 100,000 coins when you sign up and 50,000 more every day. Coins can't be bought and can't be cashed out." },
     { icon: Shield, title: "Secure", desc: "Passwords are hashed with bcrypt and sessions use httpOnly cookies." },
     { icon: Globe, title: "Bilingual", desc: "Vietnamese and English." },
   ];

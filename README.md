@@ -166,7 +166,7 @@ and are never in this repository. A link like `/auth?code=VN888-XXXX-XXXX` pre-f
   type a question (it never leaves the phone) and draws one of 24 fortune sticks with a Vietnamese
   verse, a meaning and advice. The stick's grade blesses the next spin: Đại Cát ×5, Thượng ×3,
   Trung ×2, Hạ ×1.5. The fortune is entertainment and says so.
-- 50,000 coins on sign-up, 50,000 more every 20 hours, plus admin-created promo codes.
+- 100,000 coins on sign-up, 50,000 more every 20 hours, plus admin-created promo codes.
 - Every cell is drawn independently with Node's `crypto.randomInt`. No near-miss forcing, no
   per-player tuning.
 - **Return to player: 96.6% with the best holds (87.7% never holding) + 1% through the jackpot.**
