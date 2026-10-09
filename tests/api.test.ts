@@ -1335,8 +1335,9 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(statuses.filter((x) => x === 429).length).toBe(2);
       expect((await p.state()).balance).toBe(expected);
       await flushBancaLog();
-      const rows = (await pool.query("select bet, payout from game_plays where user_id = $1 and game = 'banca'", [pu.id])).rows;
-      expect(rows).toEqual([{ bet: String(spent), payout: String(won) }]);
+      // The log may have been written in more than one go (it flushes on a timer too): the totals must match
+      const [tot] = (await pool.query("select sum(bet)::int as bet, sum(payout)::int as payout from game_plays where user_id = $1 and game = 'banca'", [pu.id])).rows;
+      expect(tot).toEqual({ bet: spent, payout: won });
       // Can't shoot with no coins
       await setBalance(p.username, 100);
       await new Promise((r) => setTimeout(r, 1100));
