@@ -335,7 +335,7 @@ export const REELS = 5;
 export const ROWS = 3;
 
 export const SLOT_SYMBOLS: SlotSymbol[] = [
-  { id: "pearl", name: "Dragon Pearl (Wild)", kind: "wild", pays: [8, 40, 400], weight: 5 },
+  { id: "pearl", name: "Dragon Pearl (Wild)", kind: "wild", pays: [8, 40, 400], weight: 4 },
   { id: "dragon", name: "Imperial Dragon", kind: "regular", pays: [3, 12, 80], weight: 30 },
   { id: "drum", name: "Bronze Drum", kind: "regular", pays: [1.5, 5, 20], weight: 36 },
   { id: "lotus", name: "Golden Lotus", kind: "regular", pays: [1.5, 3, 12], weight: 40 },
@@ -404,9 +404,14 @@ export const BET_OPTIONS = [1000, 5000, 10000, 50000, 100000, 500000, 1000000];
  * free. Each repeat that forms a new winning line, or makes a paid line longer, pays the new
  * value (the extra, for a longer line) times the next multiplier and goes again; a repeat
  * that adds nothing ends it. Pearls that land during repeats lock too.
+ * Two pearls wake a short repeater (REPEATER_SMALL); three or more the full ladder.
  */
-export const REPEATER_PEARLS = 3;
+export const REPEATER_PEARLS = 2;
+export const REPEATER_BIG_PEARLS = 3;
+export const REPEATER_SMALL = [1, 1];
 export const REPEATER_MULTIPLIERS = [2, 3, 5, 8, 12];
+/** The repeater's multipliers for a spin with this many pearls (none below REPEATER_PEARLS) */
+export const repeaterLadder = (pearls: number) => (pearls >= REPEATER_BIG_PEARLS ? REPEATER_MULTIPLIERS : pearls >= REPEATER_PEARLS ? REPEATER_SMALL : []);
 
 /**
  * Hũ Rồng progressive jackpot: every paid spin adds JACKPOT_CONTRIBUTION of its bet to a
@@ -426,14 +431,14 @@ export function jackpotShare(pot: number, bet: number) {
 }
 
 /**
- * Return to player, measured over 40M simulated spins (±0.1%): 96.6% for a player who makes
- * the best HOLD choices (87.7% for one who never holds), with Rồng Lặp and free spins
+ * Return to player, measured over 40M simulated spins (20M each way, ±0.3%): 95.9% for a player
+ * who makes the best HOLD choices (87.7% for one who never holds), with Rồng Lặp and free spins
  * included; the engine tests re-check it. The 1% jackpot contribution is all paid back to
  * players through the jackpot.
  * The Xóc Đĩa double-up is exactly fair (100%), so taking it never changes the return.
  */
-export const BASE_RTP = 0.966;
-/** The same game for a player who never uses HOLD (40M simulated spins, ±0.1%) */
+export const BASE_RTP = 0.959;
+/** The same game for a player who never uses HOLD (20M simulated spins, ±0.3%) */
 export const RTP_WITHOUT_HOLD = 0.877;
 export const TOTAL_RTP = BASE_RTP + JACKPOT_CONTRIBUTION;
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { spin, lineWinsFor, scatterFor, pickSymbol, evalLine, pearlCount, holdEV, bestHold, randomGrid, type Rng, type Hold } from "../server/game";
 import {
-  SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, REPEATER_MULTIPLIERS, REPEATER_PEARLS, BASE_RTP, JACKPOT_ROW, REELS, ROWS,
+  SLOT_SYMBOLS, PAYLINES, SCATTER_PAYS, REPEATER_MULTIPLIERS, REPEATER_PEARLS, REPEATER_SMALL, REPEATER_BIG_PEARLS, repeaterLadder, BASE_RTP, JACKPOT_ROW, REELS, ROWS,
   FREE_SPIN_OPTIONS, payOf, HOLD_CHANCE, HOLD_MAX_REELS, RTP_WITHOUT_HOLD,
 } from "../shared/schema";
 import { GAMBLE_PICKS, GAMBLE_PAYS, gambleWins } from "../shared/gamble";
@@ -137,14 +137,25 @@ describe("Rồng Lặp (Repeater)", () => {
   it(`stays asleep with fewer than ${REPEATER_PEARLS} pearls, even after a win`, () => {
     const grid = copy(NOTHING);
     for (let reel = 0; reel < 5; reel++) grid[reel][1] = "lantern";
-    grid[0][0] = "pearl"; grid[4][2] = "pearl";
-    expect(pearlCount(grid)).toBe(2);
+    grid[0][0] = "pearl";
+    expect(pearlCount(grid)).toBe(REPEATER_PEARLS - 1);
     const r = spin(BET, { startGrid: grid, rng: scripted([]) });
     expect(r.steps).toHaveLength(1);
     expect(r.repeats).toBe(0);
   });
 
-  it(`${REPEATER_PEARLS} pearls wake it even with no win, lock the pearls and re-spin everything else`, () => {
+  it(`${REPEATER_PEARLS} pearls wake a short repeater, ${REPEATER_BIG_PEARLS} the full ladder`, () => {
+    const two = copy(NOTHING);
+    two[0][0] = "pearl"; two[4][2] = "pearl";
+    const r2 = spin(BET, { startGrid: two, rng: envelopes() });
+    expect(r2.steps[1].multiplier).toBe(REPEATER_SMALL[0]);
+    expect(repeaterLadder(2)).toEqual(REPEATER_SMALL);
+    expect(repeaterLadder(3)).toEqual(REPEATER_MULTIPLIERS);
+    expect(repeaterLadder(5)).toEqual(REPEATER_MULTIPLIERS);
+    expect(repeaterLadder(1)).toEqual([]);
+  });
+
+  it(`${REPEATER_BIG_PEARLS} pearls wake it even with no win, lock the pearls and re-spin everything else`, () => {
     const grid = copy(NOTHING);
     grid[0][0] = "pearl"; grid[2][2] = "pearl"; grid[4][0] = "pearl";
     const first = lineWinsFor(grid, BET);
@@ -183,8 +194,9 @@ describe("Rồng Lặp (Repeater)", () => {
     let woke = 0;
     for (let i = 0; i < 20000; i++) {
       const r = spin(BET, { rng });
-      expect(r.steps.length).toBeLessThanOrEqual(1 + REPEATER_MULTIPLIERS.length);
-      r.steps.forEach((s, k) => expect(s.multiplier).toBe(k === 0 ? 1 : REPEATER_MULTIPLIERS[k - 1]));
+      const ladder = repeaterLadder(pearlCount(r.steps[0].grid));
+      expect(r.steps.length).toBeLessThanOrEqual(1 + ladder.length);
+      r.steps.forEach((s, k) => expect(s.multiplier).toBe(k === 0 ? 1 : ladder[k - 1]));
       if (r.steps.length > 1) { woke++; expect(pearlCount(r.steps[0].grid)).toBeGreaterThanOrEqual(REPEATER_PEARLS); }
     }
     expect(woke).toBeGreaterThan(0);

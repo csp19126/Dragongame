@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, RotateCw, Volume2, VolumeX, Wand2, Gift, Info, Crown, Lock } from "lucide-react";
 import {
-  BET_OPTIONS, PAYLINES, SLOT_SYMBOLS, SCATTER_PAYS, WILD_ID, SCATTER_ID, REPEATER_MULTIPLIERS, REPEATER_PEARLS,
+  BET_OPTIONS, PAYLINES, SLOT_SYMBOLS, SCATTER_PAYS, WILD_ID, SCATTER_ID, REPEATER_MULTIPLIERS, REPEATER_PEARLS, REPEATER_SMALL, REPEATER_BIG_PEARLS,
   JACKPOT_FULL_BET, jackpotShare, REELS, ROWS, FREE_SPIN_OPTIONS,
 } from "@shared/schema";
 import { GAMBLE_PAYS } from "@shared/gamble";
@@ -860,12 +860,15 @@ export function SlotMachine() {
           <p className="text-sm text-purple-200/90">{t.paytableWild}</p>
 
           <p className="text-sm text-fuchsia-200/90 mt-1">{t.paytableRepeater}</p>
-          <div className="text-center text-xl tracking-widest">{"🔮".repeat(REPEATER_PEARLS)} → 🐉</div>
-          <div className="flex justify-center gap-1.5">
-            {REPEATER_MULTIPLIERS.map((m) => (
-              <span key={m} className="px-2.5 py-1 rounded-lg bg-fuchsia-600/30 border border-fuchsia-400/50 font-black text-yellow-200 text-sm">×{m}</span>
-            ))}
-          </div>
+          {[{ pearls: REPEATER_PEARLS, ladder: REPEATER_SMALL }, { pearls: REPEATER_BIG_PEARLS, ladder: REPEATER_MULTIPLIERS }].map((lv) => (
+            <div key={lv.pearls} className="flex items-center justify-center gap-1.5">
+              <span className="text-lg tracking-widest w-16 text-right">{"🔮".repeat(lv.pearls)}{lv.pearls === REPEATER_BIG_PEARLS ? "+" : ""}</span>
+              <span>→</span>
+              {lv.ladder.map((m, i) => (
+                <span key={i} className="px-2 py-0.5 rounded-lg bg-fuchsia-600/30 border border-fuchsia-400/50 font-black text-yellow-200 text-sm">×{m}</span>
+              ))}
+            </div>
+          ))}
 
           <p className="text-sm text-yellow-200/90 mt-1">{t.paytableJackpot}</p>
           <div className="flex items-center justify-center gap-2 rounded-xl bg-red-800/40 border border-yellow-400/40 py-1.5">
@@ -891,7 +894,7 @@ export function SlotMachine() {
             ))}
           </div>
           <p className="text-sm text-yellow-100/70">{t.paytableFree}</p>
-          <p className="text-sm text-yellow-100/70">🔒 {lang === "vi" ? "Giữ Cuộn: sau một lượt thua, đôi khi bạn được giữ tối đa 2 cuộn cho lượt quay tiếp theo (cùng mức cược). Chọn khéo thì lợi hơn: tỷ lệ hoàn trả 96,6% khi giữ đúng cuộn, chỉ 87,7% nếu không bao giờ giữ." : "Hold: after a losing spin you're sometimes offered a hold: keep up to 2 reels for your next spin (same bet). Choosing well pays: 96.6% return with the best holds, only 87.7% if you never hold."}</p>
+          <p className="text-sm text-yellow-100/70">🔒 {lang === "vi" ? "Giữ Cuộn: sau một lượt thua, đôi khi bạn được giữ tối đa 2 cuộn cho lượt quay tiếp theo (cùng mức cược). Chọn khéo thì lợi hơn: tỷ lệ hoàn trả 95,9% khi giữ đúng cuộn, chỉ 87,7% nếu không bao giờ giữ." : "Hold: after a losing spin you're sometimes offered a hold: keep up to 2 reels for your next spin (same bet). Choosing well pays: 95.9% return with the best holds, only 87.7% if you never hold."}</p>
           <p className="text-sm text-yellow-100/70">🎋 {t.oracleBlessed}.</p>
           <p className="text-sm text-yellow-100/70">🥣 {lang === "vi" ? `Xóc Đĩa nhân đôi: sau mỗi lượt thắng, bạn có thể đặt tiền thắng (hoặc một nửa) vào bốn đồng xu: Chẵn/Lẻ ×${GAMBLE_PAYS.chan}, Tứ Đỏ/Tứ Trắng ×${GAMBLE_PAYS.tu_do}, tối đa 5 lần. Tỷ lệ công bằng tuyệt đối.` : `Xóc Đĩa double-up: after a win you can stake it (or half) on four coins: even/odd ×${GAMBLE_PAYS.chan}, four of a colour ×${GAMBLE_PAYS.tu_do}, up to 5 times. Exactly fair odds.`}</p>
           <p className="text-xs text-yellow-100/50">{t.rtpNote}</p>

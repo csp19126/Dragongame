@@ -169,7 +169,7 @@ and are never in this repository. A link like `/auth?code=VN888-XXXX-XXXX` pre-f
 - 100,000 coins on sign-up, 50,000 more every 20 hours, plus admin-created promo codes.
 - Every cell is drawn independently with Node's `crypto.randomInt`. No near-miss forcing, no
   per-player tuning.
-- **Return to player: 96.6% with the best holds (87.7% never holding) + 1% through the jackpot.**
+- **Return to player: 95.9% with the best holds (87.7% never holding) + 1% through the jackpot.**
   Measured over 40M simulated spins each way (±0.1%) and re-checked against the real engine
   (`npm run rtp`); tests check the hold maths against full enumeration, the first-spin line pays
   against the exact value from the paytable, and the whole game against both published figures.
