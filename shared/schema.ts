@@ -156,6 +156,27 @@ export const userDays = pgTable("user_days", {
   day: text("day").notNull(), // YYYY-MM-DD
 }, (t) => [primaryKey({ columns: [t.userId, t.day] }), index("user_days_day").on(t.day)]);
 
+// Lô Tô: each round's 90 numbers in calling order (made when the round is first needed),
+// and the tickets bought. A ticket's first full row is worked out when it's bought and
+// kept hidden until the calls reach it; it is paid at that moment.
+export const lotoRounds = pgTable("loto_rounds", {
+  round: integer("round").primaryKey(),
+  draws: jsonb("draws").$type<number[]>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const lotoTickets = pgTable("loto_tickets", {
+  id: serial("id").primaryKey(),
+  round: integer("round").notNull(),
+  userId: varchar("user_id").notNull(),
+  grid: jsonb("grid").$type<(number | null)[][]>().notNull(),
+  price: integer("price").notNull(),
+  kinhAt: integer("kinh_at"),
+  payout: bigint("payout", { mode: "number" }).notNull(),
+  settled: boolean("settled").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("loto_tickets_round").on(t.round, t.userId), index("loto_tickets_unsettled").on(t.settled, t.round)]);
+
 // League seasons already settled (one row each, so prizes can only be paid once)
 export const leagueSeasons = pgTable("league_seasons", {
   season: text("season").primaryKey(),

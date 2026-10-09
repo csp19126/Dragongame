@@ -20,6 +20,7 @@ const short = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M`
 
 const GAMES = [
   { href: "/pool", icon: "🎱", vi: "Bi-a 8 bóng", en: "8-Ball Pool", tagVi: "Trực tuyến · League", tagEn: "Online · League", from: "from-emerald-500", to: "to-teal-900", live: true },
+  { href: "/loto", icon: "🎟️", vi: "Lô Tô", en: "Lô Tô bingo", tagVi: "Gọi số trực tiếp · ×50", tagEn: "Live calls · up to ×50", from: "from-red-500", to: "to-rose-950", live: true },
   { href: "/blackjack", icon: "🃏", vi: "Xì Dách", en: "Blackjack", tagVi: "Blackjack trả 3:2", tagEn: "Blackjack pays 3:2", from: "from-sky-500", to: "to-indigo-900" },
   { href: "/roulette", icon: "🎡", vi: "Roulette", en: "Roulette", tagVi: "Một số 0 · 97,3%", tagEn: "Single zero · 97.3%", from: "from-rose-500", to: "to-red-950" },
   { href: "/bau-cua", icon: "🦀", vi: "Bầu Cua", en: "Bầu Cua", tagVi: "Tôm Cá truyền thống", tagEn: "The Tết dice game", from: "from-amber-500", to: "to-orange-950" },

@@ -401,3 +401,22 @@ describe("return to player", () => {
     expect(Math.abs(play(1_000_000, false) - RTP_WITHOUT_HOLD)).toBeLessThan(0.035);
   }, 300_000);
 });
+
+describe("Lô Tô", () => {
+  it("deals real tickets and pays back the published share", async () => {
+    const L = await import("../shared/loto");
+    for (let i = 0; i < 500; i++) expect(L.isValidLotoGrid(L.makeLotoGrid())).toBe(true);
+    expect(L.lotoRtp()).toBeCloseTo(0.9479, 4);
+    expect(L.lotoRowBy(90)).toBeCloseTo(1, 10);
+    expect(L.vnNumber(25)).toBe("hai mươi lăm");
+    expect(L.vnNumber(21)).toBe("hai mươi mốt");
+    expect(L.vnNumber(14)).toBe("mười bốn");
+    // The winning call is the last number of the first row to fill
+    const g = L.makeLotoGrid();
+    const row = g[4].filter((v): v is number => v !== null);
+    const rest = Array.from({ length: 90 }, (_, k) => k + 1).filter((n) => !row.includes(n));
+    expect(L.lotoKinhAt(g, [...row, ...rest])).toBe(5);
+    expect(L.lotoMultiplier(5)).toBe(50);
+    expect(L.lotoMultiplier(51)).toBe(0);
+  });
+});
