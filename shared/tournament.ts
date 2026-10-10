@@ -4,6 +4,10 @@
 export const WEEKLY_DAY_UTC = 6; // Saturday
 export const WEEKLY_HOUR_UTC = 13;
 export const WEEKLY_NAME = "Giải Bi-a Cuối Tuần";
+/** The weekly tournament's name in each language (it's stored in Vietnamese) */
+export const WEEKLY_NAME_TEXT = { vi: WEEKLY_NAME, en: "Weekend Pool Cup", zh: "週末撞球盃" };
+/** A tournament's name to show: the weekly one translated, others as the admin wrote them */
+export const tournamentName = (name: string, loc: (t: typeof WEEKLY_NAME_TEXT) => string) => (name === WEEKLY_NAME ? loc(WEEKLY_NAME_TEXT) : name);
 export const DEFAULT_SIZE = 16;
 /** Coins for the winner, the runner-up and each losing semi-finalist. Paid by the house; entry is free. */
 export const DEFAULT_PRIZES = [5_000_000, 2_000_000, 500_000];
@@ -11,8 +15,9 @@ export const TOURNAMENT_SIZES = [4, 8, 16, 32];
 export const MIN_PLAYERS = 2;
 
 /** "Final", "Semi-final"... counted back from the last round */
-export function roundName(round: number, rounds: number, lang: "vi" | "en") {
+export function roundName(round: number, rounds: number, lang: "vi" | "en" | "zh") {
   const fromEnd = rounds - round;
+  if (lang === "zh") return fromEnd === 0 ? "決賽" : fromEnd === 1 ? "準決賽" : fromEnd === 2 ? "八強賽" : `第 ${round} 輪`;
   if (lang === "vi") return fromEnd === 0 ? "Chung kết" : fromEnd === 1 ? "Bán kết" : fromEnd === 2 ? "Tứ kết" : `Vòng ${round}`;
   return fromEnd === 0 ? "Final" : fromEnd === 1 ? "Semi-finals" : fromEnd === 2 ? "Quarter-finals" : `Round ${round}`;
 }

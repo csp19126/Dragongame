@@ -38,6 +38,7 @@ const TXT = {
     waitOpp: "Đang chờ đối thủ vào bàn", bracket: "Bảng đấu", wonPool: "THẮNG BI-A!",
     spectators: "người xem", offline: "mất kết nối", power: "Kéo để đánh", spin: "Xoáy", top: "Trên", centre: "Giữa", backSpin: "Dưới",
     dragToAim: "Kéo trên bàn để ngắm, kéo thanh lực rồi thả để đánh", placeCue: "Kéo bi trắng để đặt, rồi ngắm và đánh",
+    rulesTitle: "Luật / Rules", closed: {} as Record<string, string>, bpWin: "Bi-a 8 bóng · thắng",
     rules: "Luật 8 bóng: phá bi, rồi người đầu tiên đưa bi vào lỗ hợp lệ nhận nhóm (trơn 1-7 hoặc sọc 9-15). Đưa hết bi nhóm mình rồi đưa bi 8 vào lỗ để thắng. Bi 8 vào lỗ sớm là thua. Phạm lỗi (bi trắng rơi, chạm sai bi, không chạm bi, không bi nào chạm băng) thì đối thủ được bi trong tay. Mỗi lượt 45 giây. Bàn có cược: người thắng nhận cả hai phần cược.",
   },
   en: {
@@ -54,9 +55,27 @@ const TXT = {
     spectators: "watching", offline: "offline", power: "Pull to shoot", spin: "Spin", top: "Top", centre: "Centre", backSpin: "Back",
     dragToAim: "Drag on the table to aim, pull the power bar and let go to shoot", placeCue: "Drag the cue ball to place it, then aim and shoot",
     rules: "8-ball: break, then the first player to legally pot a ball takes that group (solids 1-7 or stripes 9-15). Clear your group, then pot the 8 to win. Potting the 8 early loses. A foul (cue ball potted, wrong ball first, nothing hit, no cushion after contact) gives the other player ball in hand. 45 seconds a shot. On a staked table the winner takes both stakes.",
+    rulesTitle: "Luật / Rules", closed: {} as Record<string, string>, bpWin: "8-ball pool · beat",
+  },
+  zh: {
+    title: "8號球撞球", subtitle: "和朋友線上對戰", practice: "與電腦對戰", practiceSub: "免費練習",
+    tabPlay: "對戰", tabLeague: "聯賽", quick: "快速配對", quickSub: "馬上找對手 · 可得聯賽積分",
+    leaguePts: (n: number) => `+${n} 聯賽積分`, notCounted: "本局不計入聯賽積分", dailyBonus: (n: string) => `🎁 今日首勝 +${n}`,
+    create: "開桌", stake: "底注", free: "免費", open: "等待中的球桌", live: "比賽中", none: "目前還沒有球桌。開一桌並邀請好友吧！",
+    join: "加入", watch: "觀戰", back: "回到你的球桌", waiting: "等待對手中…", invite: "邀請好友", copy: "複製連結", copied: "已複製！",
+    cancel: "關閉球桌", resign: "認輸", resignAsk: "確定認輸並輸掉這局嗎？", you: "你", computer: "電腦", yourTurn: "輪到你", theirTurn: "對手回合",
+    solids: "全色球", stripes: "花色球", open8: "未分組", ballInHand: "自由球", break: "開球",
+    foul: { scratch: "犯規：母球落袋", no_hit: "犯規：未碰到任何球", wrong_ball: "犯規：先碰到錯誤的球", no_rail: "犯規：沒有球碰到球台邊", timeout: "超時" } as Record<string, string>,
+    won: "你贏了！", lost: "你輸了", winnerIs: "獲勝", again: "再玩一局", lobby: "大廳", reason: { win: "", resign: "（認輸）", left: "（對手離桌）", timeouts: "（超時 3 次）", no_show: "（未到場）" } as Record<string, string>,
+    waitOpp: "等待對手入座", bracket: "賽程表", wonPool: "撞球獲勝！",
+    spectators: "人觀戰", offline: "已離線", power: "拉動擊球", spin: "旋轉", top: "高桿", centre: "中桿", backSpin: "低桿",
+    dragToAim: "在球桌上拖曳瞄準，拉動力量條後放開擊球", placeCue: "拖曳母球放置位置，然後瞄準擊球",
+    rules: "8號球規則：開球後，第一位合法打進球的玩家取得該組球（全色球 1-7 或花色球 9-15）。打完自己的整組球後，再打進 8 號球即獲勝。提早打進 8 號球判輸。犯規（母球落袋、先碰到錯誤的球、沒碰到任何球、碰球後沒有球碰到球台邊）時，對手獲得自由球。每次擊球限時 45 秒。有底注的球桌由贏家拿走雙方的底注。",
+    rulesTitle: "遊戲規則", closed: { expired: "等待逾時，球桌已關閉", cancelled: "球桌已關閉" } as Record<string, string>, bpWin: "8號球撞球 · 擊敗",
   },
 };
 
+type Strings = typeof TXT.vi;
 const fmt = (n: number) => n.toLocaleString();
 const fmtStake = (n: number) => (n >= 1_000_000 ? `${n / 1_000_000}M` : n >= 1000 ? `${n / 1000}K` : String(n));
 
@@ -86,7 +105,7 @@ function PlayerCard({ name, group, left, active, online, side, game, msLeft }: {
   );
 }
 
-function statusLine(L: typeof TXT.vi, g: GameState, mine: boolean) {
+function statusLine(L: Strings, g: GameState, mine: boolean) {
   const parts: string[] = [];
   if (g.last?.foul) parts.push(L.foul[g.last.foul] ?? g.last.foul);
   parts.push(mine ? L.yourTurn : L.theirTurn);
@@ -96,12 +115,12 @@ function statusLine(L: typeof TXT.vi, g: GameState, mine: boolean) {
 }
 
 /** Short how-to under the status line, on the player's own turn */
-const hint = (L: typeof TXT.vi, g: GameState) => (g.ballInHand ? L.placeCue : L.dragToAim);
+const hint = (L: Strings, g: GameState) => (g.ballInHand ? L.placeCue : L.dragToAim);
 
 export default function Pool() {
   const { user, isLoading } = useAuth();
   const { lang, t } = useLang();
-  const L = TXT[lang];
+  const L: Strings = TXT[lang];
   const { toast } = useToast();
   const search = useSearch();
   const [, setLocation] = useLocation();
@@ -137,19 +156,20 @@ export default function Pool() {
 
 // ---------------- Lobby ----------------
 
-function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: typeof TXT.vi; onOpen: (c: string) => void; onPractice: () => void; toast: ReturnType<typeof useToast>["toast"]; insufficient: string }) {
+function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: Strings; onOpen: (c: string) => void; onPractice: () => void; toast: ReturnType<typeof useToast>["toast"]; insufficient: string }) {
+  const { srv } = useLang();
   const { data: state } = useGameState(true);
   const [stake, setStake] = useState(0);
   const tables = useQuery<{ open: PoolTable[]; live: PoolTable[]; mine: string | null; stakes: number[] }>({ queryKey: ["/api/pool/tables"], refetchInterval: 3000 });
   const create = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/pool/tables", { stake })).json() as Promise<{ code: string }>,
     onSuccess: (r) => { queryClient.invalidateQueries({ queryKey: STATE_KEY }); queryClient.invalidateQueries({ queryKey: ME_KEY }); onOpen(r.code); },
-    onError: (e: Error) => toast({ title: /balance/i.test(e.message) ? insufficient : e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: /balance/i.test(e.message) ? insufficient : srv(e.message), variant: "destructive" }),
   });
   const join = useMutation({
     mutationFn: async (code: string) => (await apiRequest("POST", `/api/pool/tables/${code}/join`)).json() as Promise<{ code: string }>,
     onSuccess: (r) => { queryClient.invalidateQueries({ queryKey: STATE_KEY }); queryClient.invalidateQueries({ queryKey: ME_KEY }); onOpen(r.code); },
-    onError: (e: Error) => { toast({ title: /balance/i.test(e.message) ? insufficient : e.message, variant: "destructive" }); tables.refetch(); },
+    onError: (e: Error) => { toast({ title: /balance/i.test(e.message) ? insufficient : srv(e.message), variant: "destructive" }); tables.refetch(); },
   });
   const stakes = tables.data?.stakes ?? [0, 1000, 10000, 50000, 100000, 500000, 1000000];
   const balance = state?.balance ?? 0;
@@ -169,7 +189,7 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: typeof TXT.v
       return await (await apiRequest("POST", "/api/pool/tables", { stake: 0 })).json() as { code: string };
     },
     onSuccess: (r) => onOpen(r.code),
-    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: srv(e.message), variant: "destructive" }),
   });
 
   const tabs = (
@@ -241,7 +261,7 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: typeof TXT.v
       )}
 
       <details className="rounded-2xl bg-purple-950/60 border border-yellow-500/20 p-4 text-sm text-yellow-100/70">
-        <summary className="font-black text-yellow-400 cursor-pointer">Luật / Rules</summary>
+        <summary className="font-black text-yellow-400 cursor-pointer">{L.rulesTitle}</summary>
         <p className="mt-2 leading-relaxed">{L.rules}</p>
       </details>
     </div>
@@ -250,7 +270,7 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: typeof TXT.v
 
 // ---------------- Practice against the computer ----------------
 
-function PracticeTable({ L, name, onExit }: { L: typeof TXT.vi; name: string; onExit: () => void }) {
+function PracticeTable({ L, name, onExit }: { L: Strings; name: string; onExit: () => void }) {
   const [game, setGame] = useState<GameState>(() => newGame(undefined, 0));
   const [playback, setPlayback] = useState<Playback | null>(null);
   const [aiAim, setAiAim] = useState<{ aim: Aim; cue: { x: number; y: number } | null } | null>(null);
@@ -328,7 +348,8 @@ function EndBanner({ title, sub, actions, extra }: { title: string; sub: string;
 
 type StateMsg = Extract<PoolServerMsg, { t: "state" }>;
 
-function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; code: string; userId: string; onExit: () => void; toast: ReturnType<typeof useToast>["toast"] }) {
+function OnlineTable({ L, code, userId, onExit, toast }: { L: Strings; code: string; userId: string; onExit: () => void; toast: ReturnType<typeof useToast>["toast"] }) {
+  const { lang, srv } = useLang();
   const [table, setTable] = useState<StateMsg | null>(null);
   const [, nav] = useLocation();
   const [game, setGame] = useState<GameState | null>(null);
@@ -371,9 +392,9 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; cod
       setEmotes((list) => [...list, e]);
       setTimeout(() => setEmotes((list) => list.filter((x) => x.id !== e.id)), 2600);
     } else if (m.t === "error") {
-      toast({ title: m.message, variant: "destructive" });
+      toast({ title: srv(m.message), variant: "destructive" });
     } else if (m.t === "closed") {
-      toast({ title: m.reason === "expired" ? "⏱" : "✖", description: m.reason });
+      toast({ title: m.reason === "expired" ? "⏱" : "✖", description: L.closed[m.reason] ?? m.reason });
       onExit();
     }
   });
@@ -438,7 +459,6 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; cod
   const ready = table.ready !== false;
   const myTurn = seat !== null && g.turn === seat && table.status === "playing" && !playback && ready;
   const tour = table.tournament;
-  const vi = L === TXT.vi;
   const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
   const left = (s: Side) => (g.groups[s] ? ballsLeft(g, g.groups[s]!) : 7);
   const order: Side[] = seat === 1 ? [1, 0] : [0, 1];
@@ -448,7 +468,7 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; cod
     <div className="w-full max-w-md flex flex-col gap-2 relative" data-testid="pool-online">
       {tour && (
         <button type="button" onClick={() => nav("/tournament")} className="w-full rounded-xl bg-gradient-to-r from-yellow-500/25 to-emerald-600/25 border border-yellow-400/40 py-1 text-xs font-black text-yellow-200" data-testid="pool-tournament-badge">
-          🏆 {tour.name} · {roundName(tour.round, tour.rounds, vi ? "vi" : "en")}
+          🏆 {tour.name} · {roundName(tour.round, tour.rounds, lang)}
         </button>
       )}
       <div className="flex gap-2">
@@ -493,7 +513,7 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: typeof TXT.vi; cod
               emoji: "🎱",
               title: L.wonPool,
               amount: ended.payout || undefined,
-              detail: tour ? `${tour.name} · ${roundName(tour.round, tour.rounds, vi ? "vi" : "en")}` : `${vi ? "Bi-a 8 bóng · thắng" : "8-ball pool · beat"} ${names[(1 - seat) as Side] ?? ""}`,
+              detail: tour ? `${tour.name} · ${roundName(tour.round, tour.rounds, lang)}` : `${L.bpWin} ${names[(1 - seat) as Side] ?? ""}`,
             }} />
           ) : undefined}
         />

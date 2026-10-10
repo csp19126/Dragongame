@@ -31,7 +31,7 @@ interface ProfileData {
 
 export default function Profile() {
   const { user, isLoading: isAuthLoading } = useAuth();
-  const { t } = useLang();
+  const { t, tr, locale, srv } = useLang();
   const { toast } = useToast();
 
   const { data: profile, isLoading: isProfileLoading } = useQuery<ProfileData>({
@@ -67,7 +67,7 @@ export default function Profile() {
       toast({ title: t.profileUpdated });
     },
     onError: (err: Error) => {
-      toast({ title: err.message, variant: "destructive" });
+      toast({ title: srv(err.message), variant: "destructive" });
     },
   });
 
@@ -99,7 +99,7 @@ export default function Profile() {
   }
 
   const initials = (profile.firstName?.[0] || "") + (profile.lastName?.[0] || "") || profile.username.slice(0, 2).toUpperCase();
-  const memberDate = profile.createdAt ? new Date(profile.createdAt).toLocaleDateString() : "N/A";
+  const memberDate = profile.createdAt ? new Date(profile.createdAt).toLocaleDateString(locale) : tr("N/A", "N/A", "不詳");
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a35] to-[#0a0515] flex flex-col">
@@ -241,7 +241,7 @@ export default function Profile() {
 }
 
 function PasswordCard() {
-  const { t } = useLang();
+  const { t, srv } = useLang();
   const { toast } = useToast();
   const [currentPassword, setCurrent] = useState("");
   const [newPassword, setNew] = useState("");
@@ -253,7 +253,7 @@ function PasswordCard() {
       setCurrent("");
       setNew("");
     },
-    onError: (err: Error) => toast({ title: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: srv(err.message), variant: "destructive" }),
   });
 
   return (

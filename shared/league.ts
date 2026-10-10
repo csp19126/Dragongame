@@ -20,10 +20,10 @@ export const PARTICIPATION_PRIZE = 100_000;
 export const DAILY_WIN_BONUS = 20_000;
 
 export const TIERS = [
-  { id: "diamond", min: 150, icon: "💎", vi: "Kim Cương", en: "Diamond" },
-  { id: "gold", min: 80, icon: "🥇", vi: "Vàng", en: "Gold" },
-  { id: "silver", min: 30, icon: "🥈", vi: "Bạc", en: "Silver" },
-  { id: "bronze", min: 0, icon: "🥉", vi: "Đồng", en: "Bronze" },
+  { id: "diamond", min: 150, icon: "💎", vi: "Kim Cương", en: "Diamond", zh: "鑽石" },
+  { id: "gold", min: 80, icon: "🥇", vi: "Vàng", en: "Gold", zh: "黃金" },
+  { id: "silver", min: 30, icon: "🥈", vi: "Bạc", en: "Silver", zh: "白銀" },
+  { id: "bronze", min: 0, icon: "🥉", vi: "Đồng", en: "Bronze", zh: "青銅" },
 ] as const;
 
 export function tierOf(points: number) {

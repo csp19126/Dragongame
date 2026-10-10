@@ -13,6 +13,7 @@ export interface Sticker {
   emoji: string;
   vi: string;
   en: string;
+  zh: string;
   rarity: Rarity;
 }
 
@@ -20,48 +21,49 @@ export interface StickerSet {
   id: string;
   vi: string;
   en: string;
+  zh: string;
   reward: number;
   colors: [string, string];
 }
 
 export const STICKER_SETS: StickerSet[] = [
-  { id: "tet", vi: "Tết Nguyên Đán", en: "Lunar New Year", reward: 200_000, colors: ["#e11d48", "#f59e0b"] },
-  { id: "street", vi: "Phố Phường", en: "Street Life", reward: 200_000, colors: ["#0ea5e9", "#22c55e"] },
-  { id: "home", vi: "Quê Hương", en: "Homeland", reward: 300_000, colors: ["#16a34a", "#84cc16"] },
-  { id: "legend", vi: "Huyền Thoại", en: "Legends", reward: 1_000_000, colors: ["#7c3aed", "#f59e0b"] },
+  { id: "tet", vi: "Tết Nguyên Đán", en: "Lunar New Year", zh: "農曆新年", reward: 200_000, colors: ["#e11d48", "#f59e0b"] },
+  { id: "street", vi: "Phố Phường", en: "Street Life", zh: "街頭風情", reward: 200_000, colors: ["#0ea5e9", "#22c55e"] },
+  { id: "home", vi: "Quê Hương", en: "Homeland", zh: "故鄉風光", reward: 300_000, colors: ["#16a34a", "#84cc16"] },
+  { id: "legend", vi: "Huyền Thoại", en: "Legends", zh: "傳說神獸", reward: 1_000_000, colors: ["#7c3aed", "#f59e0b"] },
 ];
 
 /** Paid once when every sticker in the album has been collected */
 export const ALBUM_REWARD = 5_000_000;
 
 export const STICKERS: Sticker[] = [
-  { id: "tet_lixi", set: "tet", emoji: "🧧", vi: "Lì xì", en: "Lucky money", rarity: "common" },
-  { id: "tet_hoadao", set: "tet", emoji: "🌸", vi: "Hoa đào", en: "Peach blossom", rarity: "common" },
-  { id: "tet_duahau", set: "tet", emoji: "🍉", vi: "Dưa hấu", en: "Watermelon", rarity: "common" },
-  { id: "tet_denlong", set: "tet", emoji: "🏮", vi: "Đèn lồng", en: "Lantern", rarity: "rare" },
-  { id: "tet_phaohoa", set: "tet", emoji: "🎆", vi: "Pháo hoa", en: "Fireworks", rarity: "rare" },
-  { id: "tet_mualan", set: "tet", emoji: "🦁", vi: "Múa lân", en: "Lion dance", rarity: "epic" },
+  { id: "tet_lixi", set: "tet", emoji: "🧧", vi: "Lì xì", en: "Lucky money", zh: "紅包", rarity: "common" },
+  { id: "tet_hoadao", set: "tet", emoji: "🌸", vi: "Hoa đào", en: "Peach blossom", zh: "桃花", rarity: "common" },
+  { id: "tet_duahau", set: "tet", emoji: "🍉", vi: "Dưa hấu", en: "Watermelon", zh: "西瓜", rarity: "common" },
+  { id: "tet_denlong", set: "tet", emoji: "🏮", vi: "Đèn lồng", en: "Lantern", zh: "燈籠", rarity: "rare" },
+  { id: "tet_phaohoa", set: "tet", emoji: "🎆", vi: "Pháo hoa", en: "Fireworks", zh: "煙火", rarity: "rare" },
+  { id: "tet_mualan", set: "tet", emoji: "🦁", vi: "Múa lân", en: "Lion dance", zh: "舞獅", rarity: "epic" },
 
-  { id: "street_pho", set: "street", emoji: "🍜", vi: "Phở", en: "Phở", rarity: "common" },
-  { id: "street_banhmi", set: "street", emoji: "🥖", vi: "Bánh mì", en: "Bánh mì", rarity: "common" },
-  { id: "street_caphe", set: "street", emoji: "☕", vi: "Cà phê sữa đá", en: "Iced coffee", rarity: "common" },
-  { id: "street_xemay", set: "street", emoji: "🛵", vi: "Xe máy", en: "Motorbike", rarity: "rare" },
-  { id: "street_nonla", set: "street", emoji: "👒", vi: "Nón lá", en: "Conical hat", rarity: "rare" },
-  { id: "street_aodai", set: "street", emoji: "👘", vi: "Áo dài", en: "Áo dài", rarity: "epic" },
+  { id: "street_pho", set: "street", emoji: "🍜", vi: "Phở", en: "Phở", zh: "越南河粉", rarity: "common" },
+  { id: "street_banhmi", set: "street", emoji: "🥖", vi: "Bánh mì", en: "Bánh mì", zh: "越南麵包", rarity: "common" },
+  { id: "street_caphe", set: "street", emoji: "☕", vi: "Cà phê sữa đá", en: "Iced coffee", zh: "越南冰咖啡", rarity: "common" },
+  { id: "street_xemay", set: "street", emoji: "🛵", vi: "Xe máy", en: "Motorbike", zh: "機車", rarity: "rare" },
+  { id: "street_nonla", set: "street", emoji: "👒", vi: "Nón lá", en: "Conical hat", zh: "斗笠", rarity: "rare" },
+  { id: "street_aodai", set: "street", emoji: "👘", vi: "Áo dài", en: "Áo dài", zh: "奧黛", rarity: "epic" },
 
-  { id: "home_lua", set: "home", emoji: "🌾", vi: "Ruộng lúa", en: "Rice field", rarity: "common" },
-  { id: "home_sen", set: "home", emoji: "🪷", vi: "Hoa sen", en: "Lotus", rarity: "common" },
-  { id: "home_tre", set: "home", emoji: "🎋", vi: "Cây tre", en: "Bamboo", rarity: "common" },
-  { id: "home_trau", set: "home", emoji: "🐃", vi: "Con trâu", en: "Water buffalo", rarity: "rare" },
-  { id: "home_thuyen", set: "home", emoji: "🛶", vi: "Thuyền Hạ Long", en: "Hạ Long boat", rarity: "epic" },
-  { id: "home_halong", set: "home", emoji: "🏞️", vi: "Vịnh Hạ Long", en: "Hạ Long Bay", rarity: "epic" },
+  { id: "home_lua", set: "home", emoji: "🌾", vi: "Ruộng lúa", en: "Rice field", zh: "稻田", rarity: "common" },
+  { id: "home_sen", set: "home", emoji: "🪷", vi: "Hoa sen", en: "Lotus", zh: "蓮花", rarity: "common" },
+  { id: "home_tre", set: "home", emoji: "🎋", vi: "Cây tre", en: "Bamboo", zh: "竹子", rarity: "common" },
+  { id: "home_trau", set: "home", emoji: "🐃", vi: "Con trâu", en: "Water buffalo", zh: "水牛", rarity: "rare" },
+  { id: "home_thuyen", set: "home", emoji: "🛶", vi: "Thuyền Hạ Long", en: "Hạ Long boat", zh: "下龍灣遊船", rarity: "epic" },
+  { id: "home_halong", set: "home", emoji: "🏞️", vi: "Vịnh Hạ Long", en: "Hạ Long Bay", zh: "下龍灣", rarity: "epic" },
 
-  { id: "legend_cachep", set: "legend", emoji: "🐟", vi: "Cá chép hóa rồng", en: "Koi to dragon", rarity: "rare" },
-  { id: "legend_ho", set: "legend", emoji: "🐯", vi: "Hổ", en: "Tiger", rarity: "rare" },
-  { id: "legend_rua", set: "legend", emoji: "🐢", vi: "Rùa thần", en: "Golden turtle", rarity: "epic" },
-  { id: "legend_phuong", set: "legend", emoji: "🦚", vi: "Phượng hoàng", en: "Phoenix", rarity: "epic" },
-  { id: "legend_kylan", set: "legend", emoji: "🦄", vi: "Kỳ lân", en: "Kỳ lân", rarity: "legendary" },
-  { id: "legend_rong", set: "legend", emoji: "🐉", vi: "Rồng vàng", en: "Golden dragon", rarity: "legendary" },
+  { id: "legend_cachep", set: "legend", emoji: "🐟", vi: "Cá chép hóa rồng", en: "Koi to dragon", zh: "鯉躍龍門", rarity: "rare" },
+  { id: "legend_ho", set: "legend", emoji: "🐯", vi: "Hổ", en: "Tiger", zh: "老虎", rarity: "rare" },
+  { id: "legend_rua", set: "legend", emoji: "🐢", vi: "Rùa thần", en: "Golden turtle", zh: "神龜", rarity: "epic" },
+  { id: "legend_phuong", set: "legend", emoji: "🦚", vi: "Phượng hoàng", en: "Phoenix", zh: "鳳凰", rarity: "epic" },
+  { id: "legend_kylan", set: "legend", emoji: "🦄", vi: "Kỳ lân", en: "Kỳ lân", zh: "麒麟", rarity: "legendary" },
+  { id: "legend_rong", set: "legend", emoji: "🐉", vi: "Rồng vàng", en: "Golden dragon", zh: "金龍", rarity: "legendary" },
 ];
 
 export const STICKER_BY_ID = new Map(STICKERS.map((s) => [s.id, s]));

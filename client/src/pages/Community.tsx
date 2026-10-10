@@ -7,7 +7,7 @@ import { Header } from "@/components/Header";
 import { ShareDialog, type ShareWhat } from "@/components/ShareCard";
 import { useAuth, ME_KEY } from "@/hooks/use-auth";
 import { STATE_KEY } from "@/hooks/use-game";
-import { useLang } from "@/lib/lang-context";
+import { useLang, type Language, fmtCoins } from "@/lib/lang-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { soundManager } from "@/lib/sound";
@@ -18,7 +18,7 @@ import {
 } from "@shared/stickers";
 import { CHAT_MAX_LEN } from "@shared/chat";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = fmtCoins;
 
 const TXT = {
   vi: {
@@ -59,6 +59,25 @@ const TXT = {
     friends: "Friends you invited", noFriends: "Nobody yet. Send your link!", claimInvite: (n: number) => `Claim reward (${n})`, paid: "Paid", games: "games",
     announce: "Announcement", maxInvites: (n: number) => `Up to ${n} invite rewards.`,
   },
+  zh: {
+    title: "社群", subtitle: "聊天 · 收集 · 邀請",
+    tabChat: "聊天", tabAlbum: "圖鑑", tabInvite: "邀請好友",
+    rules: "請保持禮貌。禁止買賣金幣，禁止發送連結或電話號碼。",
+    placeholder: "說點什麼…", send: "發送", stickers: "你的貼圖", noStickers: "你還沒有貼圖。到圖鑑開卡包吧！",
+    playFirst: (n: number) => `再玩 ${n} 局即可解鎖聊天`, mutedUntil: "你已被暫時禁言，直到",
+    report: "檢舉", reported: "已檢舉，謝謝你！", empty: "還沒有訊息。跟大家打聲招呼吧！👋",
+    err: { trade: "金幣僅供遊戲使用：禁止買賣金幣或談論真錢交易。", link: "不能發送連結。", phone: "不能發送電話號碼。", long: "訊息太長了。", slow_down: "慢一點喔…", repeat: "你剛剛已經發過這則訊息了。", empty: "訊息是空的。", muted: "你目前被暫時禁言。", play_first: "先玩幾局再來吧。", not_owned: "你沒有這張貼圖。" } as Record<string, string>,
+    collected: "已收集", packs: "貼圖卡包", freePack: "免費卡包", freeIn: "下一個免費卡包", open: "開啟", playPack: "遊戲卡包", nextIn: (n: number) => `再玩 ${n} 局`, bonusPack: "獎勵卡包",
+    trade: `${TRADE_IN} 張重複貼圖 → 換 1 包`, spares: "張重複", claim: "領取", claimed: "已領取", reward: "獎勵", albumDone: "集滿整本圖鑑",
+    newOne: "新！", gift: "贈送", giftTitle: "贈送 1 張重複貼圖", giftTo: "收件玩家帳號", giftsLeft: "今日剩餘贈送次數", giftOk: (n: string) => `已送給 ${n}！🎁`,
+    needSpare: "至少要有 2 張才能贈送", rarity: { common: "普通", rare: "稀有", epic: "史詩", legendary: "傳說" } as Record<Rarity, string>,
+    howToGet: `每天 1 包免費卡包 · 每玩 ${PLAY_PACK_EVERY} 局得 1 包 · 邀請好友得獎勵卡包`,
+    inviteTitle: "邀請好友，一起拿獎勵", inviteSub: (w: string, r: string) => `你的好友立即獲得 ${w} 金幣。等他們玩夠局數，你可獲得 ${r} 金幣 + 1 包貼圖卡包。`,
+    yourLink: "你的邀請連結", copy: "複製", copied: "已複製！", share: "分享", shareText: "來 VnSlot 888 跟我一起玩！用這個連結註冊可額外獲得金幣 🎁",
+    step1: "把連結傳給好友", step2: (w: string) => `好友註冊：立即獲得 ${w} 金幣`, step3: (n: number, r: string) => `好友玩滿 ${n} 局：你獲得 ${r} 金幣 + 1 包卡包`,
+    friends: "已邀請的好友", noFriends: "還沒有人。快傳送連結吧！", claimInvite: (n: number) => `領取獎勵（${n}）`, paid: "已領取", games: "局",
+    announce: "公告", maxInvites: (n: number) => `邀請獎勵最多 ${n} 次。`,
+  },
 };
 type L = typeof TXT.vi;
 
@@ -72,7 +91,7 @@ const RARITY_STYLE: Record<Rarity, string> = {
 export default function Community() {
   const { user, isLoading } = useAuth();
   const { lang } = useLang();
-  const L = TXT[lang];
+  const L: L = TXT[lang];
   const search = useSearch();
   const [, setLocation] = useLocation();
   const tab = (new URLSearchParams(search).get("tab") as "chat" | "album" | "invite" | null) ?? "chat";
@@ -113,13 +132,14 @@ export default function Community() {
 
 // ---------------- Stickers ----------------
 
-function StickerCard({ s, count, lang, L, small, isNew }: { s: Sticker; count: number; lang: "vi" | "en"; L: L; small?: boolean; isNew?: boolean }) {
+function StickerCard({ s, count, lang: _lang, L, small, isNew }: { s: Sticker; count: number; lang: Language; L: L; small?: boolean; isNew?: boolean }) {
+  const { loc } = useLang();
   const owned = count > 0;
   return (
     <div className={`relative rounded-2xl border bg-gradient-to-br ${owned ? RARITY_STYLE[s.rarity] : "from-white/5 to-white/0 border-white/10 border-dashed"} ${small ? "p-1.5" : "p-2"} flex flex-col items-center text-center`}
       data-testid={`sticker-${s.id}`}>
       <div className={`${small ? "text-3xl" : "text-5xl"} leading-none my-1 ${owned ? "drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]" : "grayscale opacity-20"}`}>{s.emoji}</div>
-      <div className={`font-black leading-tight ${small ? "text-[9px]" : "text-[11px]"} ${owned ? "text-white" : "text-white/30"}`}>{owned ? (lang === "vi" ? s.vi : s.en) : "???"}</div>
+      <div className={`font-black leading-tight ${small ? "text-[9px]" : "text-[11px]"} ${owned ? "text-white" : "text-white/30"}`}>{owned ? loc(s) : "???"}</div>
       {!small && <div className={`text-[9px] font-bold uppercase tracking-wider ${owned ? "text-white/60" : "text-white/20"}`}>{L.rarity[s.rarity]}</div>}
       {count > 1 && <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-red-600 text-white text-[11px] font-black flex items-center justify-center border-2 border-[#1a0a2e]">×{count}</span>}
       {isNew && <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 rounded-full bg-yellow-400 text-black text-[10px] font-black">{L.newOne}</span>}
@@ -129,8 +149,9 @@ function StickerCard({ s, count, lang, L, small, isNew }: { s: Sticker; count: n
 
 const ALBUM_KEY = ["/api/stickers"];
 
-function AlbumTab({ L, lang }: { L: L; lang: "vi" | "en" }) {
+function AlbumTab({ L, lang }: { L: L; lang: Language }) {
   const { toast } = useToast();
+  const { tr, loc, srv } = useLang();
   const album = useQuery<AlbumView>({ queryKey: ALBUM_KEY });
   const [reveal, setReveal] = useState<{ id: string; isNew: boolean }[] | null>(null);
   const [giftFor, setGiftFor] = useState<Sticker | null>(null);
@@ -138,7 +159,7 @@ function AlbumTab({ L, lang }: { L: L; lang: "vi" | "en" }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
-  const fail = (e: unknown) => toast({ title: e instanceof ApiError ? e.message : String(e), variant: "destructive" });
+  const fail = (e: unknown) => toast({ title: e instanceof ApiError ? srv(e.message) : String(e), variant: "destructive" });
   const open = useMutation({
     mutationFn: async (kind: "free" | "play" | "bonus") => (await apiRequest("POST", "/api/stickers/open", { kind })).json() as Promise<{ stickers: { id: string; isNew: boolean }[] }>,
     onSuccess: (r) => { soundManager.bonus(); setReveal(r.stickers); queryClient.invalidateQueries({ queryKey: ALBUM_KEY }); },
@@ -153,9 +174,9 @@ function AlbumTab({ L, lang }: { L: L; lang: "vi" | "en" }) {
       const emoji = r.set === "album" ? "📒" : STICKERS.filter((x) => x.set === r.set).map((x) => x.emoji).slice(0, 3).join("");
       setBrag({
         emoji,
-        title: r.set === "album" ? (lang === "vi" ? "HOÀN THÀNH ALBUM!" : "ALBUM COMPLETE!") : (lang === "vi" ? "ĐỦ BỘ STICKER!" : "SET COMPLETE!"),
+        title: r.set === "album" ? tr("HOÀN THÀNH ALBUM!", "ALBUM COMPLETE!", "圖鑑集滿！") : tr("ĐỦ BỘ STICKER!", "SET COMPLETE!", "貼圖套組集滿！"),
         amount: r.reward,
-        detail: set ? (lang === "vi" ? set.vi : set.en) : (lang === "vi" ? "Sưu tầm đủ 24 sticker" : "All 24 stickers collected"),
+        detail: set ? loc(set) : tr("Sưu tầm đủ 24 sticker", "All 24 stickers collected", "24 張貼圖全部收集完成"),
       });
       queryClient.invalidateQueries({ queryKey: ALBUM_KEY }); queryClient.invalidateQueries({ queryKey: ME_KEY }); queryClient.invalidateQueries({ queryKey: STATE_KEY });
     },
@@ -214,7 +235,7 @@ function AlbumTab({ L, lang }: { L: L; lang: "vi" | "en" }) {
           <div key={set.id} className="rounded-2xl border border-white/10 bg-black/30 p-2.5" data-testid={`set-${set.id}`}>
             <div className="flex items-center gap-2 mb-2">
               <div className="flex-1 leading-tight">
-                <div className="font-black text-sm" style={{ color: set.colors[1] }}>{lang === "vi" ? set.vi : set.en}</div>
+                <div className="font-black text-sm" style={{ color: set.colors[1] }}>{loc(set)}</div>
                 <div className="text-[11px] text-white/60">{have}/{items.length} · {L.reward}: {fmt(set.reward)} 🪙</div>
               </div>
               <ClaimBtn done={have === items.length} claimed={a.claimedSets.includes(set.id)} onClick={() => claim.mutate(set.id)} L={L} testid={`claim-${set.id}`} />
@@ -264,7 +285,7 @@ function ClaimBtn({ done, claimed, onClick, L, testid }: { done: boolean; claime
   );
 }
 
-function PackReveal({ items, L, lang, onClose }: { items: { id: string; isNew: boolean }[]; L: L; lang: "vi" | "en"; onClose: () => void }) {
+function PackReveal({ items, L, lang, onClose }: { items: { id: string; isNew: boolean }[]; L: L; lang: Language; onClose: () => void }) {
   useEffect(() => {
     const best = items.map((i) => STICKER_BY_ID.get(i.id)!.rarity);
     if (best.includes("legendary") || best.includes("epic")) { fireworks(1800); soundManager.bigWinFanfare(); }
@@ -283,20 +304,21 @@ function PackReveal({ items, L, lang, onClose }: { items: { id: string; isNew: b
   );
 }
 
-function GiftDialog({ s, count, left, L, lang, onClose }: { s: Sticker; count: number; left: number; L: L; lang: "vi" | "en"; onClose: () => void }) {
+function GiftDialog({ s, count, left, L, lang, onClose }: { s: Sticker; count: number; left: number; L: L; lang: Language; onClose: () => void }) {
   const { toast } = useToast();
+  const { tr, srv } = useLang();
   const [to, setTo] = useState("");
   const gift = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/stickers/gift", { to, sticker: s.id })).json() as Promise<{ to: string }>,
     onSuccess: (r) => { toast({ title: L.giftOk(r.to) }); queryClient.invalidateQueries({ queryKey: ALBUM_KEY }); onClose(); },
-    onError: (e) => toast({ title: e instanceof ApiError ? e.message : String(e), variant: "destructive" }),
+    onError: (e) => toast({ title: e instanceof ApiError ? srv(e.message) : String(e), variant: "destructive" }),
   });
   return (
     <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center px-4" onClick={onClose}>
       <div className="w-full max-w-xs rounded-2xl bg-[#1a0a2e] border border-yellow-500/40 p-4 flex flex-col gap-3" onClick={(e) => e.stopPropagation()} data-testid="gift-dialog">
         <div className="flex items-center justify-between">
           <span className="font-black text-yellow-300 flex items-center gap-1.5"><Gift className="w-4 h-4" />{L.giftTitle}</span>
-          <button type="button" onClick={onClose} aria-label="Close"><X className="w-5 h-5 text-white/60" /></button>
+          <button type="button" onClick={onClose} aria-label={tr("Đóng", "Close", "關閉")}><X className="w-5 h-5 text-white/60" /></button>
         </div>
         <div className="w-28 self-center"><StickerCard s={s} count={count} lang={lang} L={L} /></div>
         {count < 2 ? (
@@ -326,6 +348,7 @@ const hue = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(
 
 function ChatTab({ L, me }: { L: L; me: string }) {
   const { toast } = useToast();
+  const { loc, srv } = useLang();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [meInfo, setMeInfo] = useState<ChatResp["me"] | null>(null);
   const [text, setText] = useState("");
@@ -380,7 +403,7 @@ function ChatTab({ L, me }: { L: L; me: string }) {
       setText(""); setTray(false); toBottom();
     } catch (e) {
       const code = e instanceof ApiError ? e.message : "";
-      toast({ title: L.err[code] ?? code, variant: "destructive" });
+      toast({ title: L.err[code] ?? srv(code), variant: "destructive" });
     } finally { setSending(false); }
   };
 
@@ -412,7 +435,7 @@ function ChatTab({ L, me }: { L: L; me: string }) {
               </span>
               <div className="flex items-end gap-1">
                 {st ? (
-                  <div className="text-5xl leading-none py-1" title={st.vi}>{st.emoji}</div>
+                  <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div>
                 ) : (
                   <div className={`px-3 py-1.5 rounded-2xl text-sm break-words ${mine ? "bg-gradient-to-b from-yellow-400 to-orange-500 text-black rounded-br-md" : m.admin ? "bg-red-800/80 text-white rounded-bl-md border border-yellow-400/40" : "bg-white/10 text-white rounded-bl-md"}`}>{m.text}</div>
                 )}

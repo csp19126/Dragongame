@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useGameState, useSetBalance } from "@/hooks/use-game";
 import { useBauCua, type BauCuaResponse } from "@/hooks/use-tables";
 import { useLang } from "@/lib/lang-context";
+import { achievementToast } from "@/components/slot/achievements";
 import { useToast } from "@/hooks/use-toast";
 import { soundManager } from "@/lib/sound";
 import { coinBurst, fireworks, stopCelebrations } from "@/lib/celebrate";
@@ -80,7 +81,7 @@ const sum = (b: Bets) => Object.values(b).reduce((a, n) => a + (n ?? 0), 0);
 export default function BauCua() {
   const { user, isLoading } = useAuth();
   const { data: state } = useGameState(!!user);
-  const { t } = useLang();
+  const { t, loc, srv } = useLang();
   const { toast } = useToast();
   const setBalance = useSetBalance();
   const play = useBauCua();
@@ -147,12 +148,12 @@ export default function BauCua() {
           } else if (r.winAmount === 0) {
             soundManager.lossComfort();
           }
-          r.newAchievements.forEach((a) => toast({ title: `🏆 ${a.badgeName}`, description: a.description }));
+          r.newAchievements.forEach((a) => toast(achievementToast(a, loc)));
         }, wait(DIE_STOP_MS[2] + 250)));
       },
       onError: (e) => {
         setShaking([false, false, false]);
-        const msg = e instanceof ApiError && e.status === 400 ? t.insufficientBalanceDesc : (e as Error).message;
+        const msg = e instanceof ApiError && e.status === 400 ? t.insufficientBalanceDesc : srv((e as Error).message);
         toast({ title: t.error, description: msg, variant: "destructive" });
       },
     });

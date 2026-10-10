@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import { STARTING_BALANCE } from "@shared/schema";
 import { REFERRAL_WELCOME } from "@shared/stickers";
+import type { Language } from "@/lib/lang-context";
 
 /**
  * Brag cards: a 1080x1920 picture (phone story / TikTok size) drawn on a canvas in the browser.
@@ -13,7 +14,7 @@ export interface ShareCardData {
   amount?: number;
   detail: string;
   username: string;
-  lang: "vi" | "en";
+  lang: Language;
 }
 
 const W = 1080, H = 1920;
@@ -60,15 +61,17 @@ function goldText(ctx: CanvasRenderingContext2D, text: string, y: number, size: 
 }
 
 export async function renderShareCard(d: ShareCardData): Promise<Blob> {
-  const vi = d.lang === "vi";
+  const tr = <T,>(vi: T, en: T, zh: T): T => (d.lang === "vi" ? vi : d.lang === "zh" ? zh : en);
   try { await Promise.all([document.fonts.load("120px Lobster"), document.fonts.load("800 80px Nunito")]); } catch { /* use fallbacks */ }
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  const display = "Lobster, Georgia, serif";
-  const body = "Nunito, 'Segoe UI', Roboto, Arial, sans-serif";
+  // CJK fallbacks so Chinese titles draw with a real font instead of boxes
+  const cjk = "'PingFang TC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Microsoft JhengHei'";
+  const display = `Lobster, Georgia, ${cjk}, serif`;
+  const body = `Nunito, 'Segoe UI', Roboto, Arial, ${cjk}, sans-serif`;
 
   // Background: red glow over deep purple
   const bg = ctx.createRadialGradient(W / 2, 620, 60, W / 2, 760, 1250);
@@ -126,7 +129,7 @@ export async function renderShareCard(d: ShareCardData): Promise<Blob> {
   fitFont(ctx, d.title, display, "", 150, W - 140);
   goldText(ctx, d.title, 980, 150);
   if (d.amount != null) {
-    const amount = `+${d.amount.toLocaleString(vi ? "vi-VN" : "en-GB")}`;
+    const amount = `+${d.amount.toLocaleString(tr("vi-VN", "en-GB", "zh-TW"))}`;
     fitFont(ctx, amount, body, "800", 170, W - 160);
     ctx.shadowColor = "rgba(250,204,21,0.9)"; ctx.shadowBlur = 40;
     ctx.fillStyle = "#ffffff";
@@ -134,7 +137,7 @@ export async function renderShareCard(d: ShareCardData): Promise<Blob> {
     ctx.shadowBlur = 0;
     ctx.font = `bold 56px ${body}`;
     ctx.fillStyle = "#fde68a";
-    ctx.fillText(vi ? "xu 🪙" : "coins 🪙", W / 2, 1245);
+    ctx.fillText(tr("xu 🪙", "coins 🪙", "金幣 🪙"), W / 2, 1245);
   }
   fitFont(ctx, d.detail, body, "bold", 54, W - 160);
   ctx.fillStyle = "rgba(255,255,255,0.88)";
@@ -158,10 +161,11 @@ export async function renderShareCard(d: ShareCardData): Promise<Blob> {
   }
   ctx.textAlign = "left";
   const tx = px + qrSize + 70, tw = pw - qrSize - 100;
-  fitFont(ctx, vi ? "Chơi miễn phí!" : "Play free!", display, "", 76, tw);
-  ctx.fillStyle = "#facc15"; ctx.fillText(vi ? "Chơi miễn phí!" : "Play free!", tx, py + 115);
+  const playFree = tr("Chơi miễn phí!", "Play free!", "免費玩！");
+  fitFont(ctx, playFree, display, "", 76, tw);
+  ctx.fillStyle = "#facc15"; ctx.fillText(playFree, tx, py + 115);
   const welcome = STARTING_BALANCE + REFERRAL_WELCOME;
-  const scan = vi ? `Quét mã: +${welcome.toLocaleString("vi-VN")} xu` : `Scan: +${welcome.toLocaleString("en-US")} coins`;
+  const scan = tr(`Quét mã: +${welcome.toLocaleString("vi-VN")} xu`, `Scan: +${welcome.toLocaleString("en-US")} coins`, `掃碼：+${welcome.toLocaleString("zh-TW")} 金幣`);
   fitFont(ctx, scan, body, "bold", 44, tw);
   ctx.fillStyle = "#ffffff"; ctx.fillText(scan, tx, py + 185);
   fitFont(ctx, location.host, body, "bold", 42, tw);
@@ -171,7 +175,7 @@ export async function renderShareCard(d: ShareCardData): Promise<Blob> {
   // Honest small print: play money only
   ctx.font = `bold 30px ${body}`;
   ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.fillText(vi ? "Xu ảo · chỉ để giải trí · không đổi ra tiền · 18+" : "Play coins · entertainment only · no cash value · 18+", W / 2, H - 70);
+  ctx.fillText(tr("Xu ảo · chỉ để giải trí · không đổi ra tiền · 18+", "Play coins · entertainment only · no cash value · 18+", "遊戲金幣 · 僅供娛樂 · 無法兌換現金 · 18+"), W / 2, H - 70);
 
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not draw the card"))), "image/png"));
 }

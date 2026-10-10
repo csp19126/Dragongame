@@ -20,17 +20,16 @@ const HISTORY_KEY = ["/api/coins/history"];
 export default function Coins() {
   const { user, isLoading: authLoading } = useAuth();
   const { data: state } = useGameState(!!user);
-  const { t, lang } = useLang();
+  const { t, tr, srv } = useLang();
   const { toast } = useToast();
   const setBalance = useSetBalance();
   const [code, setCode] = useState("");
-  const vi = lang === "vi";
 
   const { data: history = [] } = useQuery<Deposit[]>({ queryKey: HISTORY_KEY, enabled: !!user });
 
   const nextDaily = state?.lastDailyBonusAt ? new Date(state.lastDailyBonusAt).getTime() + DAILY_BONUS_COOLDOWN_MS : 0;
   const dailyReady = nextDaily <= Date.now();
-  const fmtTime = (ms: number) => new Date(ms).toLocaleString(vi ? "vi-VN" : "en-GB", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" });
+  const fmtTime = (ms: number) => new Date(ms).toLocaleString(tr("vi-VN", "en-GB", "zh-TW"), { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" });
 
   const daily = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/bonus/daily")).json(),
@@ -42,7 +41,7 @@ export default function Coins() {
     },
     onError: (e: Error) => {
       queryClient.invalidateQueries({ queryKey: ["/api/game/state"] });
-      toast({ title: t.error, description: e.message, variant: "destructive" });
+      toast({ title: t.error, description: srv(e.message), variant: "destructive" });
     },
   });
 
@@ -55,7 +54,7 @@ export default function Coins() {
       setCode("");
       queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
     },
-    onError: (e: Error) => toast({ title: t.error, description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t.error, description: srv(e.message), variant: "destructive" }),
   });
 
   if (authLoading) {
@@ -78,8 +77,8 @@ export default function Coins() {
   }
 
   const methodLabel = (m: string) =>
-    m === "daily_bonus" ? (vi ? "Thưởng hằng ngày" : "Daily bonus")
-      : m === "promo_code" || m === "gift_card" ? (vi ? "Mã khuyến mãi" : "Promo code")
+    m === "daily_bonus" ? tr("Thưởng hằng ngày", "Daily bonus", "每日獎勵")
+      : m === "promo_code" || m === "gift_card" ? tr("Mã khuyến mãi", "Promo code", "優惠碼")
       : m;
 
   return (
@@ -95,7 +94,7 @@ export default function Coins() {
           <div className="grid md:grid-cols-2 gap-6">
             <Card className="bg-purple-950/60 border-yellow-500/20 p-6 space-y-4 text-center" data-testid="card-daily">
               <Gift className="w-12 h-12 text-yellow-400 mx-auto" />
-              <h2 className="text-xl font-display text-yellow-400">{vi ? "Quà Hằng Ngày" : "Daily Gift"}</h2>
+              <h2 className="text-xl font-display text-yellow-400">{tr("Quà Hằng Ngày", "Daily Gift", "每日禮物")}</h2>
               <div className="text-3xl font-black text-yellow-300 font-mono">+{DAILY_BONUS_AMOUNT.toLocaleString()} 🪙</div>
               <Button
                 onClick={() => daily.mutate()}
@@ -103,7 +102,7 @@ export default function Coins() {
                 className="w-full h-12 bg-gradient-to-r from-yellow-500 to-orange-500 text-purple-950 font-black text-lg"
                 data-testid="button-claim-daily"
               >
-                {daily.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : dailyReady ? (vi ? "NHẬN NGAY" : "CLAIM") : (
+                {daily.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : dailyReady ? tr("NHẬN NGAY", "CLAIM", "領取") : (
                   <span className="flex items-center gap-2 text-sm"><Clock className="w-4 h-4" />{fmtTime(nextDaily)}</span>
                 )}
               </Button>
@@ -112,27 +111,27 @@ export default function Coins() {
             <Card className="bg-purple-950/60 border-yellow-500/20 p-6 space-y-4" data-testid="card-promo">
               <div className="text-center">
                 <Ticket className="w-12 h-12 text-yellow-400 mx-auto" />
-                <h2 className="text-xl font-display text-yellow-400 mt-4">{vi ? "Mã Khuyến Mãi" : "Promo Code"}</h2>
+                <h2 className="text-xl font-display text-yellow-400 mt-4">{tr("Mã Khuyến Mãi", "Promo Code", "優惠碼")}</h2>
               </div>
               <form onSubmit={(e) => { e.preventDefault(); if (code.trim()) redeem.mutate(code.trim()); }} className="space-y-3">
                 <Input
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder={vi ? "NHẬP MÃ" : "ENTER CODE"}
+                  placeholder={tr("NHẬP MÃ", "ENTER CODE", "輸入代碼")}
                   className="bg-purple-900/40 border-yellow-500/20 text-yellow-100 placeholder:text-yellow-100/30 h-12 text-center font-mono tracking-widest"
                   data-testid="input-promo-code"
                 />
                 <Button type="submit" disabled={!code.trim() || redeem.isPending} className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-black" data-testid="button-redeem">
-                  {redeem.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : (vi ? "ĐỔI MÃ" : "REDEEM")}
+                  {redeem.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : tr("ĐỔI MÃ", "REDEEM", "兌換")}
                 </Button>
               </form>
             </Card>
           </div>
 
           <Card className="bg-purple-950/60 border-yellow-500/20 p-6" data-testid="card-history">
-            <h3 className="text-lg font-display text-yellow-400 mb-4 flex items-center gap-2"><History className="w-4 h-4" />{vi ? "Lịch Sử" : "History"}</h3>
+            <h3 className="text-lg font-display text-yellow-400 mb-4 flex items-center gap-2"><History className="w-4 h-4" />{tr("Lịch Sử", "History", "紀錄")}</h3>
             {history.length === 0 ? (
-              <p className="text-yellow-100/40 text-sm">{vi ? "Chưa có gì" : "Nothing yet"}</p>
+              <p className="text-yellow-100/40 text-sm">{tr("Chưa có gì", "Nothing yet", "目前還沒有紀錄")}</p>
             ) : (
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {history.map((d) => (

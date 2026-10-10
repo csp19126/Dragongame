@@ -73,13 +73,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center bg-[#0a0515] text-yellow-100">
         <div className="text-6xl">🐉</div>
-        <p className="text-lg font-bold">Có lỗi xảy ra · Something went wrong</p>
-        <p className="text-sm text-yellow-100/60">Kiểm tra kết nối mạng rồi tải lại · Check your connection and reload</p>
+        <p className="text-lg font-bold">Có lỗi xảy ra · Something went wrong · 發生錯誤</p>
+        <p className="text-sm text-yellow-100/60">Kiểm tra kết nối mạng rồi tải lại · Check your connection and reload · 請檢查網路連線後重新整理</p>
         <button
           onClick={() => window.location.reload()}
           className="px-6 py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-purple-950 font-black"
         >
-          Tải lại · Reload
+          Tải lại · Reload · 重新整理
         </button>
       </div>
     );

@@ -1,6 +1,17 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { SERVER_MESSAGES } from "./server-messages";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-export type Language = "en" | "vi";
+export type Language = "en" | "vi" | "zh";
+
+/** The languages a player can pick, in menu order (Chinese is Traditional, for Taiwan and Hong Kong) */
+export const LANGUAGES: { id: Language; label: string; short: string; html: string; locale: string }[] = [
+  { id: "vi", label: "Tiếng Việt", short: "VI", html: "vi", locale: "vi-VN" },
+  { id: "en", label: "English", short: "EN", html: "en", locale: "en-US" },
+  { id: "zh", label: "繁體中文", short: "中", html: "zh-Hant", locale: "zh-TW" },
+];
+
+/** Text that comes with its own translations (game data, menus) */
+export type LocalText = { vi: string; en: string; zh?: string };
 
 const en = {
   installTitle: "Get the VnSlot 888 app",
@@ -300,34 +311,210 @@ const vi: Translations = {
   emptyLeaderboard: "Đấu trường còn trống. Hãy là người đầu tiên lên ngôi!",
 };
 
-const translations: Record<Language, Translations> = { en, vi };
+const zh: Translations = {
+  installTitle: "下載 VnSlot 888 App",
+  installDesc: "免費。從主畫面以全螢幕開啟，就像一般 App。",
+  installBannerSub: "從主畫面全螢幕暢玩",
+  installShort: "安裝 App",
+  installNow: "立即安裝",
+  installDone: "已安裝。請從主畫面開啟 VnSlot 888。",
+  installIos1: "在 Safari 中，點選「分享」按鈕",
+  installIos2: "往下捲動並點選",
+  installIosAdd: "加入主畫面",
+  installIos3: "點選",
+  installIosConfirm: "新增",
+  installAndroid1: "在 Chrome 中，點選選單",
+  installAndroid2: "點選「安裝應用程式」或「加到主畫面」",
+  notNow: "以後再說",
+  privacy: "隱私權",
+  deleteAccount: "刪除帳號",
+  deleteAccountDesc: "永久刪除你的帳號、金幣、統計資料和成就。此操作無法復原。",
+  deleteConfirm: "我了解我的帳號和金幣將永久消失",
+  accountDeleted: "你的帳號已刪除",
+  gameSlot: "老虎機",
+  gameBauCua: "魚蝦蟹",
+  gameRoulette: "輪盤",
+  gameBlackjack: "21點",
+  gamePool: "撞球",
+  gameLoto: "賓果",
+  gameTienLen: "大老二",
+  gameBanca: "捕魚",
+  gameCardTables: "牌桌",
+  bcTitle: "魚蝦蟹 (Bầu Cua)",
+  bcSubtitle: "過年骰子遊戲",
+  bcNames: { bau: "葫蘆", cua: "蟹", tom: "蝦", ca: "魚", ga: "雞", nai: "鹿" },
+  bcRules: "押注六個圖案中的任一個，然後擲三顆骰子。圖案出現在一顆骰子上賠 1 比 1，兩顆賠 2 比 1，三顆全中賠 3 比 1。返還率：92.13%，與傳統玩法完全相同。",
+  rlTitle: "輪盤",
+  rlSubtitle: "歐式單零",
+  rlRules: "押單一號碼（賠 35 比 1）、一打或一列（賠 2 比 1），或紅/黑、單/雙、1-18/19-36（賠 1 比 1）。開出 0 時所有外圍押注皆輸。返還率：97.30%。",
+  pickChip: "選擇籌碼，再點選要下注的位置",
+  roll: "擲骰",
+  spinWheel: "旋轉",
+  clearBets: "清除",
+  undo: "復原",
+  onTable: "桌上押注",
+  tableWin: "你贏了",
+  tableLose: "這次運氣不佳",
+  placeBetFirst: "請先下注",
+  lastNumbers: "最近開出",
+  red: "紅", black: "黑", odd: "單", even: "雙",
+  rules: "規則",
+  login: "登入",
+  register: "註冊",
+  username: "帳號",
+  password: "密碼",
+  spin: "旋轉",
+  bet: "押注",
+  balance: "餘額",
+  logout: "登出",
+  leaderboard: "傳奇殿堂",
+  loading: "好運召喚中...",
+  streak: "連勝",
+  topUp: "免費金幣",
+  autoSpin: "自動",
+  totalWins: "總贏得",
+  maxWin: "最大獎",
+  gamesPlayed: "遊戲局數",
+  deposit: "免費金幣",
+  about: "關於",
+  terms: "條款",
+  support: "客服",
+  beginQuest: "免費暢玩",
+  subtitle: "888 神龍發財",
+  description: "一款免費的越南風格老虎機。轉動轉輪，連成",
+  descriptionDragon: "神龍",
+  descriptionEnd: "，再試試魚蝦蟹和輪盤，全部共用一個金幣餘額。只使用遊戲金幣——不用真錢儲值，也無法提領真錢。",
+  maxWinStat: "最高派彩",
+  freeSpins: "免費旋轉",
+  dailyCoins: "每日金幣",
+  feature1: "10 條連線",
+  feature1Desc: "5 個轉輪、3 列：從左起 3、4 或 5 個相連即中獎。每次中獎至少拿回你的押注",
+  feature2: "百搭與紅包",
+  feature2Desc: "🔮 龍珠百搭可補齊連線。🧧 3 個以上紅包在任何位置都派彩，而且由你選擇免費旋轉方式",
+  feature3: "神龍連轉與神龍彩金",
+  feature3Desc: "任意位置 3 個 🔮 喚醒神龍：龍珠保留，其餘以 ×2 到 ×12 重轉。中間列 🔮🔮🔮 引爆共享彩金",
+  achievements: "成就",
+  topPlayers: "頂尖玩家",
+  won: "贏得",
+  noPlayersYet: "還沒有玩家",
+  noWinsYet: "還沒有大獎——搶當第一個！",
+  games: "局數",
+  wins: "贏局",
+  profile: "個人檔案",
+  insufficientBalance: "金幣不足",
+  insufficientBalanceDesc: "降低押注，或領取每日免費金幣。",
+  niceWin: "漂亮！",
+  bigWin: "大獎！",
+  hugeWin: "超級大獎！",
+  megaWin: "神龍發財！",
+  youWon: "你贏得",
+  smallWin: "小獎",
+  scatterWin: "幸運紅包！",
+  freeSpinsMode: "免費旋轉",
+  wild: "百搭",
+  scatter: "分散",
+  anywhere: "任意位置",
+  paytableWild: "🔮 龍珠是百搭：可代替連線上的任何符號，連續的龍珠本身也會派彩（上方 🔮 那一列）。",
+  paytableScatter: "🧧 紅包在任何位置都派彩，不需連線，還能贏得免費旋轉。你可以選擇領取方式（選紅包）：較多次旋轉，或較少次但每次獎金加倍。每種選擇的平均價值都相同：",
+  noWin: "這次沒中",
+  freeSpinsLeft: "次免費旋轉",
+  freeSpinsWon: "次免費旋轉到手！",
+  oracle: "龍神求籤",
+  oracleBlessed: "求一支籤：籤運加持你的下一次旋轉（×1.5 到 ×5）",
+  oracleCooldown: "龍神正在休息。再次開放時間：",
+  blessedBadge: "下次旋轉已加持",
+  paytable: "賠率表",
+  paytableIntro: "在 10 條連線中的任一條上，從最左邊轉輪起連續 3、4 或 5 個相同符號，即派彩下方倍數乘以你的押注。所有連線獎金累加。",
+  paytableFree: "免費旋轉以贏得時的押注進行。免費旋轉中再出現紅包，可用相同倍數增加旋轉次數。",
+  rtpNote: "返還率：以最佳「保留轉輪」選擇遊玩為 95.9%（從不保留則為 87.7%；以 4,000 萬次旋轉測得），另加 1% 注入彩金。搖碟比倍 (Xóc Đĩa) 完全按公平賠率派彩，因此不影響此數字。每個符號都由加密等級的亂數產生器獨立抽出。",
+  repeater: "神龍連轉",
+  repeaterGo: "神龍連轉",
+  paytableRepeater: "🐉 神龍連轉：任意位置 2 個 🔮 喚醒神龍，獲得兩次免費重轉；3 個以上則開啟完整倍數階梯。龍珠保留、中獎符號鎖定，其餘免費重轉。每條新連線，或變長的連線，都以下一個倍數派彩，只要你持續贏就會繼續：",
+  jackpotName: "神龍彩金",
+  jackpotWin: "彩金爆發！",
+  paytableJackpot: "🏺 神龍彩金：每次押注的 1% 注入共享彩池。轉輪 1-3 中間列出現三個 🔮（正常旋轉或任何連轉皆可）即贏得彩金：你的份額隨押注增加：1K 贏得彩池的 0.1%，100K 贏得 10%，1M 贏得整個彩池。彩池永不低於 1 億，所以每次押注至少贏得 100 倍。",
+  jackpotLast: "上次得主",
+  jackpotYourBet: "你的押注",
+  error: "錯誤",
+  copyright: "© VnSlot 888 · 免費娛樂 · 18+",
+  live: "大獎快訊",
+  firstName: "名字",
+  lastName: "姓氏",
+  saveChanges: "儲存變更",
+  memberSince: "加入時間",
+  editProfile: "編輯個人檔案",
+  profileUpdated: "個人檔案已更新",
+  changePassword: "變更密碼",
+  currentPassword: "目前密碼",
+  newPassword: "新密碼",
+  passwordChanged: "密碼已變更",
+  playMoneyNote: "金幣僅供娛樂，無法用真錢購買，也無法兌換成現金、獎品或任何有價物品。",
+  sound: "音效",
+  max: "最佳",
+  onFire: "手氣正旺！",
+  unstoppable: "勢不可擋！",
+  dragonMode: "神龍模式！",
+  rank: "名次",
+  legendsTagline: "神龍傳奇",
+  emptyLeaderboard: "競技場一片寂靜。搶先登上王座吧！",
+};
+
+const translations: Record<Language, Translations> = { en, vi, zh };
 
 const LanguageContext = createContext<{
   lang: Language;
+  setLang: (lang: Language) => void;
+  /** Moves to the next language in the list */
   toggleLang: () => void;
   t: Translations;
+  /** Picks the Vietnamese, English or Chinese version */
+  tr: <T,>(vi: T, en: T, zh: T) => T;
+  /** Picks this language's version of a translated piece of text (English if it has no Chinese) */
+  loc: (text: LocalText) => string;
+  /** The locale for dates and times */
+  locale: string;
+  /** A message from the server, in this language when we have it translated */
+  srv: (message: string) => string;
 } | null>(null);
+
+// The language being shown, for formatting helpers that live outside components
+let currentLang: Language = "vi";
+/** A coin amount, written the way this language writes numbers (Chinese uses commas: 5,000) */
+export const fmtCoins = (n: number) => n.toLocaleString(currentLang === "zh" ? "zh-TW" : "vi-VN");
+
+const isLanguage = (v: unknown): v is Language => LANGUAGES.some((l) => l.id === v);
 
 function initialLang(): Language {
   try {
     const saved = localStorage.getItem("lang");
-    if (saved === "en" || saved === "vi") return saved;
+    if (isLanguage(saved)) return saved;
   } catch {}
   return "vi";
 }
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Language>(initialLang);
+const htmlLang = (lang: Language) => LANGUAGES.find((l) => l.id === lang)!.html;
 
-  const toggleLang = () => setLang((prev) => {
-    const next = prev === "en" ? "vi" : "en";
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Language>(initialLang);
+  currentLang = lang;
+
+  useEffect(() => { document.documentElement.lang = htmlLang(lang); }, [lang]);
+
+  const setLang = (next: Language) => {
     try { localStorage.setItem("lang", next); } catch {}
-    document.documentElement.lang = next;
-    return next;
-  });
+    setLangState(next);
+  };
+  const toggleLang = () => {
+    const i = LANGUAGES.findIndex((l) => l.id === lang);
+    setLang(LANGUAGES[(i + 1) % LANGUAGES.length].id);
+  };
+  const tr = <T,>(vi: T, en: T, zhText: T): T => (lang === "vi" ? vi : lang === "zh" ? zhText : en);
+  const loc = (text: LocalText) => (lang === "vi" ? text.vi : lang === "zh" ? text.zh ?? text.en : text.en);
+  const locale = LANGUAGES.find((l) => l.id === lang)!.locale;
+  const srv = (message: string) => (lang === "en" ? message : SERVER_MESSAGES[message]?.[lang] ?? message);
 
   return (
-    <LanguageContext.Provider value={{ lang, toggleLang, t: translations[lang] }}>
+    <LanguageContext.Provider value={{ lang, setLang, toggleLang, t: translations[lang], tr, loc, locale, srv }}>
       {children}
     </LanguageContext.Provider>
   );

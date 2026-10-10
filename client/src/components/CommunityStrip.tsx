@@ -19,14 +19,13 @@ export function AnnouncementBar() {
 
 /** Shortcuts to chat, the sticker album and invites, with a nudge when a free pack is waiting */
 export function CommunityStrip() {
-  const { lang } = useLang();
-  const vi = lang === "vi";
+  const { tr } = useLang();
   const album = useQuery<AlbumView>({ queryKey: ["/api/stickers"], refetchInterval: 60_000 });
   const packs = album.data ? (album.data.packs.free ? 1 : 0) + album.data.packs.play + album.data.packs.bonus : 0;
   const tiles = [
-    { href: "/community?tab=chat", icon: "💬", title: vi ? "Trò chuyện" : "Chat", sub: vi ? "Gặp người chơi" : "Meet players", badge: 0, id: "chat" },
-    { href: "/community?tab=album", icon: "📒", title: vi ? "Sticker" : "Stickers", sub: packs ? (vi ? "Có gói mới!" : "Pack ready!") : (vi ? "Sưu tầm" : "Collect"), badge: packs, id: "album" },
-    { href: "/community?tab=invite", icon: "🎁", title: vi ? "Mời bạn" : "Invite", sub: `+${(REFERRAL_REWARD / 1000).toLocaleString()}K`, badge: 0, id: "invite" },
+    { href: "/community?tab=chat", icon: "💬", title: tr("Trò chuyện", "Chat", "聊天"), sub: tr("Gặp người chơi", "Meet players", "認識玩家"), badge: 0, id: "chat" },
+    { href: "/community?tab=album", icon: "📒", title: tr("Sticker", "Stickers", "貼圖"), sub: packs ? tr("Có gói mới!", "Pack ready!", "有新卡包！") : tr("Sưu tầm", "Collect", "收集"), badge: packs, id: "album" },
+    { href: "/community?tab=invite", icon: "🎁", title: tr("Mời bạn", "Invite", "邀請好友"), sub: `+${(REFERRAL_REWARD / 1000).toLocaleString()}K`, badge: 0, id: "invite" },
   ];
   return (
     <div className="grid grid-cols-3 gap-2 w-full max-w-md" data-testid="community-strip">
