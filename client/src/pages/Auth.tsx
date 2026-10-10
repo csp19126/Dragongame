@@ -10,10 +10,10 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const GAMES = [
-  { icon: "🐉", vi: "Slot Rồng", en: "Dragon Slot" },
-  { icon: "🦀", vi: "Bầu Cua", en: "Bầu Cua" },
-  { icon: "🎡", vi: "Roulette", en: "Roulette" },
-  { icon: "🃏", vi: "Xì Dách", en: "Blackjack" },
+  { icon: "🐉", vi: "Slot Rồng", en: "Dragon Slot", zh: "神龍老虎機" },
+  { icon: "🦀", vi: "Bầu Cua", en: "Bầu Cua", zh: "魚蝦蟹" },
+  { icon: "🎡", vi: "Roulette", en: "Roulette", zh: "輪盤" },
+  { icon: "🃏", vi: "Xì Dách", en: "Blackjack", zh: "21點" },
 ];
 
 /** Gold sparks drifting up behind the panel (JS-free on purpose: purely decorative) */
@@ -47,8 +47,7 @@ const inputCls =
 
 export default function Auth() {
   const { login, register, user } = useAuth();
-  const { lang, t } = useLang();
-  const vi = lang === "vi";
+  const { t, tr, srv } = useLang();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -87,25 +86,25 @@ export default function Auth() {
     try {
       if (mode === "login") {
         await login.mutateAsync({ username, password });
-        toast({ title: vi ? "Chào mừng trở lại!" : "Welcome back!", className: "bg-yellow-500 text-purple-900 font-bold" });
+        toast({ title: tr("Chào mừng trở lại!", "Welcome back!", "歡迎回來！"), className: "bg-yellow-500 text-purple-900 font-bold" });
         return;
       }
       const created = await register.mutateAsync({ username, password, ...(ref ? { ref } : {}) });
       try { localStorage.removeItem("vn888_ref"); } catch { /* ignore */ }
-      toast({ title: vi ? `Đã tạo tài khoản! +${created.balance.toLocaleString()} 🪙` : `Account created! +${created.balance.toLocaleString()} 🪙`, className: "bg-yellow-500 text-purple-900 font-bold" });
+      toast({ title: tr(`Đã tạo tài khoản! +${created.balance.toLocaleString()} 🪙`, `Account created! +${created.balance.toLocaleString()} 🪙`, `帳號建立成功！+${created.balance.toLocaleString()} 🪙`), className: "bg-yellow-500 text-purple-900 font-bold" });
       if (code.trim()) {
         try {
           const r = await (await apiRequest("POST", "/api/promo/redeem", { code: code.trim() })).json();
           queryClient.invalidateQueries({ queryKey: ME_KEY });
-          toast({ title: vi ? `🎁 Mã quà tặng: +${r.amount.toLocaleString()} xu!` : `🎁 Voucher: +${r.amount.toLocaleString()} coins!`, className: "bg-yellow-500 text-purple-900 font-bold" });
+          toast({ title: tr(`🎁 Mã quà tặng: +${r.amount.toLocaleString()} xu!`, `🎁 Voucher: +${r.amount.toLocaleString()} coins!`, `🎁 禮物碼：+${r.amount.toLocaleString()} 金幣！`), className: "bg-yellow-500 text-purple-900 font-bold" });
         } catch {
-          toast({ title: vi ? "Mã quà tặng không hợp lệ hoặc đã dùng" : "That voucher code is invalid or used", variant: "destructive" });
+          toast({ title: tr("Mã quà tặng không hợp lệ hoặc đã dùng", "That voucher code is invalid or used", "禮物碼無效或已使用"), variant: "destructive" });
         }
       }
     } catch (error) {
       toast({
-        title: mode === "login" ? (vi ? "Đăng nhập thất bại" : "Login failed") : (vi ? "Đăng ký thất bại" : "Registration failed"),
-        description: (error as Error).message,
+        title: mode === "login" ? tr("Đăng nhập thất bại", "Login failed", "登入失敗") : tr("Đăng ký thất bại", "Registration failed", "註冊失敗"),
+        description: srv((error as Error).message),
         variant: "destructive",
       });
     }
@@ -131,7 +130,7 @@ export default function Auth() {
           {GAMES.map((g) => (
             <div key={g.en} className="rounded-2xl bg-white/5 border border-yellow-500/15 py-2 text-center">
               <div className="text-2xl leading-none">{g.icon}</div>
-              <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-yellow-100/70">{vi ? g.vi : g.en}</div>
+              <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-yellow-100/70">{tr(g.vi, g.en, g.zh)}</div>
             </div>
           ))}
         </div>
@@ -154,7 +153,7 @@ export default function Auth() {
                   data-testid={`tab-${m}`}
                   className={`relative z-10 py-2.5 rounded-xl font-black uppercase text-sm tracking-wider transition-colors ${mode === m ? "text-purple-950" : "text-yellow-400/60 hover:text-yellow-300"}`}
                 >
-                  {m === "login" ? (vi ? "Đăng nhập" : "Login") : (vi ? "Đăng ký" : "Register")}
+                  {m === "login" ? tr("Đăng nhập", "Login", "登入") : tr("Đăng ký", "Register", "註冊")}
                 </button>
               ))}
             </div>
@@ -163,8 +162,8 @@ export default function Auth() {
               <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-yellow-500/15 to-orange-500/10 border border-yellow-400/30 px-4 py-3">
                 <Gift className="w-6 h-6 text-yellow-300 shrink-0" />
                 <p className="text-sm text-yellow-100">
-                  <b className="text-yellow-300">+{(STARTING_BALANCE + (ref ? REFERRAL_WELCOME : 0)).toLocaleString()} {vi ? "xu" : "coins"}</b> {vi ? "khi đăng ký, thêm xu miễn phí mỗi ngày." : "when you join, plus free coins every day."}
-                  {ref && <span className="block text-xs text-yellow-200/80 mt-0.5" data-testid="text-invited-by">{vi ? `🎁 ${ref} mời bạn: thêm ${REFERRAL_WELCOME.toLocaleString()} xu!` : `🎁 Invited by ${ref}: ${REFERRAL_WELCOME.toLocaleString()} bonus coins!`}</span>}
+                  <b className="text-yellow-300">+{(STARTING_BALANCE + (ref ? REFERRAL_WELCOME : 0)).toLocaleString()} {tr("xu", "coins", "金幣")}</b> {tr("khi đăng ký, thêm xu miễn phí mỗi ngày.", "when you join, plus free coins every day.", "註冊禮金，另有每日免費金幣。")}
+                  {ref && <span className="block text-xs text-yellow-200/80 mt-0.5" data-testid="text-invited-by">{tr(`🎁 ${ref} mời bạn: thêm ${REFERRAL_WELCOME.toLocaleString()} xu!`, `🎁 Invited by ${ref}: ${REFERRAL_WELCOME.toLocaleString()} bonus coins!`, `🎁 ${ref} 邀請你：額外獲得 ${REFERRAL_WELCOME.toLocaleString()} 金幣！`)}</span>}
                 </p>
               </div>
             )}
@@ -185,7 +184,7 @@ export default function Auth() {
                   className={`${inputCls} pr-12`}
                   data-testid="input-password"
                 />
-                <button type="button" onClick={() => setShowPw((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-yellow-100/50 hover:text-yellow-100" aria-label={showPw ? "Hide password" : "Show password"}>
+                <button type="button" onClick={() => setShowPw((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-yellow-100/50 hover:text-yellow-100" aria-label={showPw ? tr("Ẩn mật khẩu", "Hide password", "隱藏密碼") : tr("Hiện mật khẩu", "Show password", "顯示密碼")}>
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </Field>
@@ -193,12 +192,12 @@ export default function Auth() {
               {mode === "register" && (
                 <>
                   <Field icon={Ticket}>
-                    <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={vi ? "Mã quà tặng (nếu có)" : "Voucher code (optional)"} autoComplete="off" className={`${inputCls} font-mono uppercase`} data-testid="input-voucher" />
+                    <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={tr("Mã quà tặng (nếu có)", "Voucher code (optional)", "禮物碼（選填）")} autoComplete="off" className={`${inputCls} font-mono uppercase`} data-testid="input-voucher" />
                   </Field>
-                  <p className="text-[11px] text-yellow-100/40 -mt-1 pl-1">{vi ? "3-24 ký tự cho tên, mật khẩu ít nhất 6 ký tự." : "Username 3-24 characters, password at least 6."}</p>
+                  <p className="text-[11px] text-yellow-100/40 -mt-1 pl-1">{tr("3-24 ký tự cho tên, mật khẩu ít nhất 6 ký tự.", "Username 3-24 characters, password at least 6.", "帳號 3-24 個字元，密碼至少 6 個字元。")}</p>
                   <label className="flex items-start gap-2.5 text-sm text-yellow-100/80 cursor-pointer select-none">
                     <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} required className="mt-0.5 w-4 h-4 accent-yellow-500" data-testid="checkbox-adult" />
-                    <span>{vi ? "Tôi từ 18 tuổi trở lên và đồng ý với " : "I'm 18 or older and agree to the "}<a href="/terms" className="underline text-yellow-300">{vi ? "Điều khoản" : "Terms"}</a>.</span>
+                    <span>{tr("Tôi từ 18 tuổi trở lên và đồng ý với ", "I'm 18 or older and agree to the ", "我已年滿 18 歲，並同意")}<a href="/terms" className="underline text-yellow-300">{tr("Điều khoản", "Terms", "服務條款")}</a>{tr(".", ".", "。")}</span>
                   </label>
                 </>
               )}
@@ -209,14 +208,14 @@ export default function Auth() {
                 data-testid="button-submit"
                 className="w-full h-13 py-3.5 rounded-2xl font-display font-black text-xl text-purple-950 bg-gradient-to-b from-yellow-300 via-yellow-500 to-orange-500 border-b-4 border-orange-700 shadow-[0_0_30px_rgba(234,179,8,0.4)] hover:brightness-110 active:translate-y-0.5 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {busy ? <Loader2 className="animate-spin w-6 h-6" /> : <><Sparkles className="w-5 h-5" />{mode === "login" ? (vi ? "Vào chơi" : "Play now") : (vi ? "Tạo tài khoản" : "Create account")}</>}
+                {busy ? <Loader2 className="animate-spin w-6 h-6" /> : <><Sparkles className="w-5 h-5" />{mode === "login" ? tr("Vào chơi", "Play now", "開始遊戲") : tr("Tạo tài khoản", "Create account", "建立帳號")}</>}
               </button>
             </form>
 
             <p className="text-center text-sm text-yellow-100/50">
-              {mode === "login" ? (vi ? "Chưa có tài khoản? " : "New here? ") : (vi ? "Đã có tài khoản? " : "Already playing? ")}
+              {mode === "login" ? tr("Chưa có tài khoản? ", "New here? ", "還沒有帳號？") : tr("Đã có tài khoản? ", "Already playing? ", "已經有帳號？")}
               <button type="button" onClick={() => setMode(mode === "login" ? "register" : "login")} className="font-black text-yellow-300 hover:underline">
-                {mode === "login" ? (vi ? "Đăng ký miễn phí" : "Join free") : (vi ? "Đăng nhập" : "Log in")}
+                {mode === "login" ? tr("Đăng ký miễn phí", "Join free", "免費註冊") : tr("Đăng nhập", "Log in", "登入")}
               </button>
             </p>
           </div>

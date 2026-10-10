@@ -5,13 +5,13 @@ import { Calendar, Crown, Eye, Loader2, Play, Trophy, Users } from "lucide-react
 import { Header } from "@/components/Header";
 import { ShareButton } from "@/components/ShareCard";
 import { useAuth } from "@/hooks/use-auth";
-import { useLang } from "@/lib/lang-context";
+import { useLang, fmtCoins } from "@/lib/lang-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
-import { roundName, type TournamentView } from "@shared/tournament";
+import { roundName, tournamentName, type TournamentView } from "@shared/tournament";
 
 import { TOURNAMENT_KEY } from "@/components/TournamentBits";
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = fmtCoins;
 
 const TXT = {
   vi: {
@@ -48,6 +48,23 @@ const TXT = {
     ],
     none: "No tournament is scheduled yet.", weekly: "Every Saturday at 20:00 Vietnam time.",
   },
+  zh: {
+    title: "撞球錦標賽", subtitle: "免費參加 · 豐厚金幣獎勵",
+    status: { open: "開放報名中", live: "進行中", finished: "已結束", cancelled: "已取消" } as Record<string, string>,
+    startsIn: "距離開始", started: "開始時間", players: "球手", free: "免費參加",
+    join: "報名參加", leave: "取消報名", joined: "你已報名 ✓", full: "名額已滿",
+    yourMatch: "你的比賽準備好了！", vs: "對手", play: "立即入座", fiveMin: "你有 5 分鐘入座，否則判定落敗。",
+    bracket: "賽程表", bye: "輪空", watch: "觀戰", noShow: "未到場", tbd: "待定…",
+    champion: "冠軍", runnerUp: "亞軍", semi: "並列季軍", shareChamp: "分享我的頭銜",
+    next: "下一場錦標賽", hall: "名人堂", noChamps: "還沒有冠軍。你會是第一位嗎？",
+    rules: "比賽規則", rulesText: [
+      "免費參加。獎勵為主辦方發放的遊戲金幣，沒有現金價值。",
+      "單淘汰賽，8號球，每次擊球限時 45 秒。",
+      "比賽準備好後，你有 5 分鐘入座，否則判定落敗。",
+      "錦標賽開始時隨機抽籤。人數不足時以輪空補位。",
+    ],
+    none: "目前還沒有排定的錦標賽。", weekly: "每週六晚上 20:00（越南時間）舉行。",
+  },
 };
 
 function useCountdown(target: string | undefined, serverNow: string | undefined) {
@@ -62,7 +79,8 @@ function useCountdown(target: string | undefined, serverNow: string | undefined)
 
 export default function Tournament() {
   const { user, isLoading } = useAuth();
-  const { lang } = useLang();
+  const { lang, tr, srv, loc } = useLang();
+  const tname = (name: string) => tournamentName(name, loc);
   const L = TXT[lang];
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -70,7 +88,7 @@ export default function Tournament() {
   const act = useMutation({
     mutationFn: async ({ id, action }: { id: number; action: "join" | "leave" }) => (await apiRequest("POST", `/api/tournaments/${id}/${action}`)).json(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: TOURNAMENT_KEY }),
-    onError: (e) => toast({ title: e instanceof ApiError ? e.message : String(e), variant: "destructive" }),
+    onError: (e) => toast({ title: e instanceof ApiError ? srv(e.message) : String(e), variant: "destructive" }),
   });
   const v = q.data;
   const t = v?.tournament;
@@ -83,7 +101,7 @@ export default function Tournament() {
   const rounds = t?.rounds ?? 0;
   const byRound = Array.from({ length: rounds }, (_, i) => (v?.matches ?? []).filter((m) => m.round === i + 1));
   const me = v?.players.find((p) => p.username === user.username);
-  const when = (iso: string) => new Date(iso).toLocaleString(lang === "vi" ? "vi-VN" : "en-GB", { weekday: "long", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const when = (iso: string) => new Date(iso).toLocaleString(tr("vi-VN", "en-GB", "zh-TW"), { weekday: "long", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#062a1d] to-[#0a0515] flex flex-col">
@@ -112,7 +130,7 @@ export default function Tournament() {
               <div className="w-full rounded-2xl bg-gradient-to-br from-[#2a0f4f] to-[#140726] border border-yellow-400/50 p-4 flex flex-col gap-3" data-testid="tournament-card">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-display text-2xl text-yellow-300 leading-tight">{t.name}</div>
+                    <div className="font-display text-2xl text-yellow-300 leading-tight">{tname(t.name)}</div>
                     <div className="text-xs text-white/70 flex items-center gap-1 mt-0.5"><Calendar className="w-3.5 h-3.5" />{when(t.startsAt)}</div>
                   </div>
                   <span className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-black uppercase ${t.status === "live" ? "bg-red-600 text-white animate-pulse" : t.status === "open" ? "bg-emerald-500 text-black" : "bg-white/10 text-white/70"}`} data-testid="tournament-status">{L.status[t.status]}</span>
@@ -161,9 +179,9 @@ export default function Tournament() {
                           label={L.shareChamp}
                           what={{
                             emoji: me.place === 1 ? "🏆" : me.place === 2 ? "🥈" : "🥉",
-                            title: me.place === 1 ? (lang === "vi" ? "VÔ ĐỊCH BI-A!" : "POOL CHAMPION!") : me.place === 2 ? (lang === "vi" ? "Á QUÂN BI-A!" : "RUNNER-UP!") : (lang === "vi" ? "TOP 4 BI-A!" : "TOP 4!"),
+                            title: me.place === 1 ? tr("VÔ ĐỊCH BI-A!", "POOL CHAMPION!", "撞球冠軍！") : me.place === 2 ? tr("Á QUÂN BI-A!", "RUNNER-UP!", "撞球亞軍！") : tr("TOP 4 BI-A!", "TOP 4!", "撞球四強！"),
                             amount: me.prize ?? undefined,
-                            detail: t.name,
+                            detail: tname(t.name),
                           }}
                         />
                       </div>
@@ -210,7 +228,7 @@ export default function Tournament() {
               <div className="w-full rounded-2xl bg-black/30 border border-emerald-400/40 p-3 flex items-center gap-3" data-testid="next-tournament">
                 <div className="flex-1">
                   <div className="text-[11px] uppercase font-black text-emerald-300">{L.next}</div>
-                  <div className="font-black text-white">{v.next.name}</div>
+                  <div className="font-black text-white">{tname(v.next.name)}</div>
                   <div className="text-xs text-white/60">{when(v.next.startsAt)} · {nextCountdown} · {v.next.count}/{v.next.size}</div>
                 </div>
                 {v.next.joined ? <span className="text-emerald-300 text-xs font-black">{L.joined}</span> : (
@@ -224,8 +242,8 @@ export default function Tournament() {
               {v.champions.length === 0 ? <p className="text-xs text-white/50">{L.noChamps}</p> : v.champions.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 py-1 text-sm">
                   <span>{i === 0 ? "👑" : "🏆"}</span>
-                  <span className="font-black text-yellow-200 flex-1 truncate">{c.name}</span>
-                  <span className="text-[11px] text-white/50">{new Date(c.date).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-GB")}</span>
+                  <span className="font-black text-yellow-200 flex-1 truncate">{tname(c.name)}</span>
+                  <span className="text-[11px] text-white/50">{new Date(c.date).toLocaleDateString(tr("vi-VN", "en-GB", "zh-TW"))}</span>
                 </div>
               ))}
             </section>

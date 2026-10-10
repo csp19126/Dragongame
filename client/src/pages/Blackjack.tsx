@@ -3,6 +3,7 @@ import { Link, Redirect } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RotateCcw, Trash2 } from "lucide-react";
 import type { Achievement } from "@shared/schema";
+import { achievementToast } from "@/components/slot/achievements";
 import { Header } from "@/components/Header";
 import { GameTabs } from "@/components/GameTabs";
 import { ChipRack, ChipBadge } from "@/components/ChipRack";
@@ -47,6 +48,13 @@ const TXT = {
     dealer: "Dealer", you: "You", hand: "Hand",
     outcome: { blackjack: "BLACKJACK!", win: "WIN", push: "PUSH", lose: "LOSE", bust: "BUST" },
     rules: "Get closer to 21 than the dealer without going over. J, Q, K count 10; aces count 1 or 11. A blackjack (ace + ten-card on the deal) pays 3 to 2, other wins pay 1 to 1. The dealer draws to 16 and stands on all 17s. Double on your first two cards (also after a split); split once; split aces get one card each. Six decks, shuffled fresh every hand. Return to player is about 99.6% with basic strategy (measured over 4 million hands).",
+  },
+  zh: {
+    title: "21點", subtitle: "21點（Xì Dách）賠 3 比 2", felt: "黑傑克賠 3 比 2 · 莊家 17 點一律停牌",
+    deal: "發牌", hit: "要牌", stand: "停牌", double: "加倍", split: "分牌", rebet: "再押", newHand: "新一局",
+    dealer: "莊家", you: "你", hand: "手牌",
+    outcome: { blackjack: "黑傑克！", win: "贏", push: "平手", lose: "輸", bust: "爆牌" },
+    rules: "點數比莊家更接近 21 且不超過即可獲勝。J、Q、K 算 10 點；A 算 1 或 11 點。黑傑克（開局 A 加 10 點牌）賠 3 比 2，一般獲勝賠 1 比 1。莊家 16 點以下要牌，17 點一律停牌。前兩張牌可加倍（分牌後也可以）；只能分牌一次；分開的 A 每手只發一張牌。使用 6 副牌，每局重新洗牌。按基本策略遊玩，返還率約 99.6%（以 400 萬局測得）。",
   },
 };
 
@@ -110,8 +118,8 @@ interface Shown { dealer: number; hands: number[]; hole: boolean }
 export default function Blackjack() {
   const { user, isLoading } = useAuth();
   const { data: state } = useGameState(!!user);
-  const { lang, t } = useLang();
-  const L = TXT[lang];
+  const { t, tr, srv, loc } = useLang();
+  const L = tr(TXT.vi, TXT.en, TXT.zh);
   const { toast } = useToast();
   const setBalance = useSetBalance();
   const qc = useQueryClient();
@@ -149,7 +157,7 @@ export default function Blackjack() {
     } else if (h.payout === 0) {
       soundManager.lossComfort();
     }
-    r.newAchievements?.forEach((a) => toast({ title: `🏆 ${a.badgeName}`, description: a.description }));
+    r.newAchievements?.forEach((a) => toast(achievementToast(a, loc)));
   };
 
   /** Reveal the cards that are new in `next`, one at a time, then settle */
@@ -185,7 +193,7 @@ export default function Blackjack() {
   };
 
   const onError = (e: Error) => {
-    const msg = e instanceof ApiError && e.status === 400 && /balance/i.test(e.message) ? t.insufficientBalanceDesc : e.message;
+    const msg = e instanceof ApiError && e.status === 400 && /balance/i.test(e.message) ? t.insufficientBalanceDesc : srv(e.message);
     toast({ title: t.error, description: msg, variant: "destructive" });
     qc.invalidateQueries({ queryKey: KEY });
   };
@@ -255,7 +263,7 @@ export default function Blackjack() {
         </div>
         <GameTabs />
         <Link href="/ban-bai" className="w-full max-w-md flex items-center gap-2 rounded-2xl px-3 py-2 bg-indigo-600/30 border border-indigo-300/40 text-white text-sm font-black" data-testid="link-card-tables">
-          <span className="text-xl">🀄</span><span className="flex-1">{lang === "vi" ? "Chơi với người thật: Xì Dách làm cái & Bàn Chung" : "Play real people: Xì Dách banker & shared tables"}</span><span>→</span>
+          <span className="text-xl">🀄</span><span className="flex-1">{tr("Chơi với người thật: Xì Dách làm cái & Bàn Chung", "Play real people: Xì Dách banker & shared tables", "與真人對戰：21點坐莊與共享牌桌")}</span><span>→</span>
         </Link>
 
         <div className="w-full max-w-md flex items-center justify-between rounded-2xl bg-[#052e1f]/80 border border-emerald-400/20 px-4 py-2.5">

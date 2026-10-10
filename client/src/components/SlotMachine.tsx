@@ -10,11 +10,12 @@ import { XocDia } from "@/components/slot/XocDia";
 import { FreeSpinPicker, type PickResult } from "@/components/slot/FreeSpinPicker";
 import { Oracle } from "@/components/slot/Oracle";
 import { useGameState, useSpin, useSetBalance, useJackpot, JACKPOT_KEY, type SpinResponse, type JackpotResponse } from "@/hooks/use-game";
-import { useLang } from "@/lib/lang-context";
+import { useLang, LANGUAGES } from "@/lib/lang-context";
 import { soundManager } from "@/lib/sound";
 import { apiRequest, ApiError, queryClient } from "@/lib/queryClient";
 import { coinBurst, fireworks, luckyRain, cannons, stopCelebrations, winTier, type WinTier } from "@/lib/celebrate";
 import { ShareButton } from "@/components/ShareCard";
+import { achievementToast } from "@/components/slot/achievements";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -227,7 +228,10 @@ function JackpotMeter({ bet }: { bet: number }) {
 interface Chip { key: string; label: string; amount: number; color: string; mult: number }
 
 export function SlotMachine() {
-  const { t, lang, toggleLang } = useLang();
+  const { t, lang, toggleLang, tr, loc, srv } = useLang();
+  // Read inside the spin callbacks without making them change on every render
+  const words = useRef({ loc, srv });
+  words.current = { loc, srv };
   const { toast } = useToast();
   const { data: state } = useGameState();
   const spinMutation = useSpin();
@@ -360,7 +364,7 @@ export function SlotMachine() {
         if (res.pendingFreeSpinUnits > 0) { setAutoSpin(false); setShowPicker(true); }
       }, (OVERLAY_MS[tier] || 0) + 2600);
     }
-    res.newAchievements.forEach((a) => toast({ title: `🏆 ${a.badgeName}`, description: a.description }));
+    res.newAchievements.forEach((a) => toast(achievementToast(a, words.current.loc)));
   }, [setBalance, state?.freeSpinBet, toast]);
 
   /** Light up the lines (and chips) a step paid */
@@ -456,7 +460,7 @@ export function SlotMachine() {
       setAutoSpin(false);
       queryClient.invalidateQueries({ queryKey: ["/api/game/state"] });
       if (e instanceof ApiError && e.status === 409) { setShowPicker(true); return; }
-      const msg = e instanceof ApiError && e.status === 400 ? t.insufficientBalanceDesc : (e as Error).message;
+      const msg = e instanceof ApiError && e.status === 400 ? t.insufficientBalanceDesc : words.current.srv((e as Error).message);
       toast({ title: t.error, description: msg, variant: "destructive" });
     }
   }, [balance, bet, spinBet, holding, holdPicks, canSpin, finish, freeSpins, setBalance, showStep, spinMutation, state, t, toast]);
@@ -521,7 +525,7 @@ export function SlotMachine() {
             {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </Button>
           <Button variant="ghost" size="sm" onClick={toggleLang} className="text-yellow-400 font-bold" data-testid="button-lang">
-            {lang === "en" ? "EN" : "VI"}
+            {LANGUAGES.find((l) => l.id === lang)!.short}
           </Button>
           <Button variant="ghost" size="icon" onClick={() => { stopCelebrations(); setShowPaytable(true); }} className="text-yellow-400" aria-label={t.paytable} data-testid="button-paytable">
             <Info className="w-5 h-5" />
@@ -618,7 +622,7 @@ export function SlotMachine() {
         {holdOffer && !busy && (
           <div className="px-1.5 sm:px-3 -mt-1 mb-1" data-testid="hold-row">
             <div className="text-center text-[11px] font-black text-yellow-200 mb-1 tracking-wide">
-              🔒 {lang === "vi" ? `GIỮ CUỘN! Chọn tối đa 2 cuộn để giữ (cược ${fmtBet(state!.holdBet!)})` : `HOLD! Pick up to 2 reels to keep (bet ${fmtBet(state!.holdBet!)})`}
+              🔒 {tr(`GIỮ CUỘN! Chọn tối đa 2 cuộn để giữ (cược ${fmtBet(state!.holdBet!)})`, `HOLD! Pick up to 2 reels to keep (bet ${fmtBet(state!.holdBet!)})`, `保留轉輪！最多選 2 個轉輪保留（押注 ${fmtBet(state!.holdBet!)}）`)}
             </div>
             <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
               {REEL_IDX.map((c) => {
@@ -628,7 +632,7 @@ export function SlotMachine() {
                     onClick={() => { soundManager.buttonClick(); setHoldPicks((h) => (h.includes(c) ? h.filter((x) => x !== c) : h.length >= 2 ? h : [...h, c])); }}
                     className={`py-1.5 rounded-lg text-[11px] font-black border-2 transition active:scale-95 ${on ? "bg-yellow-400 text-black border-white shadow-[0_0_14px_rgba(250,204,21,0.8)]" : "bg-black/50 text-yellow-300 border-yellow-500/50 animate-pulse"}`}
                     data-testid={`hold-${c}`}>
-                    {on ? (lang === "vi" ? "ĐÃ GIỮ" : "HELD") : (lang === "vi" ? "GIỮ" : "HOLD")}
+                    {on ? tr("ĐÃ GIỮ", "HELD", "已保留") : tr("GIỮ", "HOLD", "保留")}
                   </button>
                 );
               })}
@@ -689,7 +693,7 @@ export function SlotMachine() {
               <div className="text-white font-black text-lg">
                 {scatterBanner.isFreeSpin
                   ? `+${Math.floor(scatterBanner.freeSpinUnits / Math.max(1, scatterBanner.freeSpinMult))} ${t.freeSpinsLeft} ×${scatterBanner.freeSpinMult}`
-                  : lang === "vi" ? "🧧 Chọn lì xì của bạn!" : "🧧 Pick your envelope!"}
+                  : tr("🧧 Chọn lì xì của bạn!", "🧧 Pick your envelope!", "🧧 選個紅包！")}
               </div>
             </motion.div>
           )}
@@ -759,7 +763,7 @@ export function SlotMachine() {
             data-testid="button-gamble"
           >
             <span className="text-xl">🥣</span>
-            {lang === "vi" ? `Xóc Đĩa: nhân đôi ${gambleAmount.toLocaleString()}?` : `Xóc Đĩa: double ${gambleAmount.toLocaleString()}?`}
+            {tr(`Xóc Đĩa: nhân đôi ${gambleAmount.toLocaleString()}?`, `Xóc Đĩa: double ${gambleAmount.toLocaleString()}?`, `搖碟比倍：${gambleAmount.toLocaleString()} 翻倍？`)}
             <span className="text-xs bg-yellow-300 text-black rounded-full px-2 py-0.5">×{GAMBLE_PAYS.chan} / ×{GAMBLE_PAYS.tu_do}</span>
           </motion.button>
         )}
@@ -801,13 +805,13 @@ export function SlotMachine() {
           <ShareButton
             what={{
               emoji: brag.jackpot ? "🏺" : brag.tier === "epic" ? "🐉" : "💰",
-              title: brag.jackpot ? (lang === "vi" ? "NỔ HŨ RỒNG!" : "JACKPOT!") : tierTitle(brag.tier),
+              title: brag.jackpot ? tr("NỔ HŨ RỒNG!", "JACKPOT!", "爆神龍彩金！") : tierTitle(brag.tier),
               amount: brag.amount,
-              detail: `Slot Rồng Vàng · ×${brag.multiple}`,
+              detail: `${tr("Slot Rồng Vàng", "Slot Rồng Vàng", "神龍老虎機")} · ×${brag.multiple}`,
             }}
-            label={lang === "vi" ? `Khoe thắng +${brag.amount.toLocaleString("vi-VN")}` : `Share +${brag.amount.toLocaleString()}`}
+            label={tr(`Khoe thắng +${brag.amount.toLocaleString("vi-VN")}`, `Share +${brag.amount.toLocaleString()}`, `分享 +${brag.amount.toLocaleString()}`)}
           />
-          <button type="button" onClick={() => setBrag(null)} className="w-8 h-8 rounded-full bg-white/10 text-white/60 text-sm" aria-label="Dismiss">✕</button>
+          <button type="button" onClick={() => setBrag(null)} className="w-8 h-8 rounded-full bg-white/10 text-white/60 text-sm" aria-label={tr("Đóng", "Dismiss", "關閉")}>✕</button>
         </div>
       )}
 
@@ -894,9 +898,9 @@ export function SlotMachine() {
             ))}
           </div>
           <p className="text-sm text-yellow-100/70">{t.paytableFree}</p>
-          <p className="text-sm text-yellow-100/70">🔒 {lang === "vi" ? "Giữ Cuộn: sau một lượt thua, đôi khi bạn được giữ tối đa 2 cuộn cho lượt quay tiếp theo (cùng mức cược). Chọn khéo thì lợi hơn: tỷ lệ hoàn trả 95,9% khi giữ đúng cuộn, chỉ 87,7% nếu không bao giờ giữ." : "Hold: after a losing spin you're sometimes offered a hold: keep up to 2 reels for your next spin (same bet). Choosing well pays: 95.9% return with the best holds, only 87.7% if you never hold."}</p>
+          <p className="text-sm text-yellow-100/70">🔒 {tr("Giữ Cuộn: sau một lượt thua, đôi khi bạn được giữ tối đa 2 cuộn cho lượt quay tiếp theo (cùng mức cược). Chọn khéo thì lợi hơn: tỷ lệ hoàn trả 95,9% khi giữ đúng cuộn, chỉ 87,7% nếu không bao giờ giữ.", "Hold: after a losing spin you're sometimes offered a hold: keep up to 2 reels for your next spin (same bet). Choosing well pays: 95.9% return with the best holds, only 87.7% if you never hold.", "保留轉輪：沒贏的那一轉之後，有時可以保留最多 2 個轉輪到下一次旋轉（押注不變）。選得好更划算：保留得當時返還率 95.9%，從不保留只有 87.7%。")}</p>
           <p className="text-sm text-yellow-100/70">🎋 {t.oracleBlessed}.</p>
-          <p className="text-sm text-yellow-100/70">🥣 {lang === "vi" ? `Xóc Đĩa nhân đôi: sau mỗi lượt thắng, bạn có thể đặt tiền thắng (hoặc một nửa) vào bốn đồng xu: Chẵn/Lẻ ×${GAMBLE_PAYS.chan}, Tứ Đỏ/Tứ Trắng ×${GAMBLE_PAYS.tu_do}, tối đa 5 lần. Tỷ lệ công bằng tuyệt đối.` : `Xóc Đĩa double-up: after a win you can stake it (or half) on four coins: even/odd ×${GAMBLE_PAYS.chan}, four of a colour ×${GAMBLE_PAYS.tu_do}, up to 5 times. Exactly fair odds.`}</p>
+          <p className="text-sm text-yellow-100/70">🥣 {tr(`Xóc Đĩa nhân đôi: sau mỗi lượt thắng, bạn có thể đặt tiền thắng (hoặc một nửa) vào bốn đồng xu: Chẵn/Lẻ ×${GAMBLE_PAYS.chan}, Tứ Đỏ/Tứ Trắng ×${GAMBLE_PAYS.tu_do}, tối đa 5 lần. Tỷ lệ công bằng tuyệt đối.`, `Xóc Đĩa double-up: after a win you can stake it (or half) on four coins: even/odd ×${GAMBLE_PAYS.chan}, four of a colour ×${GAMBLE_PAYS.tu_do}, up to 5 times. Exactly fair odds.`, `搖碟比倍 (Xóc Đĩa)：每次贏了之後，可以把獎金（或一半）押在四枚硬幣上：雙/單 ×${GAMBLE_PAYS.chan}，四紅/四白 ×${GAMBLE_PAYS.tu_do}，最多 5 次。機率完全公平。`)}</p>
           <p className="text-xs text-yellow-100/50">{t.rtpNote}</p>
         </DialogContent>
       </Dialog>

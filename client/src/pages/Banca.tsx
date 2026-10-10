@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 import { GameTabs } from "@/components/GameTabs";
 import { useAuth } from "@/hooks/use-auth";
 import { useGameState, useSetBalance } from "@/hooks/use-game";
-import { useLang } from "@/lib/lang-context";
+import { useLang, fmtCoins } from "@/lib/lang-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { soundManager } from "@/lib/sound";
@@ -17,7 +17,7 @@ const CANNON = { x: W / 2, y: H - 34 };
 const BULLET_SPEED = 520;
 const FIRE_GAP_MS = 220; // under the server's limit of 8 a second
 const MAX_FISH = 14;
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = fmtCoins;
 const short = (n: number) => (n >= 1000 ? `${n / 1000}K` : String(n));
 
 interface Fish { id: number; t: FishType; x: number; y: number; vx: number; vy: number; phase: number; flash: number; dying: number; born: number }
@@ -34,8 +34,7 @@ function pickFishType(): FishType {
 
 export default function Banca() {
   const { user, isLoading } = useAuth();
-  const { lang } = useLang();
-  const vi = lang === "vi";
+  const { tr, srv } = useLang();
   const { toast } = useToast();
   const { data: state } = useGameState();
   const setBalance = useSetBalance();
@@ -47,6 +46,8 @@ export default function Banca() {
   // The header's balance too (a ref, since the animation loop is set up once)
   const setHeaderBalance = useRef(setBalance);
   setHeaderBalance.current = setBalance;
+  const srvRef = useRef(srv);
+  srvRef.current = srv;
 
   // Everything the animation loop needs lives in refs, so the loop never waits on React
   const g = useRef({
@@ -100,7 +101,7 @@ export default function Banca() {
         .catch((e) => {
           if (e instanceof ApiError && e.status === 400) {
             s.firing = false; setAuto(false);
-            if (!s.stopped) { s.stopped = true; toast({ title: e.message, variant: "destructive" }); setTimeout(() => { s.stopped = false; }, 3000); }
+            if (!s.stopped) { s.stopped = true; toast({ title: srvRef.current(e.message), variant: "destructive" }); setTimeout(() => { s.stopped = false; }, 3000); }
           }
         });
     };
@@ -248,11 +249,11 @@ export default function Banca() {
         <GameTabs />
         <div className="flex items-end justify-between px-1">
           <div>
-            <div className="font-display text-3xl text-sky-300 leading-none">Bắn Cá</div>
-            <div className="text-[11px] text-white/60">{vi ? "Chạm để ngắm, giữ để bắn liên tục" : "Touch to aim, hold to keep firing"}</div>
+            <div className="font-display text-3xl text-sky-300 leading-none">{tr("Bắn Cá", "Bắn Cá", "捕魚")}</div>
+            <div className="text-[11px] text-white/60">{tr("Chạm để ngắm, giữ để bắn liên tục", "Touch to aim, hold to keep firing", "點擊瞄準，按住連續射擊")}</div>
           </div>
           <div className="text-right text-xs">
-            <div className="text-white/50">{vi ? "Lượt này" : "This session"}</div>
+            <div className="text-white/50">{tr("Lượt này", "This session", "本局")}</div>
             <div className={`font-black ${net >= 0 ? "text-emerald-300" : "text-rose-300"}`} data-testid="banca-session">{net >= 0 ? "+" : "−"}{fmt(Math.abs(net))} · {session.caught} 🐟</div>
           </div>
         </div>
@@ -267,25 +268,25 @@ export default function Banca() {
 
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
           <div className="flex items-center gap-1 rounded-2xl bg-white/5 p-1">
-            <button type="button" onClick={() => setLevelIdx((i) => Math.max(0, i - 1))} className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center" aria-label={vi ? "Giảm" : "Lower"}><Minus className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setLevelIdx((i) => Math.max(0, i - 1))} className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center" aria-label={tr("Giảm", "Lower", "降低")}><Minus className="w-4 h-4" /></button>
             <div className="w-16 text-center">
-              <div className="text-[9px] uppercase font-black text-white/50">{vi ? "Mỗi phát" : "Per shot"}</div>
+              <div className="text-[9px] uppercase font-black text-white/50">{tr("Mỗi phát", "Per shot", "每發")}</div>
               <div className="font-black text-yellow-300" data-testid="banca-level">{fmt(BANCA_LEVELS[levelIdx])}</div>
             </div>
-            <button type="button" onClick={() => setLevelIdx((i) => Math.min(BANCA_LEVELS.length - 1, i + 1))} className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center" aria-label={vi ? "Tăng" : "Raise"}><Plus className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setLevelIdx((i) => Math.min(BANCA_LEVELS.length - 1, i + 1))} className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center" aria-label={tr("Tăng", "Raise", "提高")}><Plus className="w-4 h-4" /></button>
           </div>
           <div className="text-center">
-            <div className="text-[9px] uppercase font-black text-white/50">{vi ? "Số dư" : "Balance"}</div>
+            <div className="text-[9px] uppercase font-black text-white/50">{tr("Số dư", "Balance", "餘額")}</div>
             <div className="font-mono font-black text-white">{fmt(balance ?? state?.balance ?? 0)}</div>
           </div>
           <button type="button" onClick={() => { setAuto((a) => !a); soundManager.autoSpinToggle(); }}
             className={`h-11 px-3 rounded-2xl font-black text-sm flex items-center gap-1 ${auto ? "bg-yellow-400 text-black" : "bg-white/10 text-white"}`} data-testid="banca-auto">
-            <Zap className="w-4 h-4" />{vi ? "Tự bắn" : "Auto"}
+            <Zap className="w-4 h-4" />{tr("Tự bắn", "Auto", "自動")}
           </button>
         </div>
 
         <section className="rounded-3xl p-3 bg-white/[0.04] border border-white/10">
-          <div className="text-sm font-black text-sky-300 mb-2">{vi ? "Bảng thưởng" : "Prizes"}</div>
+          <div className="text-sm font-black text-sky-300 mb-2">{tr("Bảng thưởng", "Prizes", "賠率表")}</div>
           <div className="grid grid-cols-4 gap-1.5">
             {FISH.map((f) => (
               <div key={f.id} className="rounded-xl bg-black/30 py-1.5 text-center">
@@ -296,8 +297,9 @@ export default function Banca() {
             ))}
           </div>
           <p className="text-[11px] text-white/50 mt-2">
-            {vi ? `Mỗi viên trúng cá tính một phát. Cá to thưởng lớn nhưng khó bắt hơn: tỷ lệ bắt được ghi dưới mỗi con, nên con nào cũng hoàn trả đúng ${Math.round(BANCA_RTP * 100)}%. Đạn trượt không mất tiền.`
-              : `Each bullet that hits a fish costs one shot. Bigger fish pay more but are harder to catch: the chance is under each one, so every fish returns exactly ${Math.round(BANCA_RTP * 100)}%. Bullets that miss cost nothing.`}
+            {tr(`Mỗi viên trúng cá tính một phát. Cá to thưởng lớn nhưng khó bắt hơn: tỷ lệ bắt được ghi dưới mỗi con, nên con nào cũng hoàn trả đúng ${Math.round(BANCA_RTP * 100)}%. Đạn trượt không mất tiền.`,
+              `Each bullet that hits a fish costs one shot. Bigger fish pay more but are harder to catch: the chance is under each one, so every fish returns exactly ${Math.round(BANCA_RTP * 100)}%. Bullets that miss cost nothing.`,
+              `每顆子彈打中魚就算一發。大魚獎勵高但較難捕獲：每條魚下方標示捕獲機率，因此每條魚的返還率都剛好是 ${Math.round(BANCA_RTP * 100)}%。沒打中的子彈不扣金幣。`)}
           </p>
         </section>
       </main>

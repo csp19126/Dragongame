@@ -9,8 +9,7 @@ import type { AlbumView } from "@shared/stickers";
 /** App-style tab bar along the bottom. Hidden on the sign-in page and at a pool table (it needs the room). */
 export function BottomNav() {
   const { user } = useAuth();
-  const { lang } = useLang();
-  const vi = lang === "vi";
+  const { tr } = useLang();
   const [location] = useLocation();
   const search = useSearch();
   const album = useQuery<AlbumView>({ queryKey: ["/api/stickers"], enabled: !!user, refetchInterval: 120_000 });
@@ -27,11 +26,11 @@ export function BottomNav() {
 
   const packs = album.data ? (album.data.packs.free ? 1 : 0) + album.data.packs.play + album.data.packs.bonus : 0;
   const items = [
-    { href: "/", label: vi ? "Sảnh" : "Home", icon: <Home className="w-5 h-5" />, active: location === "/" },
-    { href: "/slot", label: "Slot", icon: <span className="text-xl leading-none">🐉</span>, active: location === "/slot" },
-    { href: "/pool", label: vi ? "Bi-a" : "Pool", icon: <span className="text-xl leading-none">🎱</span>, active: location.startsWith("/pool") || location === "/tournament" },
-    { href: "/community", label: vi ? "Cộng đồng" : "Social", icon: <MessageCircle className="w-5 h-5" />, active: location.startsWith("/community"), badge: packs },
-    { href: "/profile", label: vi ? "Tôi" : "Me", icon: <User className="w-5 h-5" />, active: location === "/profile" || location === "/coins" },
+    { href: "/", label: tr("Sảnh", "Home", "大廳"), icon: <Home className="w-5 h-5" />, active: location === "/" },
+    { href: "/slot", label: tr("Slot", "Slot", "老虎機"), icon: <span className="text-xl leading-none">🐉</span>, active: location === "/slot" },
+    { href: "/pool", label: tr("Bi-a", "Pool", "撞球"), icon: <span className="text-xl leading-none">🎱</span>, active: location.startsWith("/pool") || location === "/tournament" },
+    { href: "/community", label: tr("Cộng đồng", "Social", "社群"), icon: <MessageCircle className="w-5 h-5" />, active: location.startsWith("/community"), badge: packs },
+    { href: "/profile", label: tr("Tôi", "Me", "我的"), icon: <User className="w-5 h-5" />, active: location === "/profile" || location === "/coins" },
   ];
 
   return (

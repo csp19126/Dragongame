@@ -7,7 +7,7 @@ import { Header } from "@/components/Header";
 import { GameTabs } from "@/components/GameTabs";
 import { useAuth } from "@/hooks/use-auth";
 import { useSetBalance } from "@/hooks/use-game";
-import { useLang } from "@/lib/lang-context";
+import { useLang, fmtCoins } from "@/lib/lang-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError, queryClient } from "@/lib/queryClient";
 import { soundManager } from "@/lib/sound";
@@ -19,7 +19,7 @@ import {
   type LotoGrid, type LotoView, type LotoTicketView,
 } from "@shared/loto";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN");
+const fmt = fmtCoins;
 const short = (n: number) => (n >= 1_000_000 ? `${n / 1_000_000}M` : `${n / 1000}K`);
 const VOICE_KEY = "loto-voice";
 const RTP = (lotoRtp() * 100).toFixed(1);
@@ -36,8 +36,8 @@ function speak(n: number) {
     synth.cancel();
     const u = new SpeechSynthesisUtterance(`${vnNumber(n)}`);
     u.lang = "vi-VN";
-    const vi = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("vi"));
-    if (vi) u.voice = vi;
+    const viVoice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("vi"));
+    if (viVoice) u.voice = viVoice;
     u.rate = 1;
     synth.speak(u);
   } catch { /* no voice: the number is on screen anyway */ }
@@ -47,8 +47,7 @@ function speak(n: number) {
 function Ticket({ grid, called, latest, price, kinhAt, compact = false, onReroll }: {
   grid: LotoGrid; called: Set<number>; latest?: number; price?: number; kinhAt?: number | null; compact?: boolean; onReroll?: () => void;
 }) {
-  const { lang } = useLang();
-  const vi = lang === "vi";
+  const { tr } = useLang();
   const rows = grid.map((row) => {
     const nums = row.filter((v): v is number => v !== null);
     const hit = nums.filter((v) => called.has(v)).length;
@@ -59,10 +58,10 @@ function Ticket({ grid, called, latest, price, kinhAt, compact = false, onReroll
     <div className={`relative rounded-2xl p-2 ${won ? "bg-gradient-to-b from-yellow-200 to-amber-300 shadow-[0_0_30px_rgba(250,204,21,0.6)]" : "bg-[#fdf6e3]"} border-4 ${won ? "border-yellow-400" : "border-red-700"}`} data-testid="loto-ticket">
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="font-display text-red-700 text-lg leading-none">Lô Tô</span>
-        {price ? <span className="text-[11px] font-black text-red-800">{fmt(price)} xu</span> : null}
+        {price ? <span className="text-[11px] font-black text-red-800">{fmt(price)} {tr("xu", "xu", "金幣")}</span> : null}
         {onReroll && (
           <button type="button" onClick={onReroll} className="flex items-center gap-1 rounded-full bg-red-700 text-white text-[11px] font-black px-2 py-0.5" data-testid="loto-reroll">
-            <RefreshCw className="w-3 h-3" />{vi ? "Đổi vé" : "New ticket"}
+            <RefreshCw className="w-3 h-3" />{tr("Đổi vé", "New ticket", "換一張")}
           </button>
         )}
       </div>
@@ -78,7 +77,7 @@ function Ticket({ grid, called, latest, price, kinhAt, compact = false, onReroll
                 </div>
               );
             })}
-            {rows[r].waiting && <span className="absolute -right-1 -top-2 rounded-full bg-red-600 text-white text-[9px] font-black px-1.5">{vi ? "CHỜ" : "1 TO GO"}</span>}
+            {rows[r].waiting && <span className="absolute -right-1 -top-2 rounded-full bg-red-600 text-white text-[9px] font-black px-1.5">{tr("CHỜ", "1 TO GO", "差1個")}</span>}
           </div>
         ))}
       </div>
@@ -87,7 +86,7 @@ function Ticket({ grid, called, latest, price, kinhAt, compact = false, onReroll
           <motion.div initial={{ scale: 3, opacity: 0, rotate: -20 }} animate={{ scale: 1, opacity: 1, rotate: -10 }} transition={{ type: "spring", stiffness: 300, damping: 16 }}
             className="rounded-2xl border-[5px] border-red-600 bg-yellow-300/95 px-4 py-1 text-center shadow-xl">
             <div className="font-display text-4xl text-red-600 leading-none">KINH!</div>
-            {price ? <div className="font-black text-red-800 text-sm">×{lotoMultiplier(kinhAt)} = {fmt(Math.round(price * lotoMultiplier(kinhAt)))} xu</div> : null}
+            {price ? <div className="font-black text-red-800 text-sm">×{lotoMultiplier(kinhAt)} = {fmt(Math.round(price * lotoMultiplier(kinhAt)))} {tr("xu", "xu", "金幣")}</div> : null}
           </motion.div>
         </div>
       )}
@@ -109,8 +108,7 @@ function Board({ called, latest }: { called: Set<number>; latest?: number }) {
 
 export default function Loto() {
   const { user, isLoading } = useAuth();
-  const { lang } = useLang();
-  const vi = lang === "vi";
+  const { tr, srv } = useLang();
   const { toast } = useToast();
   const setBalance = useSetBalance();
   const q = useQuery<LotoView>({ queryKey: ["/api/loto"], refetchInterval: 1000, enabled: !!user });
@@ -169,9 +167,9 @@ export default function Loto() {
       soundManager.coinShower();
       setDrafts([makeLotoGrid(), makeLotoGrid(), makeLotoGrid()]);
       queryClient.invalidateQueries({ queryKey: ["/api/loto"] });
-      toast({ title: vi ? `🎟️ Đã mua ${r.tickets.length} vé. Chúc may mắn!` : `🎟️ ${r.tickets.length} ticket${r.tickets.length > 1 ? "s" : ""} bought. Good luck!` });
+      toast({ title: tr(`🎟️ Đã mua ${r.tickets.length} vé. Chúc may mắn!`, `🎟️ ${r.tickets.length} ticket${r.tickets.length > 1 ? "s" : ""} bought. Good luck!`, `🎟️ 已購買 ${r.tickets.length} 張賓果卡，祝你好運！`) });
     },
-    onError: (e) => toast({ title: e instanceof ApiError ? e.message : String(e), variant: "destructive" }),
+    onError: (e) => toast({ title: e instanceof ApiError ? srv(e.message) : String(e), variant: "destructive" }),
   });
 
   if (isLoading) return null;
@@ -196,11 +194,11 @@ export default function Loto() {
         <section className="relative overflow-hidden rounded-[28px] p-4 bg-gradient-to-br from-red-700 via-red-900 to-[#2a0712] border border-yellow-300/40 shadow-[0_14px_40px_rgba(220,38,38,0.35)]">
           <div className="flex items-start justify-between">
             <div>
-              <div className="font-display text-3xl text-yellow-300 leading-none">Lô Tô</div>
-              <div className="text-[11px] text-white/70">{vi ? `Ván #${v?.round ?? "…"} · ${v?.players ?? 0} người chơi · ${v?.tickets ?? 0} vé` : `Round #${v?.round ?? "…"} · ${v?.players ?? 0} players · ${v?.tickets ?? 0} tickets`}</div>
+              <div className="font-display text-3xl text-yellow-300 leading-none">{tr("Lô Tô", "Lô Tô", "賓果 (Lô Tô)")}</div>
+              <div className="text-[11px] text-white/70">{tr(`Ván #${v?.round ?? "…"} · ${v?.players ?? 0} người chơi · ${v?.tickets ?? 0} vé`, `Round #${v?.round ?? "…"} · ${v?.players ?? 0} players · ${v?.tickets ?? 0} tickets`, `第 ${v?.round ?? "…"} 局 · ${v?.players ?? 0} 位玩家 · ${v?.tickets ?? 0} 張卡`)}</div>
             </div>
             <button type="button" onClick={() => { const nv = !voice; setVoice(nv); try { localStorage.setItem(VOICE_KEY, nv ? "on" : "off"); } catch {} }}
-              className="p-2 rounded-full bg-black/30 text-yellow-200" aria-label={voice ? "Mute the caller" : "Hear the caller"} data-testid="loto-voice">
+              className="p-2 rounded-full bg-black/30 text-yellow-200" aria-label={voice ? tr("Tắt tiếng gọi số", "Mute the caller", "關閉開號語音") : tr("Nghe gọi số", "Hear the caller", "開啟開號語音")} data-testid="loto-voice">
               {voice ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
             </button>
           </div>
@@ -208,7 +206,7 @@ export default function Loto() {
           {phase === "loading" && <Loader2 className="w-8 h-8 animate-spin text-yellow-300 mx-auto my-8" />}
           {phase === "buying" && v && (
             <div className="text-center py-3">
-              <div className="text-xs font-black uppercase tracking-widest text-yellow-100/80">{vi ? "Mua vé · bắt đầu gọi số sau" : "Buy tickets · calling starts in"}</div>
+              <div className="text-xs font-black uppercase tracking-widest text-yellow-100/80">{tr("Mua vé · bắt đầu gọi số sau", "Buy tickets · calling starts in", "購買賓果卡 · 距離開號")}</div>
               <div className="font-mono font-black text-6xl text-white" data-testid="loto-countdown">{secs(v.drawStart - now)}s</div>
             </div>
           )}
@@ -224,7 +222,7 @@ export default function Loto() {
                 <div className="text-sm italic text-yellow-100/90">{latest ? lotoCallLine(latest, v.round) : ""}</div>
                 <div className="text-xl font-black text-white capitalize">{latest ? vnNumber(latest) : ""}</div>
                 <div className="text-xs text-white/70 mt-1">
-                  {phase === "calling" ? (vi ? `Số thứ ${v.calls.length}/${LOTO_CALLS}` : `Call ${v.calls.length} of ${LOTO_CALLS}`) : (vi ? `Hết ván · ván mới sau ${secs(v.end - now)}s` : `Round over · next in ${secs(v.end - now)}s`)}
+                  {phase === "calling" ? tr(`Số thứ ${v.calls.length}/${LOTO_CALLS}`, `Call ${v.calls.length} of ${LOTO_CALLS}`, `第 ${v.calls.length}/${LOTO_CALLS} 號`) : tr(`Hết ván · ván mới sau ${secs(v.end - now)}s`, `Round over · next in ${secs(v.end - now)}s`, `本局結束 · ${secs(v.end - now)} 秒後開始下一局`)}
                 </div>
                 <div className="mt-1 h-1.5 w-40 rounded-full bg-black/30 overflow-hidden"><div className="h-full bg-yellow-300" style={{ width: `${(v.calls.length / LOTO_CALLS) * 100}%` }} /></div>
               </div>
@@ -232,7 +230,7 @@ export default function Loto() {
           )}
           {won.length > 0 && (
             <div className="mt-1 rounded-xl bg-yellow-300 text-red-800 font-black text-center py-1.5" data-testid="loto-round-win">
-              {vi ? `🎉 Bạn đã KINH! +${fmt(roundWin)} xu` : `🎉 KINH! You won ${fmt(roundWin)} coins`}
+              {tr(`🎉 Bạn đã KINH! +${fmt(roundWin)} xu`, `🎉 KINH! You won ${fmt(roundWin)} coins`, `🎉 賓果！(KINH) 贏得 ${fmt(roundWin)} 金幣`)}
             </div>
           )}
         </section>
@@ -243,7 +241,7 @@ export default function Loto() {
             {canBuyMore > 0 ? (
               <>
                 <div>
-                  <div className="text-[11px] font-black uppercase text-white/50 mb-1">{vi ? "Giá mỗi vé" : "Price per ticket"}</div>
+                  <div className="text-[11px] font-black uppercase text-white/50 mb-1">{tr("Giá mỗi vé", "Price per ticket", "每張價格")}</div>
                   <div className="grid grid-cols-5 gap-1.5">
                     {LOTO_PRICES.map((p) => (
                       <button key={p} type="button" onClick={() => setPrice(p)} className={`py-2 rounded-xl text-sm font-black ${price === p ? "bg-yellow-400 text-black" : "bg-white/5 text-white/70"}`} data-testid={`loto-price-${p}`}>{short(p)}</button>
@@ -251,7 +249,7 @@ export default function Loto() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="text-[11px] font-black uppercase text-white/50">{vi ? "Số vé" : "Tickets"}</div>
+                  <div className="text-[11px] font-black uppercase text-white/50">{tr("Số vé", "Tickets", "張數")}</div>
                   {Array.from({ length: Math.min(LOTO_BUY_AT_ONCE, canBuyMore) }, (_, i) => i + 1).map((n) => (
                     <button key={n} type="button" onClick={() => setCount(n)} className={`w-9 h-9 rounded-xl font-black ${count === n ? "bg-yellow-400 text-black" : "bg-white/5 text-white/70"}`}>{n}</button>
                   ))}
@@ -261,11 +259,11 @@ export default function Loto() {
                 ))}
                 <button type="button" disabled={buy.isPending || v.balance < price * Math.min(count, canBuyMore)} onClick={() => buy.mutate()}
                   className="w-full py-3 rounded-2xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black font-black text-lg disabled:opacity-50" data-testid="loto-buy-button">
-                  {buy.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : vi ? `Mua ${Math.min(count, canBuyMore)} vé · ${fmt(price * Math.min(count, canBuyMore))} xu` : `Buy ${Math.min(count, canBuyMore)} · ${fmt(price * Math.min(count, canBuyMore))} coins`}
+                  {buy.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : tr(`Mua ${Math.min(count, canBuyMore)} vé · ${fmt(price * Math.min(count, canBuyMore))} xu`, `Buy ${Math.min(count, canBuyMore)} · ${fmt(price * Math.min(count, canBuyMore))} coins`, `購買 ${Math.min(count, canBuyMore)} 張 · ${fmt(price * Math.min(count, canBuyMore))} 金幣`)}
                 </button>
               </>
             ) : (
-              <p className="text-sm text-white/70 text-center">{vi ? `Bạn đã có ${LOTO_MAX_TICKETS} vé, tối đa cho một ván.` : `You have ${LOTO_MAX_TICKETS} tickets, the most for one round.`}</p>
+              <p className="text-sm text-white/70 text-center">{tr(`Bạn đã có ${LOTO_MAX_TICKETS} vé, tối đa cho một ván.`, `You have ${LOTO_MAX_TICKETS} tickets, the most for one round.`, `你已有 ${LOTO_MAX_TICKETS} 張賓果卡，已達每局上限。`)}</p>
             )}
           </section>
         )}
@@ -273,23 +271,23 @@ export default function Loto() {
         {/* My tickets this round */}
         {mine.length > 0 && (
           <section className="flex flex-col gap-2">
-            <div className="text-xs font-black uppercase text-white/60 px-1">{vi ? `Vé của bạn (${mine.length})` : `Your tickets (${mine.length})`}</div>
+            <div className="text-xs font-black uppercase text-white/60 px-1">{tr(`Vé của bạn (${mine.length})`, `Your tickets (${mine.length})`, `我的賓果卡（${mine.length}）`)}</div>
             {mine.map((t: LotoTicketView) => (
               <Ticket key={t.id} grid={t.grid} called={called} latest={latest} price={t.price} kinhAt={t.kinhAt} compact={mine.length > 2} />
             ))}
           </section>
         )}
         {phase !== "buying" && mine.length === 0 && v && (
-          <p className="text-sm text-white/60 text-center px-4">{vi ? "Ván này đang gọi số. Xem và mua vé cho ván sau!" : "This round is being called. Watch, and buy tickets for the next one!"}</p>
+          <p className="text-sm text-white/60 text-center px-4">{tr("Ván này đang gọi số. Xem và mua vé cho ván sau!", "This round is being called. Watch, and buy tickets for the next one!", "本局正在開號。先觀看，再為下一局購買賓果卡吧！")}</p>
         )}
 
         {/* Last round, if you played it */}
         {last && last.tickets.length > 0 && phase === "buying" && (
           <section className={`rounded-2xl p-3 border ${lastWin > 0 ? "bg-yellow-400/10 border-yellow-400/40" : "bg-white/[0.04] border-white/10"}`} data-testid="loto-last">
-            <div className="text-sm font-black text-white">{vi ? `Ván trước (#${last.round})` : `Last round (#${last.round})`}</div>
+            <div className="text-sm font-black text-white">{tr(`Ván trước (#${last.round})`, `Last round (#${last.round})`, `上一局（第 ${last.round} 局）`)}</div>
             <div className="text-xs text-white/70">
-              {lastWin > 0 ? (vi ? `Thắng ${fmt(lastWin)} xu từ ${fmt(lastSpent)} xu vé 🎉` : `Won ${fmt(lastWin)} coins on ${fmt(lastSpent)} of tickets 🎉`)
-                : (vi ? `Chưa kín hàng nào trong ${LOTO_CALLS} số. Ván này nhé!` : `No full row in ${LOTO_CALLS} calls. This round's yours!`)}
+              {lastWin > 0 ? tr(`Thắng ${fmt(lastWin)} xu từ ${fmt(lastSpent)} xu vé 🎉`, `Won ${fmt(lastWin)} coins on ${fmt(lastSpent)} of tickets 🎉`, `花 ${fmt(lastSpent)} 金幣買卡，贏得 ${fmt(lastWin)} 金幣 🎉`)
+                : tr(`Chưa kín hàng nào trong ${LOTO_CALLS} số. Ván này nhé!`, `No full row in ${LOTO_CALLS} calls. This round's yours!`, `${LOTO_CALLS} 個號碼內沒有連成一整行。這局一定是你的！`)}
             </div>
           </section>
         )}
@@ -297,35 +295,36 @@ export default function Loto() {
         {/* Called numbers */}
         {v && phase !== "buying" && (
           <section className="rounded-3xl p-3 bg-white/[0.04] border border-white/10">
-            <div className="text-[11px] font-black uppercase text-white/50 mb-2">{vi ? "Bảng số đã gọi" : "Numbers called"}</div>
+            <div className="text-[11px] font-black uppercase text-white/50 mb-2">{tr("Bảng số đã gọi", "Numbers called", "已開號碼")}</div>
             <Board called={called} latest={latest} />
           </section>
         )}
 
         {/* Prizes */}
         <section className="rounded-3xl p-3 bg-white/[0.04] border border-white/10">
-          <div className="text-sm font-black text-yellow-300">{vi ? "Giải thưởng: kín một hàng càng sớm càng lớn" : "Prizes: the sooner a row fills, the bigger"}</div>
+          <div className="text-sm font-black text-yellow-300">{tr("Giải thưởng: kín một hàng càng sớm càng lớn", "Prizes: the sooner a row fills, the bigger", "獎勵：越早連成一行，獎勵越大")}</div>
           <div className="grid grid-cols-4 gap-1.5 mt-2 text-center">
             {LOTO_TIERS.map((t, i) => (
               <div key={t.upTo} className="rounded-xl bg-black/30 py-1.5">
-                <div className="text-[10px] text-white/55">{vi ? `≤ ${t.upTo} số` : `by call ${t.upTo}`}</div>
+                <div className="text-[10px] text-white/55">{tr(`≤ ${t.upTo} số`, `by call ${t.upTo}`, `≤ ${t.upTo} 號`)}</div>
                 <div className={`font-black ${i === 0 ? "text-yellow-300 text-lg" : "text-white"}`}>×{t.mult}</div>
               </div>
             ))}
           </div>
           <p className="text-[11px] text-white/50 mt-2">
-            {vi ? `Mỗi ván gọi ${LOTO_CALLS} số. Vé thật 9 hàng, mỗi hàng 5 số. Số được tự đánh dấu. Mỗi vé tính riêng nên chơi một mình cũng như đông người. Hoàn trả ${RTP}%, tính chính xác.`
-              : `Each round calls ${LOTO_CALLS} numbers. A real 9-row ticket, 5 numbers a row, marked for you. Every ticket is paid on its own, so playing alone is as good as a crowd. Returns ${RTP}%, worked out exactly.`}
+            {tr(`Mỗi ván gọi ${LOTO_CALLS} số. Vé thật 9 hàng, mỗi hàng 5 số. Số được tự đánh dấu. Mỗi vé tính riêng nên chơi một mình cũng như đông người. Hoàn trả ${RTP}%, tính chính xác.`,
+              `Each round calls ${LOTO_CALLS} numbers. A real 9-row ticket, 5 numbers a row, marked for you. Every ticket is paid on its own, so playing alone is as good as a crowd. Returns ${RTP}%, worked out exactly.`,
+              `每局開出 ${LOTO_CALLS} 個號碼。真實的 9 行賓果卡，每行 5 個號碼，系統自動幫你標記。每張卡獨立派彩，所以一個人玩和多人玩一樣划算。返還率 ${RTP}%，經過精確計算。`)}
           </p>
         </section>
 
         {v && v.winners.length > 0 && (
           <section className="rounded-3xl p-3 bg-white/[0.04] border border-white/10">
-            <div className="text-[11px] font-black uppercase text-white/50 mb-1">{vi ? "Người thắng gần đây" : "Recent winners"}</div>
+            <div className="text-[11px] font-black uppercase text-white/50 mb-1">{tr("Người thắng gần đây", "Recent winners", "最近贏家")}</div>
             {v.winners.map((w, i) => (
               <div key={i} className="flex items-center gap-2 text-xs py-1 border-t border-white/5 first:border-0">
                 <span className="flex-1 truncate font-bold text-white">{w.username}</span>
-                <span className="text-white/50">{vi ? `${w.kinhAt} số` : `${w.kinhAt} calls`}</span>
+                <span className="text-white/50">{tr(`${w.kinhAt} số`, `${w.kinhAt} calls`, `${w.kinhAt} 號`)}</span>
                 <span className="font-black text-yellow-300">+{fmt(w.payout)}</span>
               </div>
             ))}

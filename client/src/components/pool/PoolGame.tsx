@@ -6,6 +6,7 @@ import {
 } from "@shared/pool/engine";
 import { drawTable, toTable, VIEW_H, VIEW_W, type Aim, type View } from "@/lib/poolDraw";
 import { soundManager } from "@/lib/sound";
+import { useLang } from "@/lib/lang-context";
 
 export interface Playback { id: number; start: Ball[]; shot: Shot; onDone: () => void }
 
@@ -30,6 +31,7 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ scale: 2, dpr: 1 });
+  const { tr } = useLang();
   const [aim, setAim] = useState<{ dx: number; dy: number }>({ dx: 1, dy: 0 });
   const [power, setPower] = useState(0);
   const [spin, setSpin] = useState<-1 | 0 | 1>(0);
@@ -238,7 +240,7 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
               </span>
               <span className="text-[9px] font-black mt-0.5">{spin === 1 ? labels.top : spin === 0 ? labels.centre : labels.back}</span>
             </button>
-            <button type="button" onPointerDown={() => startHold(-0.15)} onPointerUp={endHold} onPointerLeave={endHold} className="w-10 h-11 rounded-xl bg-white/10 text-white flex items-center justify-center active:bg-white/20" aria-label="Nudge aim left" data-testid="pool-nudge-left">
+            <button type="button" onPointerDown={() => startHold(-0.15)} onPointerUp={endHold} onPointerLeave={endHold} className="w-10 h-11 rounded-xl bg-white/10 text-white flex items-center justify-center active:bg-white/20" aria-label={tr("Chỉnh ngắm sang trái", "Nudge aim left", "向左微調瞄準")} data-testid="pool-nudge-left">
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div
@@ -255,7 +257,7 @@ export function PoolGame({ game, canShoot, onShoot, playback, remoteAim, onAim, 
                 {badSpot ? <span className="text-red-300 text-[11px] leading-tight px-2 text-center">{labels.placeCue}</span> : power > 0 ? `${Math.round(power * 100)}%` : `${labels.power} ⟶`}
               </span>
             </div>
-            <button type="button" onPointerDown={() => startHold(0.15)} onPointerUp={endHold} onPointerLeave={endHold} className="w-10 h-11 rounded-xl bg-white/10 text-white flex items-center justify-center active:bg-white/20" aria-label="Nudge aim right" data-testid="pool-nudge-right">
+            <button type="button" onPointerDown={() => startHold(0.15)} onPointerUp={endHold} onPointerLeave={endHold} className="w-10 h-11 rounded-xl bg-white/10 text-white flex items-center justify-center active:bg-white/20" aria-label={tr("Chỉnh ngắm sang phải", "Nudge aim right", "向右微調瞄準")} data-testid="pool-nudge-right">
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>

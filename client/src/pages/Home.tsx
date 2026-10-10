@@ -8,6 +8,7 @@ import { SlotMachine } from "@/components/SlotMachine";
 import { Header } from "@/components/Header";
 import { StreakDisplay } from "@/components/StreakDisplay";
 import { AchievementBadge } from "@/components/AchievementBadge";
+import { ALL_ACHIEVEMENTS } from "@/components/slot/achievements";
 import { useLang } from "@/lib/lang-context";
 import { Link, Redirect } from "wouter";
 import Lobby from "@/pages/Lobby";
@@ -117,21 +118,6 @@ function SlotPreview() {
   );
 }
 
-const ALL_ACHIEVEMENTS = [
-  { id: "first_win", name: "First Win", description: "Win your first spin", icon: "star" },
-  { id: "hot_streak_3", name: "Hot Streak", description: "3 wins in a row", icon: "flame" },
-  { id: "hot_streak_5", name: "On Fire", description: "5 wins in a row", icon: "zap" },
-  { id: "dragon_master", name: "Dragon Master", description: "3 dragons on a line", icon: "crown" },
-  { id: "high_roller", name: "High Roller", description: "Bet 100,000+", icon: "gem" },
-  { id: "millionaire", name: "Millionaire", description: "Reach 1M balance", icon: "trophy" },
-  { id: "jackpot_hunter", name: "Jackpot Hunter", description: "Win 50x your bet", icon: "target" },
-  { id: "lucky_seven", name: "Lucky Seven", description: "Win 7 times", icon: "gift" },
-  { id: "lucky_envelope", name: "Lucky Envelope", description: "Land 3 red envelopes", icon: "mail" },
-  { id: "pearl_power", name: "Pearl Power", description: "Win a line with a wild", icon: "sparkles" },
-  { id: "chain_reaction", name: "Chain Reaction", description: "3 Repeaters in one spin", icon: "repeat" },
-  { id: "no_hu", name: "Nổ Hũ!", description: "Win the Hũ Rồng jackpot", icon: "crown" },
-];
-
 function Landing() {
   const { t } = useLang();
   const { data: jackpot } = useJackpot();
@@ -220,12 +206,12 @@ export function SlotPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const { data: gameState } = useGameState(!!user);
   const { data: achievements = [] } = useAchievements(user?.id);
-  const { t } = useLang();
+  const { t, loc } = useLang();
 
   const mergedAchievements = useMemo(() => {
     const unlocked = new Set(achievements.map((a) => a.badgeId));
-    return ALL_ACHIEVEMENTS.map((b) => ({ ...b, unlocked: unlocked.has(b.id) }));
-  }, [achievements]);
+    return ALL_ACHIEVEMENTS.map((b) => ({ ...b, name: loc(b.name), description: loc(b.description), unlocked: unlocked.has(b.id) }));
+  }, [achievements, loc]);
 
   if (isAuthLoading) {
     return (
