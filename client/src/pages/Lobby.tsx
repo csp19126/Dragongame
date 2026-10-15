@@ -9,6 +9,7 @@ import { RecentWinsTicker, AppFooter } from "@/pages/Home";
 import { useAuth } from "@/hooks/use-auth";
 import { useGameState, useJackpot, useSetBalance } from "@/hooks/use-game";
 import { useLang } from "@/lib/lang-context";
+import { Seven } from "@/components/Seven777";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { soundManager } from "@/lib/sound";
@@ -19,8 +20,10 @@ import { tierOf, type LeagueView } from "@shared/league";
 const short = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`);
 
 const GAMES = [
+  { href: "/slot-777", icon: "7️⃣", vi: "Slot 777 Cổ Điển", en: "Classic 777", tagVi: "Quay là ăn · ⭐⭐⭐ ×1500", tagEn: "Spin, win, repeat · ⭐⭐⭐ ×1500", zh: "經典777", tagZh: "轉就對了 · ⭐⭐⭐ ×1500", from: "from-fuchsia-500", to: "to-purple-950", isNew: true },
   { href: "/pool", icon: "🎱", vi: "Bi-a 8 bóng", en: "8-Ball Pool", tagVi: "Trực tuyến · League", tagEn: "Online · League", zh: "8號球撞球", tagZh: "線上對戰 · 聯賽", from: "from-emerald-500", to: "to-teal-900", live: true },
   { href: "/loto", icon: "🎟️", vi: "Lô Tô", en: "Lô Tô bingo", tagVi: "Gọi số trực tiếp · ×50", tagEn: "Live calls · up to ×50", zh: "賓果 (Lô Tô)", tagZh: "即時開號 · 最高 ×50", from: "from-red-500", to: "to-rose-950", live: true },
+  { href: "/dua-ngua", icon: "🏇", vi: "Đua Ngựa", en: "Horse Racing", tagVi: "8 chiến mã · mỗi phút một cuộc đua", tagEn: "8 horses · a race every minute", zh: "賽馬", tagZh: "8 匹駿馬 · 每分鐘一場", from: "from-lime-500", to: "to-green-950", live: true },
   { href: "/ban-ca", icon: "🐟", vi: "Bắn Cá", en: "Fish hunter", tagVi: "Rồng vàng ×300", tagEn: "Golden dragon ×300", zh: "捕魚", tagZh: "黃金龍 ×300", from: "from-sky-500", to: "to-blue-950" },
   { href: "/tien-len", icon: "🂡", vi: "Tiến Lên", en: "Tiến Lên", tagVi: "Miền Nam · chặt heo", tagEn: "Southern rules · vs 3", zh: "大老二 (Tiến Lên)", tagZh: "南方規則 · 對戰 3 人", from: "from-emerald-500", to: "to-green-950" },
   { href: "/ban-bai", icon: "🀄", vi: "Xì Dách Online", en: "Live Xì Dách", tagVi: "Đấu với người thật · làm cái", tagEn: "Play real people · be the banker", zh: "線上 21點", tagZh: "真人對戰 · 當莊家", from: "from-indigo-500", to: "to-indigo-950", live: true },
@@ -119,7 +122,10 @@ export default function Lobby() {
           {GAMES.map((g) => (
             <Link key={g.href} href={g.href} data-testid={`lobby-game-${g.href.slice(1)}`}>
               <motion.div whileTap={{ scale: 0.96 }} className={`relative overflow-hidden h-32 rounded-3xl p-3 bg-gradient-to-br ${g.from} ${g.to} border border-white/15 shadow-[0_10px_30px_rgba(0,0,0,0.4)] flex flex-col justify-end`}>
-                <div className="absolute right-1 top-0 text-6xl drop-shadow-[0_6px_10px_rgba(0,0,0,0.4)] select-none">{g.icon}</div>
+                {g.href === "/slot-777"
+                  ? <div className="absolute right-1 top-2 flex -space-x-3 rotate-[-6deg] drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]">{[0, 1, 2].map((i) => <span key={i} className="w-11 h-11 block"><Seven /></span>)}</div>
+                  : <div className="absolute right-1 top-0 text-6xl drop-shadow-[0_6px_10px_rgba(0,0,0,0.4)] select-none">{g.icon}</div>}
+                {"isNew" in g && <span className="absolute left-2.5 top-2.5 rounded-full bg-yellow-300 px-2 py-0.5 text-[9px] font-black text-black">{tr("MỚI", "NEW", "新")}</span>}
                 {"live" in g && <span className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full bg-black/35 px-2 py-0.5 text-[9px] font-black text-white"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />{tr("LIVE", "LIVE", "直播")}</span>}
                 <div className="font-black text-white text-base leading-tight drop-shadow">{tr(g.vi, g.en, g.zh)}</div>
                 <div className="text-[10px] text-white/80 font-bold">{tr(g.tagVi, g.tagEn, g.tagZh)}</div>

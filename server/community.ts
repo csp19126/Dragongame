@@ -14,7 +14,8 @@ import {
   GIFTS_PER_DAY, TRADE_IN, ALBUM_REWARD, REFERRAL_WELCOME, REFERRAL_REWARD, REFERRAL_GAMES_NEEDED, REFERRAL_MAX_PAID,
   type AlbumView, type Sticker,
 } from "@shared/stickers";
-import { checkChat, CHAT_COOLDOWN_MS, CHAT_MIN_GAMES, CHAT_AUTO_HIDE_REPORTS } from "@shared/chat";
+import { CHAT_COOLDOWN_MS, CHAT_MIN_GAMES, CHAT_AUTO_HIDE_REPORTS } from "@shared/chat";
+import { speakerRefusal, paceLimiter, readMessage } from "./speech";
 import { and, desc, eq, gt, gte, lt, isNull, or, sql, count, inArray } from "drizzle-orm";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
@@ -34,7 +35,7 @@ export function drawSticker(): Sticker {
 }
 
 // Per-player limits held in memory (one server; they reset on a redeploy, which is harmless)
-const lastChat = new Map<string, { at: number; text: string }>();
+const chatPace = paceLimiter(CHAT_COOLDOWN_MS);
 const gifts = new Map<string, { day: string; n: number }>();
 const today = () => new Date().toISOString().slice(0, 10);
 function giftsLeft(userId: string) {
@@ -224,7 +225,7 @@ export async function claimReferrals(userId: string) {
 async function chatRows(where: ReturnType<typeof and> | undefined, limit: number, newestFirst: boolean) {
   return db.select({
     id: chatMessages.id, username: chatMessages.username, text: chatMessages.text, sticker: chatMessages.sticker,
-    createdAt: chatMessages.createdAt, admin: users.isAdmin,
+    createdAt: chatMessages.createdAt, admin: users.isAdmin, avatar: users.profileImageUrl,
   }).from(chatMessages).leftJoin(users, eq(users.id, chatMessages.userId))
     .where(where).orderBy(newestFirst ? desc(chatMessages.id) : chatMessages.id).limit(limit);
 }
@@ -318,28 +319,17 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
 
   app.post("/api/chat", requireUser, async (req, res) => {
     const u: User = res.locals.user;
-    if (u.mutedUntil && u.mutedUntil.getTime() > Date.now()) return res.status(403).json({ message: "muted", until: u.mutedUntil });
-    if (u.gamesPlayed < CHAT_MIN_GAMES && !u.isAdmin) return res.status(403).json({ message: "play_first" });
-    const now = Date.now();
-    const last = lastChat.get(u.id);
-    if (last && now - last.at < CHAT_COOLDOWN_MS && !u.isAdmin) return res.status(429).json({ message: "slow_down" });
-
-    let text: string | null = null, sticker: string | null = null;
-    if (typeof req.body?.sticker === "string") {
-      sticker = req.body.sticker;
-      const [own] = await db.select().from(userStickers)
-        .where(and(eq(userStickers.userId, u.id), eq(userStickers.stickerId, sticker!), gt(userStickers.count, 0)));
-      if (!own) return res.status(400).json({ message: "not_owned" });
-    } else {
-      const c = checkChat(String(req.body?.text ?? ""));
-      if (!c.ok) return res.status(400).json({ message: c.reason });
-      if (last && last.text === c.text && now - last.at < 60_000) return res.status(429).json({ message: "repeat" });
-      text = c.text;
-    }
-    lastChat.set(u.id, { at: now, text: text ?? "" });
-    if (lastChat.size > 5000) lastChat.clear();
-    const [m] = await db.insert(chatMessages).values({ userId: u.id, username: u.username, text, sticker }).returning();
-    res.json({ id: m.id, username: m.username, text: m.text, sticker: m.sticker, createdAt: m.createdAt, admin: u.isAdmin });
+    const no = speakerRefusal(u);
+    if (no) return res.status(no.status).json({ message: no.message, until: no.until });
+    const early = chatPace.check(u, null);
+    if (early) return res.status(early.status).json({ message: early.message });
+    const msg = await readMessage(u, req.body);
+    if ("status" in msg) return res.status(msg.status).json({ message: msg.message });
+    const again = msg.text ? chatPace.check(u, msg.text) : null;
+    if (again) return res.status(again.status).json({ message: again.message });
+    chatPace.record(u, msg.text);
+    const [m] = await db.insert(chatMessages).values({ userId: u.id, username: u.username, text: msg.text, sticker: msg.sticker }).returning();
+    res.json({ id: m.id, username: m.username, text: m.text, sticker: m.sticker, createdAt: m.createdAt, admin: u.isAdmin, avatar: u.profileImageUrl });
   });
 
   app.post("/api/chat/:id/report", requireUser, async (req, res) => {

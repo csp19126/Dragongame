@@ -90,6 +90,8 @@ export type SeatStatus = "waiting" | "playing" | "done" | "out";
 export interface SeatView {
   seat: number;
   username: string;
+  /** Their profile photo, if they have one */
+  avatarUrl: string | null;
   you: boolean;
   online: boolean;
   /** A computer player, sitting in so one person can still play Xì Dách */

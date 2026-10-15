@@ -649,7 +649,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       const r = await new Player().req("GET", "/api/game/leaderboard");
       expect(r.status).toBe(200);
       expect(r.body.length).toBeGreaterThan(0);
-      for (const e of r.body) expect(Object.keys(e).sort()).toEqual(["balance", "maxStreak", "maxWin", "rank", "totalWins", "username"]);
+      for (const e of r.body) expect(Object.keys(e).sort()).toEqual(["avatarUrl", "balance", "maxStreak", "maxWin", "rank", "totalWins", "username"]);
     });
 
     it("health check reports the database and unknown API routes return JSON 404", async () => {
@@ -794,6 +794,239 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await inviter.req("GET", "/api/stickers")).body.packs.bonus).toBe(1);
     });
   });
+  describe("social: photos, profiles, private messages", () => {
+    const games = (username: string, n: number) => pool.query("update users set games_played = $1 where username = $2", [n, username]);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const jpeg = (size = 2000) => { const b = Buffer.alloc(size, 7); b.set([0xff, 0xd8, 0xff, 0xe0]); return b; };
+    const png = () => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(500, 1)]);
+    const webp = () => Buffer.concat([Buffer.from("RIFF"), Buffer.from([0, 0, 0, 0]), Buffer.from("WEBPVP8 "), Buffer.alloc(300, 2)]);
+    async function social(n: number, played = 5) {
+      const ps = Array.from({ length: n }, () => new Player());
+      for (const p of ps) { await p.register(); await games(p.username, played); }
+      return ps;
+    }
+
+    it("sniffs real image bytes", async () => {
+      const { sniffImage, safeAvatarUrl, initialOf } = await import("../shared/social");
+      expect(sniffImage(jpeg())).toBe("image/jpeg");
+      expect(sniffImage(png())).toBe("image/png");
+      expect(sniffImage(webp())).toBe("image/webp");
+      expect(sniffImage(Buffer.from("<svg onload=alert(1)>"))).toBeNull();
+      expect(sniffImage(Buffer.from("GIF89a......"))).toBeNull();
+      expect(safeAvatarUrl("/api/avatar/0123456789abcdef0123456789abcdef")).toBe("/api/avatar/0123456789abcdef0123456789abcdef");
+      expect(safeAvatarUrl("javascript:alert(1)")).toBeNull();
+      expect(safeAvatarUrl("https://evil.example/x.png")).toBeNull();
+      expect(initialOf("đức")).toBe("Đ");
+    });
+
+    it("photo upload: gate, bad bytes, size limit, serving with cache headers, removal", async () => {
+      const [newbie] = await social(1, 1);
+      const photo = (b: Buffer) => ({ photo: `data:image/jpeg;base64,${b.toString("base64")}` });
+      expect((await newbie.req("POST", "/api/profile/photo", photo(jpeg()))).body.message).toBe("play_first");
+      await games(newbie.username, 3);
+      const me = (await newbie.req("GET", "/api/me")).body;
+
+      const fake = await newbie.req("POST", "/api/profile/photo", { photo: Buffer.from("<html><script>alert(1)</script></html>").toString("base64") });
+      expect(fake.status).toBe(400);
+      expect(fake.body.message).toBe("Photo must be a JPEG, PNG or WebP image");
+      expect((await newbie.req("POST", "/api/profile/photo", { photo: "not base64 !!" })).status).toBe(400);
+      const big = await newbie.req("POST", "/api/profile/photo", photo(jpeg(151 * 1024)));
+      expect(big.status).toBe(400);
+      expect(big.body.message).toBe("Photo is too big (150 KB max)");
+      const huge = await newbie.req("POST", "/api/profile/photo", photo(jpeg(400 * 1024)));
+      expect(huge.status).toBe(413); // over the route's body limit
+      // Other routes keep the small body limit
+      expect((await newbie.req("POST", "/api/chat", { text: "x".repeat(150 * 1024) })).status).toBe(413);
+
+      const ok = await newbie.req("POST", "/api/profile/photo", { photo: png().toString("base64") });
+      expect(ok.status).toBe(200);
+      expect(ok.body.profileImageUrl).toMatch(/^\/api\/avatar\/[0-9a-f]{32}$/);
+      expect(ok.body.profileImageUrl).not.toContain(me.id); // never reveals the player's id
+      expect((await newbie.req("GET", "/api/me")).body.profileImageUrl).toBe(ok.body.profileImageUrl);
+
+      const res = await fetch(base + ok.body.profileImageUrl);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toBe("image/png");
+      expect(res.headers.get("cache-control")).toContain("max-age=31536000");
+      expect(Buffer.from(await res.arrayBuffer()).equals(png())).toBe(true);
+      expect((await fetch(`${base}/api/avatar/nobody-here`)).status).toBe(404);
+      // A new upload gets a new URL; the old one stops working
+      const again = await newbie.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
+      expect(again.body.profileImageUrl).not.toBe(ok.body.profileImageUrl);
+      expect((await fetch(base + ok.body.profileImageUrl)).status).toBe(404);
+      expect((await fetch(base + again.body.profileImageUrl)).headers.get("content-type")).toBe("image/jpeg");
+
+      expect((await newbie.req("DELETE", "/api/profile/photo")).status).toBe(200);
+      expect((await newbie.req("GET", "/api/me")).body.profileImageUrl).toBeNull();
+      expect((await fetch(base + again.body.profileImageUrl)).status).toBe(404);
+      const left = await pool.query("select count(*) from user_avatars where user_id = $1", [me.id]);
+      expect(Number(left.rows[0].count)).toBe(0);
+
+      // Muted players can't change their photo
+      await pool.query("update users set muted_until = now() + interval '1 hour' where id = $1", [me.id]);
+      expect((await newbie.req("POST", "/api/profile/photo", photo(jpeg()))).body.message).toBe("muted");
+    });
+
+    it("photo changes are limited per day", async () => {
+      const [p] = await social(1);
+      let last = 0;
+      for (let i = 0; i < 11; i++) last = (await p.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") })).status;
+      expect(last).toBe(429);
+    });
+
+    it("profile: public fields only, avatars in chat and the rich list", async () => {
+      const [a, b] = await social(2);
+      await a.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
+      const prof = await b.req("GET", `/api/players/${a.username.toUpperCase()}/profile`);
+      expect(prof.status).toBe(200);
+      expect(Object.keys(prof.body).sort()).toEqual(["admin", "avatarUrl", "biggestWin", "blockedByYou", "gamesPlayed", "league", "memberSince", "online", "stickers", "username", "you"]);
+      expect(prof.body).toMatchObject({ username: a.username, gamesPlayed: 5, online: true, you: false, blockedByYou: false, league: null });
+      expect(prof.body.avatarUrl).toMatch(/^\/api\/avatar\//);
+      for (const k of ["balance", "email", "password", "firstName", "id", "mutedUntil"]) expect(prof.body).not.toHaveProperty(k);
+      expect((await a.req("GET", `/api/players/${a.username}/profile`)).body.you).toBe(true);
+      expect((await b.req("GET", "/api/players/no_such_player_x/profile")).status).toBe(404);
+      expect((await new Player().req("GET", `/api/players/${a.username}/profile`)).status).toBe(401);
+
+      const m = await a.req("POST", "/api/chat", { text: "ảnh mới nè" });
+      expect(m.body.avatar).toBe(prof.body.avatarUrl);
+      expect((await b.req("GET", "/api/chat")).body.messages.find((x: any) => x.id === m.body.id).avatar).toBe(prof.body.avatarUrl);
+    });
+
+    it("private messages: send, thread, unread counts, read ticks, filters", async () => {
+      const [a, b, c] = await social(3);
+      const [newbie] = await social(1, 0);
+      expect((await newbie.req("POST", "/api/dm/send", { to: a.username, text: "hi" })).body.message).toBe("play_first");
+      expect((await a.req("POST", "/api/dm/send", { to: a.username, text: "me" })).status).toBe(400);
+      expect((await a.req("POST", "/api/dm/send", { to: "no_such_player_x", text: "hi" })).status).toBe(404);
+
+      const m1 = await a.req("POST", "/api/dm/send", { to: b.username, text: "  chào   bạn  " });
+      expect(m1.status).toBe(200);
+      expect(m1.body).toMatchObject({ mine: true, text: "chào bạn", read: false });
+      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "again" })).status).toBe(429);
+      await sleep(1600);
+      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "zalo 0912345678" })).body.message).toBe("phone");
+      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "bán xu giá rẻ" })).body.message).toBe("trade");
+      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "x".repeat(501) })).body.message).toBe("long");
+      expect((await a.req("POST", "/api/dm/send", { to: b.username, sticker: "legend_rong" })).body.message).toBe("not_owned");
+      const m2 = await a.req("POST", "/api/dm/send", { to: b.username, text: "y".repeat(500) });
+      expect(m2.status).toBe(200);
+      await c.req("POST", "/api/dm/send", { to: b.username, text: "hello from c" });
+
+      expect((await b.req("GET", "/api/dm/unread")).body.total).toBe(3);
+      const convs = (await b.req("GET", "/api/dm/conversations")).body.conversations;
+      expect(convs.map((x: any) => x.username)).toEqual([c.username, a.username]);
+      expect(convs[1]).toMatchObject({ unread: 2, last: { mine: false } });
+
+      const th = (await b.req("GET", `/api/dm/thread/${a.username}`)).body;
+      expect(th.messages.map((x: any) => x.id)).toEqual([m1.body.id, m2.body.id]);
+      expect(th.messages[0].mine).toBe(false);
+      expect(th.cantMessage).toBe(false);
+      expect((await b.req("GET", `/api/dm/thread/${a.username}?after=${m1.body.id}`)).body.messages.map((x: any) => x.id)).toEqual([m2.body.id]);
+
+      expect((await a.req("GET", `/api/dm/thread/${b.username}`)).body.readUpTo).toBe(0);
+      expect((await b.req("POST", "/api/dm/read", { with: a.username })).body.total).toBe(1);
+      expect((await b.req("GET", "/api/dm/unread")).body.total).toBe(1);
+      const seen = (await a.req("GET", `/api/dm/thread/${b.username}`)).body;
+      expect(seen.readUpTo).toBe(m2.body.id);
+      expect(seen.messages.every((x: any) => x.read)).toBe(true);
+      // Nobody else can read the conversation or report into it
+      expect((await c.req("GET", `/api/dm/thread/${a.username}`)).body.messages).toEqual([]);
+      expect((await c.req("POST", `/api/dm/${m1.body.id}/report`)).status).toBe(404);
+      // A banned sender's conversation is hidden, so it no longer counts as unread
+      await pool.query("update users set banned = true where username = $1", [c.username]);
+      expect((await b.req("GET", "/api/dm/unread")).body.total).toBe(0);
+      expect((await b.req("GET", "/api/dm/conversations")).body.conversations.map((x: any) => x.username)).toEqual([a.username]);
+    });
+
+    it("blocking stops messages both ways without saying who blocked", async () => {
+      const [a, b] = await social(2);
+      expect((await a.req("POST", `/api/players/${b.username}/block`, { block: true })).body.blocked).toBe(true);
+      const fromA = await a.req("POST", "/api/dm/send", { to: b.username, text: "hi" });
+      const fromB = await b.req("POST", "/api/dm/send", { to: a.username, text: "hi" });
+      expect([fromA.status, fromB.status]).toEqual([403, 403]);
+      expect(fromA.body.message).toBe("Can't message this player");
+      expect(fromB.body.message).toBe("Can't message this player");
+      expect((await b.req("GET", `/api/dm/thread/${a.username}`)).body).toMatchObject({ cantMessage: true, blockedByYou: false });
+      expect((await a.req("GET", `/api/players/${b.username}/profile`)).body.blockedByYou).toBe(true);
+      await a.req("POST", `/api/players/${b.username}/block`, { block: false });
+      expect((await b.req("POST", "/api/dm/send", { to: a.username, text: "hi again" })).status).toBe(200);
+      expect((await a.req("POST", `/api/players/${a.username}/block`, { block: true })).status).toBe(400);
+    });
+
+    it("reports: the receiver reports a message, admins see it with context and act; profile reports too", async () => {
+      const [admin, bad, victim, other] = await social(4);
+      const aUser = (await admin.req("GET", "/api/me")).body;
+      await pool.query("update users set is_admin = true where id = $1", [aUser.id]);
+      const badUser = (await bad.req("GET", "/api/me")).body;
+      const ids: number[] = [];
+      for (let i = 0; i < 7; i++) {
+        const [from, to] = i % 2 ? [victim, bad] : [bad, victim];
+        if (i >= 2) await sleep(i % 2 ? 0 : 1600); // bad sends every other message: wait out the pace limit
+        const r = await from.req("POST", "/api/dm/send", { to: to.username, text: `message ${i}` });
+        expect(r.status).toBe(200);
+        ids.push(r.body.id);
+      }
+      const target = ids[6]; // sent by bad
+      expect((await bad.req("POST", `/api/dm/${target}/report`)).status).toBe(404); // not to you
+      expect((await victim.req("POST", `/api/dm/${target}/report`, { reason: "rude" })).status).toBe(200);
+      expect((await victim.req("POST", `/api/dm/${target}/report`, { reason: "rude" })).status).toBe(200); // once
+
+      expect((await victim.req("GET", "/api/admin/social/reports")).status).toBe(403);
+      const view = (await admin.req("GET", "/api/admin/social/reports")).body;
+      const rep = view.messages.find((m: any) => m.id === target);
+      expect(rep).toMatchObject({ fromName: bad.username, toName: victim.username, text: "message 6", reports: 1, reasons: ["rude"] });
+      expect(rep.context.map((c: any) => c.id)).toEqual(ids.slice(1, 6));
+      // Only reported messages are visible: no other route lists private conversations to admins
+      expect(view.messages.some((m: any) => m.id === ids[0])).toBe(false);
+
+      expect((await admin.req("POST", `/api/admin/social/dm/${target}`, { action: "delete" })).status).toBe(200);
+      expect((await victim.req("GET", `/api/dm/thread/${bad.username}`)).body.messages.map((m: any) => m.id)).not.toContain(target);
+      expect((await admin.req("GET", "/api/admin/social/reports")).body.messages.some((m: any) => m.id === target)).toBe(false);
+
+      // Profile reports: grouped per player; removing the photo clears them
+      await bad.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
+      expect((await bad.req("POST", `/api/players/${bad.username}/report`, {})).status).toBe(400);
+      await victim.req("POST", `/api/players/${bad.username}/report`, { reason: "not their photo" });
+      await other.req("POST", `/api/players/${bad.username}/report`);
+      const pr = (await admin.req("GET", "/api/admin/social/reports")).body.profiles.find((p: any) => p.userId === badUser.id);
+      expect(pr).toMatchObject({ username: bad.username, reporters: 2, reasons: ["not their photo"] });
+      expect(pr.avatarUrl).toMatch(/^\/api\/avatar\//);
+      expect((await admin.req("POST", `/api/admin/social/photo/${badUser.id}/remove`)).status).toBe(200);
+      expect((await bad.req("GET", "/api/me")).body.profileImageUrl).toBeNull();
+      expect((await admin.req("GET", "/api/admin/social/reports")).body.profiles.some((p: any) => p.userId === badUser.id)).toBe(false);
+      expect((await admin.req("GET", `/api/admin/players/${badUser.id}`)).body.avatarUrl).toBeNull();
+
+      await other.req("POST", `/api/players/${victim.username}/report`);
+      const vUser = (await victim.req("GET", "/api/me")).body;
+      await admin.req("POST", `/api/admin/social/profile/${vUser.id}/dismiss`);
+      expect((await admin.req("GET", "/api/admin/social/reports")).body.profiles.some((p: any) => p.userId === vUser.id)).toBe(false);
+
+      const stats = (await admin.req("GET", "/api/admin/analytics?days=7&admins=1")).body;
+      expect(stats.kpis.dmToday).toBeGreaterThanOrEqual(7);
+    });
+
+    it("deleting an account removes the photo, private messages, blocks and reports", async () => {
+      const [gone, friend] = await social(2);
+      const g = (await gone.req("GET", "/api/me")).body;
+      await gone.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
+      const m = await friend.req("POST", "/api/dm/send", { to: gone.username, text: "see you" });
+      await gone.req("POST", `/api/dm/${m.body.id}/report`);
+      await gone.req("POST", "/api/dm/send", { to: friend.username, text: "bye" });
+      await gone.req("POST", `/api/players/${friend.username}/block`, { block: true });
+      await friend.req("POST", `/api/players/${gone.username}/report`);
+      expect((await gone.req("POST", "/api/user/delete", { password: gone.password })).status).toBe(200);
+      const left = await pool.query(`select
+        (select count(*) from user_avatars where user_id = $1) +
+        (select count(*) from direct_messages where from_id = $1 or to_id = $1) +
+        (select count(*) from user_blocks where blocker_id = $1 or blocked_id = $1) +
+        (select count(*) from dm_reports where reporter_id = $1 or message_id = $2) +
+        (select count(*) from profile_reports where user_id = $1 or reporter_id = $1) as n`, [g.id, m.body.id]);
+      expect(Number(left.rows[0].n)).toBe(0);
+      expect((await friend.req("GET", "/api/dm/conversations")).body.conversations).toEqual([]);
+      expect((await friend.req("GET", "/api/dm/unread")).body.total).toBe(0);
+    });
+  });
+
   describe("pool tournament", () => {
     async function connect(p: Player, code: string) {
       const { WebSocket } = await import("ws");
@@ -1273,6 +1506,97 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("Đua Ngựa", () => {
+    it("takes bets only while betting is open, hides the result until the off, and pays each bet once", async () => {
+      const { placeHorseBets, settleHorse, horseView, horseRound } = await import("../server/horse");
+      const H = await import("../shared/horse");
+      const p = new Player();
+      const pu = await p.register();
+      await setBalance(p.username, 10_000_000);
+      const user = (await pool.query("select * from users where id = $1", [pu.id])).rows[0];
+      // A race far in the future, so the live timer leaves it alone until we say
+      const t = H.horseRoundTimes(H.horseRoundAt(Date.now()).round + 2000);
+      const betting = t.start + 5000;
+
+      // Bad bets
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 8, amount: 1000 }] }, betting)).toHaveProperty("error");
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 0, amount: 1500 }] }, betting)).toHaveProperty("error");
+      expect(await placeHorseBets(pu.id, { bets: [] }, betting)).toHaveProperty("error");
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 0, amount: 6_000_000 }] }, betting)).toHaveProperty("error");
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 0, amount: 1000 }] }, t.raceStart - 500)).toMatchObject({ code: "closed" });
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 0, amount: 1000 }] }, t.raceStart + 100)).toMatchObject({ code: "closed" });
+
+      // Before the off nothing about the result leaves the server
+      const before = await horseView(user, betting);
+      expect(before.race).toBeNull();
+      const json = JSON.stringify(before);
+      expect(json).not.toMatch(/seed|order|chances/i);
+      expect(before.winners.every((x) => x.round < t.round)).toBe(true);
+      const row = await horseRound(t.round);
+      expect(before.odds10).toEqual(row.odds);
+      expect([...row.chances].sort((a, b) => b - a)).toEqual(H.HORSE_CHANCES);
+      expect(row.odds).toEqual(row.chances.map(H.horseOdds10));
+      expect(row.finishOrder[0]).toBe(row.winner);
+      expect(await horseRound(t.round)).toEqual(row); // made once
+
+      // Bet on the winner and on two losers; one horse twice in one slip is one bet
+      const w = row.winner, l1 = row.finishOrder[1], l2 = row.finishOrder[7];
+      const r1 = await placeHorseBets(pu.id, { bets: [{ horse: w, amount: 150_000 }, { horse: w, amount: 150_000 }, { horse: l1, amount: 20_000 }] }, betting);
+      expect(r1).not.toHaveProperty("error");
+      expect((r1 as any).balance).toBe(10_000_000 - 320_000);
+      expect((r1 as any).bets).toHaveLength(2);
+      await placeHorseBets(pu.id, { bets: [{ horse: l2, amount: 30_000 }] }, betting);
+      // 5M a race at most, counting what's already on
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: l2, amount: 4_651_000 }] }, betting)).toMatchObject({ error: "At most 5,000,000 coins on one race" });
+      // Not enough coins
+      const poor = new Player();
+      const poorU = await poor.register();
+      expect(await placeHorseBets(poorU.id, { bets: [{ horse: 0, amount: 100_000 }] }, betting)).toMatchObject({ error: "Not enough coins" });
+
+      // The room sees what's been bet; the bets are pending
+      const mid = await horseView(user, betting + 1000);
+      expect(mid.pool[w]).toEqual({ amount: 300_000, players: 1 });
+      expect(mid.players).toBe(1);
+      expect(mid.mine.every((b) => b.status === "pending" && b.payout === null)).toBe(true);
+
+      // The off: seed and order are revealed
+      const racing = await horseView(user, t.raceStart + 10);
+      expect(racing.race).toEqual({ seed: row.seed, order: row.finishOrder });
+
+      // Nothing is paid during the race; everything after it, once
+      await settleHorse(t.raceEnd - 100);
+      expect((await pool.query("select count(*)::int as n from horse_bets where round = $1 and settled", [t.round])).rows[0].n).toBe(0);
+      const bal = (await p.state()).balance;
+      await Promise.all([settleHorse(t.raceEnd + 10), settleHorse(t.raceEnd + 20)]);
+      await settleHorse(t.raceEnd + 1000);
+      const win = H.horsePayout(300_000, row.odds[w]);
+      expect((await p.state()).balance).toBe(bal + win);
+      const plays = (await pool.query("select bet, payout from game_plays where user_id = $1 and game = 'horse' order by id", [pu.id])).rows;
+      expect(plays).toHaveLength(3);
+      expect(plays.reduce((a: number, x: any) => a + Number(x.bet), 0)).toBe(350_000);
+      expect(plays.reduce((a: number, x: any) => a + Number(x.payout), 0)).toBe(win);
+      const after = await horseView(user, t.raceEnd + 2000);
+      expect(after.mine.find((b) => b.horse === w)).toMatchObject({ status: "won", payout: win });
+      expect(after.mine.filter((b) => b.status === "lost")).toHaveLength(2);
+      expect(after.winners[0]).toEqual({ round: t.round, horse: w, odds10: row.odds[w] });
+      // A big win is announced in the chat
+      expect(win).toBeGreaterThanOrEqual(H.HORSE_BIG_WIN);
+      const chat = (await pool.query("select text from chat_messages where username = '🏇 Đua Ngựa' and text like $1", [`%${p.username}%`])).rows;
+      expect(chat).toHaveLength(1);
+    });
+
+    it("serves the race over HTTP", async () => {
+      const p = new Player();
+      await p.register();
+      const r = await p.req("GET", "/api/horse");
+      expect(r.status).toBe(200);
+      expect(r.body.odds10).toHaveLength(8);
+      if (Date.now() < r.body.raceStart) expect(r.body.race).toBeNull();
+      expect((await p.req("POST", "/api/horse/bet", { bets: [{ horse: 0, amount: 999 }] })).status).toBe(400);
+      expect((await new Player().req("GET", "/api/horse")).status).toBe(401);
+    });
+  });
+
   describe("Tiến Lên", () => {
     it("deals, checks every move, plays the computer players and pays by finishing place", async () => {
       const T = await import("../shared/tienlen");
@@ -1345,6 +1669,70 @@ describe.skipIf(!TEST_DB)("API", () => {
       await setBalance(p.username, 100);
       await new Promise((r) => setTimeout(r, 1100));
       expect((await p.req("POST", "/api/banca/shoot", { level: 500, fish: "tep" })).status).toBe(400);
+    });
+  });
+
+  describe("Slot 777 Cổ Điển", () => {
+    it("validates the bet strictly", async () => {
+      const p = new Player();
+      await p.register();
+      for (const body of [
+        {}, { lines: 2, lineBet: 100 }, { lines: 5, lineBet: 150 }, { lines: 5, lineBet: -100 }, { lines: "5", lineBet: 100 },
+        { lines: 5, lineBet: 100.5 }, { lines: 1, lineBet: 100, extra: 1 }, { lines: 5, lineBet: 400_000 },
+      ]) {
+        const r = await p.req("POST", "/api/slot777/spin", body);
+        expect(r.status, JSON.stringify(body)).toBe(400);
+        expect(r.body.message).toBe("Invalid bet");
+      }
+      expect((await p.state()).balance).toBe(TEST_START);
+      expect((await new Player().req("POST", "/api/slot777/spin", { lines: 1, lineBet: 100 })).status).toBe(401);
+    });
+
+    it("takes lines × line bet, pays the line wins, and logs every spin", async () => {
+      const { evalLine777, PAYLINES_777 } = await import("../shared/slot777");
+      const p = new Player();
+      const pu = await p.register();
+      let expected = TEST_START, bet = 0, won = 0;
+      for (let i = 0; i < 30; i++) {
+        const lines = [1, 3, 5][i % 3];
+        const r = await p.req("POST", "/api/slot777/spin", { lines, lineBet: 200 });
+        expect(r.status).toBe(200);
+        expect(r.body.reels).toHaveLength(3);
+        for (const col of r.body.reels) expect(col).toHaveLength(3);
+        let sum = 0;
+        for (let l = 1; l <= lines; l++) {
+          const symbols = PAYLINES_777[l - 1].map((row, reel) => r.body.reels[reel][row]);
+          const mult = evalLine777(symbols).mult;
+          const w = r.body.lineWins.find((x: any) => x.line === l);
+          expect(w?.payout ?? 0).toBe(mult * 200);
+          sum += mult * 200;
+        }
+        expect(r.body.lineWins.every((w: any) => w.line <= lines)).toBe(true);
+        expect(r.body.payout).toBe(sum);
+        expected += r.body.payout - lines * 200;
+        bet += lines * 200; won += r.body.payout;
+        expect(r.body.balance).toBe(expected);
+      }
+      expect((await p.state()).balance).toBe(expected);
+      const [tot] = (await pool.query("select count(*)::int as n, sum(bet)::int as bet, sum(payout)::int as payout from game_plays where user_id = $1 and game = 'slot777'", [pu.id])).rows;
+      expect(tot).toEqual({ n: 30, bet, payout: won });
+    });
+
+    it("can't overdraw, even with many spins at once", async () => {
+      const p = new Player();
+      await p.register();
+      await setBalance(p.username, 5000);
+      const rs = await Promise.all(Array.from({ length: 12 }, () => p.req("POST", "/api/slot777/spin", { lines: 5, lineBet: 200 })));
+      const ok = rs.filter((r) => r.status === 200);
+      for (const r of rs) expect([200, 400]).toContain(r.status);
+      const final = (await p.state()).balance;
+      expect(final).toBeGreaterThanOrEqual(0);
+      expect(final).toBe(5000 - ok.length * 1000 + ok.reduce((a, r) => a + r.body.payout, 0));
+      await setBalance(p.username, 999);
+      const r = await p.req("POST", "/api/slot777/spin", { lines: 5, lineBet: 200 });
+      expect(r.status).toBe(400);
+      expect(r.body.message).toBe("Insufficient balance");
+      expect((await p.state()).balance).toBe(999);
     });
   });
 

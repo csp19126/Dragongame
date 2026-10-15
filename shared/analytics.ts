@@ -8,8 +8,10 @@ export const GAME_NAMES: Record<string, { label: string; icon: string }> = {
   baucua: { label: "Bầu Cua", icon: "🦀" },
   pool: { label: "8-ball pool", icon: "🎱" },
   loto: { label: "Lô Tô", icon: "🎱" },
+  horse: { label: "Horse racing", icon: "🏇" },
   tienlen: { label: "Tiến Lên", icon: "🂡" },
   banca: { label: "Bắn Cá", icon: "🐟" },
+  slot777: { label: "Classic 777", icon: "7️⃣" },
   bj_table: { label: "Blackjack table", icon: "🃏" },
   xidach: { label: "Xì Dách (banker)", icon: "🀄" },
 };
@@ -38,6 +40,8 @@ export interface AdminAnalytics {
     dau: number; wau: number; mau: number; onlineNow: number;
     playsToday: number; wageredToday: number; paidToday: number;
     coinsHeld: number; givenAway: number; chatToday: number;
+    /** Private messages sent today */
+    dmToday: number;
   };
   daily: { day: string; signups: number; active: number; plays: number; players: number; wagered: number; paid: number }[];
   games: { game: string; plays: number; players: number; wagered: number; paid: number; biggest: number }[];
@@ -61,6 +65,8 @@ export interface AdminPlayer {
   gamesPlayed: number; totalWins: number; maxWin: number;
   invitedBy: string | null; invited: number;
   daysActive: number; chatMessages: number;
+  /** Their profile photo, if they have one */
+  avatarUrl: string | null;
   pool: { won: number; lost: number };
   /** Days active in the last 30 (YYYY-MM-DD, Vietnam time) */
   activeDays: string[];

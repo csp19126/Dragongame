@@ -24,7 +24,7 @@ const GONE_MS = 60_000; // a seat whose player has been away this long is freed 
 const EMPTY_MS = 120_000; // an empty table is closed
 const KIND_VI: Record<string, string> = { xiban: "Xì Bàn", xidach: "Xì Dách", nguLinh: "Ngũ Linh", quac: "Quắc", non: "Non" };
 
-interface Seat { userId: string; name: string; lastSeen: number; leaving: boolean; bot?: boolean }
+interface Seat { userId: string; name: string; lastSeen: number; leaving: boolean; bot?: boolean; avatar?: string | null }
 
 // A computer player sits in at a Xì Dách table when only one person is there, so nobody waits.
 // It banks to 18 and plays to 16: with those, simulations show a person playing its best only
@@ -80,7 +80,7 @@ function view(t: Table, userId: string | null): TableView {
     const mine = i === you;
     const open = !!h && (mine || reveal || t.mode === "house");
     return {
-      seat: i, username: s.name, you: mine, online: !!s.bot || online.has(s.userId), bot: !!s.bot,
+      seat: i, username: s.name, avatarUrl: s.avatar ?? null, you: mine, online: !!s.bot || online.has(s.userId), bot: !!s.bot,
       playing: !!h, banker: t.banker === i,
       cards: open ? h!.cards : null, count: h?.cards.length ?? 0, total: open ? handTotal(h!.cards) : null,
       status: h?.status ?? "out", doubled: h?.doubled ?? false,
@@ -368,13 +368,13 @@ async function tick() {
   }
 }
 
-function sit(t: Table, userId: string, name: string): string | null {
+function sit(t: Table, userId: string, name: string, avatar: string | null = null): string | null {
   if (t.seats.some((s) => s?.userId === userId)) return null;
   const other = seatedAt.get(userId);
   if (other && other !== t.code && tables.has(other)) return "You're already sitting at another table";
   const free = t.seats.findIndex((s) => !s);
   if (free < 0) return "The table is full";
-  t.seats[free] = { userId, name, lastSeen: Date.now(), leaving: false };
+  t.seats[free] = { userId, name, lastSeen: Date.now(), leaving: false, avatar };
   seatedAt.set(userId, t.code);
   if (t.phase === "waiting" && !t.nextRoundAt) t.nextRoundAt = Date.now() + 3000;
   return null;
@@ -398,7 +398,7 @@ export const tableForTest = (code: string) => tables.get(code);
 export { tick as cardTablesTick };
 
 export function registerCardTableRoutes(app: Express, requireUser: RequestHandler) {
-  const me = (res: Response) => res.locals.user as { id: string; username: string };
+  const me = (res: Response) => res.locals.user as { id: string; username: string; profileImageUrl: string | null };
   app.get("/api/cards/tables", requireUser, (_req, res) => {
     const list: TableSummary[] = [...tables.values()].map((t) => ({
       code: t.code, mode: t.mode, stake: t.stake, players: t.seats.filter(Boolean).length, host: t.host,
@@ -419,14 +419,14 @@ export function registerCardTableRoutes(app: Express, requireUser: RequestHandle
       message: null, emptySince: null, busy: false,
     };
     tables.set(code, t);
-    sit(t, u.id, u.username);
+    sit(t, u.id, u.username, u.profileImageUrl);
     res.json({ code });
   });
   // Sitting down and leaving also work over the socket; these are for tests and simple clients
   app.post("/api/cards/tables/:code/sit", requireUser, (req: Request, res: Response) => {
     const t = tables.get(String(req.params.code).toUpperCase());
     if (!t) return res.status(404).json({ message: "Table not found" });
-    const err = sit(t, me(res).id, me(res).username);
+    const err = sit(t, me(res).id, me(res).username, me(res).profileImageUrl);
     if (err) return res.status(409).json({ message: err });
     broadcast(t);
     res.json({ ok: true });
@@ -464,17 +464,17 @@ export function attachCardTableSockets(httpServer: Server, sessionMiddleware: Re
     sessionMiddleware(req as Request, {} as Response, (async () => {
       const userId = (req as Request).session?.userId;
       const t = tables.get((url.searchParams.get("code") ?? "").toUpperCase());
-      const [u] = userId ? await db.select({ username: users.username, banned: users.banned }).from(users).where(eq(users.id, userId)) : [];
+      const [u] = userId ? await db.select({ username: users.username, banned: users.banned, avatar: users.profileImageUrl }).from(users).where(eq(users.id, userId)) : [];
       if (!userId || !t || !u || u.banned) {
         socket.write(`HTTP/1.1 ${userId ? "404 Not Found" : "401 Unauthorized"}\r\nConnection: close\r\n\r\n`);
         socket.destroy();
         return;
       }
-      wss.handleUpgrade(req, socket, head, (ws) => onConnect(ws, t, userId, u.username));
+      wss.handleUpgrade(req, socket, head, (ws) => onConnect(ws, t, userId, u.username, u.avatar));
     }) as unknown as NextFunction);
   });
 
-  function onConnect(ws: WebSocket, t: Table, userId: string, name: string) {
+  function onConnect(ws: WebSocket, t: Table, userId: string, name: string, avatar: string | null) {
     const client: Client = { ws, userId, lastEmote: 0 };
     t.clients.add(client);
     const seat = t.seats.find((s) => s?.userId === userId);
@@ -487,7 +487,7 @@ export function attachCardTableSockets(httpServer: Server, sessionMiddleware: Re
       const s = t.seats.find((x) => x?.userId === userId);
       if (s) s.lastSeen = Date.now();
       if (msg?.t === "sit") {
-        const err = sit(t, userId, name);
+        const err = sit(t, userId, name, avatar);
         if (err) ws.send(JSON.stringify({ t: "error", message: err }));
         broadcast(t);
       } else if (msg?.t === "leave") {

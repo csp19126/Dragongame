@@ -2,8 +2,11 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang, LANGUAGES } from "@/lib/lang-context";
 import { Button } from "@/components/ui/button";
-import { LogOut, Globe, User, Plus, Crown, Trophy, Coins } from "lucide-react";
+import { LogOut, Globe, User, Plus, Crown, Trophy, Coins, MessageCircle } from "lucide-react";
 import { TournamentAlert } from "@/components/TournamentBits";
+import { Avatar } from "@/components/Avatar";
+import { useDmUnread } from "@/hooks/use-dm";
+import { usePlayerSheet } from "@/components/PlayerSheet";
 import { motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -51,6 +54,8 @@ function AnimatedBalance({ value }: { value: number }) {
 export function Header() {
   const { user, logout } = useAuth();
   const { t, lang, setLang, tr } = useLang();
+  const unread = useDmUnread();
+  const showPlayer = usePlayerSheet();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/[0.07] bg-[#0b0716]/80 backdrop-blur-xl">
@@ -71,12 +76,19 @@ export function Header() {
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="w-9 h-9 rounded-full bg-white/5 text-yellow-200 border border-white/10 hover:bg-white/10" data-testid="button-user-menu">
-                    <User className="w-5 h-5" />
-                  </Button>
+                  <button type="button" className="relative w-9 h-9 rounded-full" aria-label={user.username} data-testid="button-user-menu">
+                    <Avatar user={user} size={36} ring />
+                    {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center border border-[#0b0716]">{unread > 99 ? "99+" : unread}</span>}
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-[#140b26]/95 backdrop-blur-xl border-white/10 rounded-2xl shadow-2xl p-2" data-testid="menu-user-dropdown">
-                  <div className="px-3 py-2 text-xs text-white/50 truncate">{user.username}</div>
+                  <DropdownMenuItem onClick={() => showPlayer(user.username)} className="rounded-xl p-2 cursor-pointer gap-2.5" data-testid="menu-my-card">
+                    <Avatar user={user} size={36} />
+                    <span className="min-w-0"><span className="block font-black text-white truncate">{user.username}</span><span className="block text-[11px] text-white/50">{tr("Xem hồ sơ của bạn", "View your profile card", "查看你的個人檔案")}</span></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="rounded-xl p-3 cursor-pointer">
+                    <Link href="/community?tab=dm" data-testid="link-messages"><MessageCircle className="w-5 h-5 mr-3 text-sky-300" /><span className="font-bold flex-1">{tr("Tin nhắn", "Messages", "私訊")}</span>{unread > 0 && <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-black flex items-center justify-center">{unread}</span>}</Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem asChild className="rounded-xl p-3 cursor-pointer">
                     <Link href="/profile" data-testid="link-profile"><User className="w-5 h-5 mr-3" /><span className="font-bold">{t.profile}</span></Link>
                   </DropdownMenuItem>

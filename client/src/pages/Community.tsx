@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Redirect, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
+import { BookOpen, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Mail, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { ShareDialog, type ShareWhat } from "@/components/ShareCard";
 import { useAuth, ME_KEY } from "@/hooks/use-auth";
@@ -17,13 +17,18 @@ import {
   type AlbumView, type Rarity, type Sticker,
 } from "@shared/stickers";
 import { CHAT_MAX_LEN } from "@shared/chat";
+import { Avatar } from "@/components/Avatar";
+import { nameHue } from "@shared/social";
+import { usePlayerSheet } from "@/components/PlayerSheet";
+import { DmTab } from "@/components/DirectMessages";
+import { useDmUnread } from "@/hooks/use-dm";
 
 const fmt = fmtCoins;
 
 const TXT = {
   vi: {
-    title: "Cộng Đồng", subtitle: "Trò chuyện · Sưu tầm · Mời bạn",
-    tabChat: "Trò chuyện", tabAlbum: "Album", tabInvite: "Mời bạn",
+    title: "Cộng Đồng", subtitle: "Trò chuyện · Nhắn riêng · Sưu tầm",
+    tabChat: "Trò chuyện", tabDm: "Tin nhắn", tabAlbum: "Album", tabInvite: "Mời bạn",
     rules: "Lịch sự nhé. Không mua bán xu, không gửi link hay số điện thoại.",
     placeholder: "Nhắn gì đó…", send: "Gửi", stickers: "Sticker của bạn", noStickers: "Bạn chưa có sticker nào. Mở gói trong Album!",
     playFirst: (n: number) => `Chơi thêm ${n} ván để mở khóa trò chuyện`, mutedUntil: "Bạn bị tạm khóa chat đến",
@@ -41,8 +46,8 @@ const TXT = {
     announce: "Thông báo", maxInvites: (n: number) => `Tối đa ${n} lượt thưởng mời bạn.`,
   },
   en: {
-    title: "Community", subtitle: "Chat · Collect · Invite",
-    tabChat: "Chat", tabAlbum: "Album", tabInvite: "Invite",
+    title: "Community", subtitle: "Chat · Message · Collect",
+    tabChat: "Chat", tabDm: "Messages", tabAlbum: "Album", tabInvite: "Invite",
     rules: "Be kind. No selling coins, no links, no phone numbers.",
     placeholder: "Say something…", send: "Send", stickers: "Your stickers", noStickers: "No stickers yet. Open a pack in the Album!",
     playFirst: (n: number) => `Play ${n} more game${n === 1 ? "" : "s"} to unlock chat`, mutedUntil: "You're muted until",
@@ -60,8 +65,8 @@ const TXT = {
     announce: "Announcement", maxInvites: (n: number) => `Up to ${n} invite rewards.`,
   },
   zh: {
-    title: "社群", subtitle: "聊天 · 收集 · 邀請",
-    tabChat: "聊天", tabAlbum: "圖鑑", tabInvite: "邀請好友",
+    title: "社群", subtitle: "聊天 · 私訊 · 收集",
+    tabChat: "聊天", tabDm: "私訊", tabAlbum: "圖鑑", tabInvite: "邀請好友",
     rules: "請保持禮貌。禁止買賣金幣，禁止發送連結或電話號碼。",
     placeholder: "說點什麼…", send: "發送", stickers: "你的貼圖", noStickers: "你還沒有貼圖。到圖鑑開卡包吧！",
     playFirst: (n: number) => `再玩 ${n} 局即可解鎖聊天`, mutedUntil: "你已被暫時禁言，直到",
@@ -94,35 +99,41 @@ export default function Community() {
   const L: L = TXT[lang];
   const search = useSearch();
   const [, setLocation] = useLocation();
-  const tab = (new URLSearchParams(search).get("tab") as "chat" | "album" | "invite" | null) ?? "chat";
+  const params = new URLSearchParams(search);
+  const dm = params.get("dm")?.trim() || null;
+  const tab = (params.get("tab") as "chat" | "dm" | "album" | "invite" | null) ?? (dm ? "dm" : "chat");
+  const unread = useDmUnread();
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-12 h-12 animate-spin text-primary" /></div>;
-  if (!user) return <Redirect to={`/auth?next=${encodeURIComponent(`/community?tab=${tab}`)}`} />;
+  if (!user) return <Redirect to={`/auth?next=${encodeURIComponent(`/community?${search || `tab=${tab}`}`)}`} />;
 
   const tabs = [
-    { id: "chat", icon: <MessageCircle className="w-4 h-4" />, label: L.tabChat },
-    { id: "album", icon: <BookOpen className="w-4 h-4" />, label: L.tabAlbum },
-    { id: "invite", icon: <Gift className="w-4 h-4" />, label: L.tabInvite },
+    { id: "chat", icon: <MessageCircle className="w-4 h-4" />, label: L.tabChat, badge: 0 },
+    { id: "dm", icon: <Mail className="w-4 h-4" />, label: L.tabDm, badge: unread },
+    { id: "album", icon: <BookOpen className="w-4 h-4" />, label: L.tabAlbum, badge: 0 },
+    { id: "invite", icon: <Gift className="w-4 h-4" />, label: L.tabInvite, badge: 0 },
   ] as const;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a2e] to-[#0a0515] flex flex-col">
       <Header />
       <main className="flex-1 flex flex-col items-center gap-3 px-3 py-3 relative z-10 w-full max-w-md mx-auto">
-        <div className="text-center">
+        <div className={`text-center ${tab === "dm" && dm ? "hidden" : ""}`}>
           <h1 className="font-display text-3xl sm:text-4xl leading-none bg-gradient-to-b from-yellow-200 via-yellow-400 to-orange-500 bg-clip-text text-transparent" data-testid="text-community-title">{L.title}</h1>
           <p className="text-[11px] font-black tracking-[0.25em] text-yellow-500/80 uppercase mt-1">{L.subtitle}</p>
         </div>
-        <div className="w-full grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-black/40 border border-white/10">
+        <div className="w-full grid grid-cols-4 gap-1 p-1 rounded-2xl bg-black/40 border border-white/10">
           {tabs.map((t) => (
             <button key={t.id} type="button" onClick={() => setLocation(`/community?tab=${t.id}`)}
-              className={`py-2 rounded-xl text-sm font-black flex items-center justify-center gap-1.5 transition ${tab === t.id ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black shadow" : "text-white/70"}`}
+              className={`relative py-1.5 rounded-xl text-[11px] leading-tight font-black flex flex-col items-center justify-center gap-0.5 transition ${tab === t.id ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black shadow" : "text-white/70"}`}
               data-testid={`tab-community-${t.id}`}>
-              {t.icon}{t.label}
+              {t.icon}<span className="truncate max-w-full px-0.5">{t.label}</span>
+              {t.badge > 0 && <span className="absolute top-0.5 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center" data-testid="tab-dm-badge">{t.badge > 99 ? "99+" : t.badge}</span>}
             </button>
           ))}
         </div>
         {tab === "chat" && <ChatTab L={L} me={user.username} />}
+        {tab === "dm" && <DmTab dm={dm} errs={L.err} />}
         {tab === "album" && <AlbumTab L={L} lang={lang} />}
         {tab === "invite" && <InviteTab L={L} />}
       </main>
@@ -341,14 +352,15 @@ function GiftDialog({ s, count, left, L, lang, onClose }: { s: Sticker; count: n
 
 // ---------------- Chat ----------------
 
-interface Msg { id: number; username: string; text: string | null; sticker: string | null; createdAt: string; admin: boolean | null }
+interface Msg { id: number; username: string; text: string | null; sticker: string | null; createdAt: string; admin: boolean | null; avatar?: string | null }
 interface ChatResp { messages: Msg[]; removed: number[]; me: { mutedUntil: string | null; gamesToUnlock: number } }
 
-const hue = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+const hue = nameHue;
 
 function ChatTab({ L, me }: { L: L; me: string }) {
   const { toast } = useToast();
   const { loc, srv } = useLang();
+  const showPlayer = usePlayerSheet();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [meInfo, setMeInfo] = useState<ChatResp["me"] | null>(null);
   const [text, setText] = useState("");
@@ -428,11 +440,13 @@ function ChatTab({ L, me }: { L: L; me: string }) {
           const mine = m.username === me;
           const st = m.sticker ? STICKER_BY_ID.get(m.sticker) : null;
           return (
-            <div key={m.id} className={`group flex flex-col max-w-[85%] ${mine ? "self-end items-end" : "self-start items-start"}`} data-testid={`chat-msg-${m.id}`}>
-              <span className="text-[10px] font-black px-1" style={{ color: `hsl(${hue(m.username)} 80% 70%)` }}>
+            <div key={m.id} className={`group flex items-start gap-1.5 max-w-[88%] ${mine ? "self-end flex-row-reverse" : "self-start"}`} data-testid={`chat-msg-${m.id}`}>
+              <Avatar user={{ username: m.username, avatarUrl: m.avatar }} size={30} onClick={m.admin === null ? undefined : () => showPlayer(m.username)} testid={`chat-avatar-${m.id}`} />
+              <div className={`flex flex-col min-w-0 ${mine ? "items-end" : "items-start"}`}>
+              <button type="button" disabled={m.admin === null} onClick={() => showPlayer(m.username)} className="text-[10px] font-black px-1 text-left" style={{ color: `hsl(${hue(m.username)} 80% 70%)` }}>
                 {m.admin && "🛡️ "}{m.username}
                 <span className="text-white/30 font-normal ml-1.5">{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-              </span>
+              </button>
               <div className="flex items-end gap-1">
                 {st ? (
                   <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div>
@@ -444,6 +458,7 @@ function ChatTab({ L, me }: { L: L; me: string }) {
                     <Flag className="w-3 h-3 text-white" />
                   </button>
                 )}
+              </div>
               </div>
             </div>
           );

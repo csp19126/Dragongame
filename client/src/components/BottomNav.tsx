@@ -5,6 +5,7 @@ import { Home, MessageCircle, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLang } from "@/lib/lang-context";
 import type { AlbumView } from "@shared/stickers";
+import { useDmUnread } from "@/hooks/use-dm";
 
 /** App-style tab bar along the bottom. Hidden on the sign-in page and at a pool table (it needs the room). */
 export function BottomNav() {
@@ -13,6 +14,7 @@ export function BottomNav() {
   const [location] = useLocation();
   const search = useSearch();
   const album = useQuery<AlbumView>({ queryKey: ["/api/stickers"], enabled: !!user, refetchInterval: 120_000 });
+  const unread = useDmUnread();
   const params = new URLSearchParams(search);
   const atTable = location === "/pool" && (params.has("table") || params.get("practice") === "1");
   const show = !!user && location !== "/auth" && !atTable;
@@ -29,7 +31,7 @@ export function BottomNav() {
     { href: "/", label: tr("Sảnh", "Home", "大廳"), icon: <Home className="w-5 h-5" />, active: location === "/" },
     { href: "/slot", label: tr("Slot", "Slot", "老虎機"), icon: <span className="text-xl leading-none">🐉</span>, active: location === "/slot" },
     { href: "/pool", label: tr("Bi-a", "Pool", "撞球"), icon: <span className="text-xl leading-none">🎱</span>, active: location.startsWith("/pool") || location === "/tournament" },
-    { href: "/community", label: tr("Cộng đồng", "Social", "社群"), icon: <MessageCircle className="w-5 h-5" />, active: location.startsWith("/community"), badge: packs },
+    { href: "/community", label: tr("Cộng đồng", "Social", "社群"), icon: <MessageCircle className="w-5 h-5" />, active: location.startsWith("/community"), badge: unread || packs, dm: unread > 0 },
     { href: "/profile", label: tr("Tôi", "Me", "我的"), icon: <User className="w-5 h-5" />, active: location === "/profile" || location === "/coins" },
   ];
 
@@ -41,7 +43,7 @@ export function BottomNav() {
             {it.active && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-gradient-to-r from-yellow-300 to-orange-500" />}
             <span className={`flex items-center justify-center w-10 h-8 rounded-2xl ${it.active ? "bg-yellow-400/15" : ""}`}>{it.icon}</span>
             <span>{it.label}</span>
-            {!!it.badge && <span className="absolute top-1.5 right-[22%] min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center">{it.badge}</span>}
+            {!!it.badge && <span className={`absolute top-1.5 right-[22%] min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center ${"dm" in it && it.dm ? "ring-2 ring-[#0b0716] animate-pulse" : ""}`} data-testid={`badge-${it.href.slice(1) || "home"}`}>{it.badge > 99 ? "99+" : it.badge}</span>}
           </Link>
         ))}
       </div>

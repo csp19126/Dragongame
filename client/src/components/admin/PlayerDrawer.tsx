@@ -2,7 +2,8 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Loader2, X, Gift, VolumeX, Ban } from "lucide-react";
+import { Loader2, X, Gift, VolumeX, Ban, Trash2 } from "lucide-react";
+import { Avatar } from "@/components/Avatar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { BONUS_NAMES, type AdminPlayer } from "@shared/analytics";
@@ -30,6 +31,12 @@ export function PlayerDrawer({ id, onClose }: { id: string; onClose: () => void 
     onError: (e: any) => toast({ title: e.message || "Failed", variant: "destructive" }),
   });
 
+  const removePhoto = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/admin/social/photo/${id}/remove`),
+    onSuccess: () => { toast({ title: "Photo removed" }); refresh(); queryClient.invalidateQueries({ queryKey: ["/api/admin/social/reports"] }); },
+    onError: (e: any) => toast({ title: e.message || "Failed", variant: "destructive" }),
+  });
+
   const p = q.data;
   const muted = p?.mutedUntil && new Date(p.mutedUntil) > new Date();
   const staked = p ? p.games.reduce((a, g) => a + g.wagered, 0) : 0;
@@ -43,7 +50,16 @@ export function PlayerDrawer({ id, onClose }: { id: string; onClose: () => void 
       <motion.aside initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} onClick={(e) => e.stopPropagation()}
         className="w-full max-w-lg h-full overflow-y-auto bg-[#120926] border-l border-yellow-400/20 p-4 space-y-4" data-testid="player-drawer">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
+          {p && (
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <Avatar user={{ username: p.username, avatarUrl: p.avatarUrl }} size={64} />
+              {p.avatarUrl && (
+                <button type="button" disabled={removePhoto.isPending} onClick={() => { if (confirm(`Remove ${p.username}'s photo? It is deleted.`)) removePhoto.mutate(); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-200 font-bold flex items-center gap-1" data-testid="button-drawer-remove-photo"><Trash2 className="w-3 h-3" />Remove</button>
+              )}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
             <h2 className="text-xl font-black text-white truncate">{p?.username ?? "…"}</h2>
             {p && <p className="text-xs text-white/50">Joined {when(p.createdAt)} · seen {ago(p.lastSeenAt)}{p.invitedBy ? ` · invited by ${p.invitedBy}` : ""}</p>}
             {p && (p.isAdmin || p.banned || muted) && (

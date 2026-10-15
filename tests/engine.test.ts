@@ -6,6 +6,8 @@ import {
 } from "../shared/schema";
 import { GAMBLE_PICKS, GAMBLE_PAYS, gambleWins } from "../shared/gamble";
 import { STICKS, GRADE_BLESSING, ADVICE, TOPICS } from "../shared/oracle";
+import * as s7 from "../shared/slot777";
+import { play777 } from "../server/slot777";
 
 const BET = 1000;
 const pay = (id: string, count: number, mult = 1) => Math.floor(payOf(id, count) * BET) * mult;
@@ -433,6 +435,89 @@ describe("Lô Tô", () => {
   });
 });
 
+describe("Đua Ngựa", () => {
+  it("prices every horse to return between 94.5% and 95%", async () => {
+    const H = await import("../shared/horse");
+    expect(H.HORSE_CHANCES.reduce((a, b) => a + b, 0)).toBe(10000);
+    expect(H.HORSE_CHANCES.length).toBe(H.HORSES.length);
+    for (const bp of H.HORSE_CHANCES) {
+      const p = bp / 10000, m = H.horseOdds10(bp) / 10;
+      expect(m).toBe(Math.floor((0.95 / p) * 10 + 1e-9) / 10);
+      expect(p * m).toBeLessThanOrEqual(0.95 + 1e-12);
+      expect(p * m).toBeGreaterThanOrEqual(0.93);
+      expect(H.horseRtp(bp)).toBeCloseTo(p * m, 12);
+    }
+    // The figures in the rules
+    expect(H.HORSE_RTP_MIN).toBe(0.945);
+    expect(H.HORSE_RTP_MAX).toBe(0.95);
+    expect(H.horsePayout(10000, 35)).toBe(35000);
+    expect(H.horseOdds10(2700)).toBe(35);
+    expect(H.horseOdds10(400)).toBe(237);
+    // Rounds run back to back: 40s betting, 15s race, 5s results
+    const r = H.horseRoundAt(Date.UTC(2026, 5, 1, 12, 0, 30));
+    expect(r.raceStart - r.start).toBe(40_000);
+    expect(r.raceEnd - r.raceStart).toBe(15_000);
+    expect(r.end - r.start).toBe(60_000);
+    expect(H.horseRoundAt(r.end).round).toBe(r.round + 1);
+    expect(H.horseRoundTimes(r.round)).toEqual(r);
+  });
+
+  it("draws the finishing order by the win chances", async () => {
+    const H = await import("../shared/horse");
+    const rand = (n: number) => Math.floor(Math.random() * n);
+    const chances = H.shuffled(H.HORSE_CHANCES, rand);
+    expect([...chances].sort((a, b) => b - a)).toEqual(H.HORSE_CHANCES);
+    const N = 200_000;
+    const wins = Array(8).fill(0);
+    const seconds = Array(8).fill(0);
+    for (let i = 0; i < N; i++) {
+      const o = H.drawOrder(chances, rand);
+      wins[o[0]]++;
+      seconds[o[1]]++;
+      if (i < 1000) expect([...o].sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    }
+    // Within 5 standard errors of each horse's chance
+    chances.forEach((bp, h) => {
+      const p = bp / 10000;
+      expect(Math.abs(wins[h] / N - p)).toBeLessThan(5 * Math.sqrt((p * (1 - p)) / N));
+    });
+    // Second place is drawn from the rest by their chances, so the favourite is second more than the long shot
+    const fav = chances.indexOf(2700), long = chances.indexOf(400);
+    expect(seconds[fav]).toBeGreaterThan(seconds[long] * 3);
+    // Every value of rand is used: lowest picks the first horse, highest the last
+    expect(H.drawOrder([5, 5], () => 0)).toEqual([0, 1]);
+    expect(H.drawOrder([5, 5], (n) => n - 1)).toEqual([1, 0]);
+  });
+
+  it("plays the same race from the same seed, and the horses cross the line in the drawn order", async () => {
+    const H = await import("../shared/horse");
+    for (let s = 0; s < 100; s++) {
+      const seed = (s * 2654435761) >>> 1;
+      const order = H.shuffled([0, 1, 2, 3, 4, 5, 6, 7], (n) => (seed + s * 7) % n);
+      const sim = H.simulateRace(seed, order);
+      const again = H.simulateRace(seed, order);
+      // Finishing times follow the order, all inside the race window
+      for (let k = 1; k < 8; k++) expect(sim.finish[order[k]]).toBeGreaterThan(sim.finish[order[k - 1]]);
+      expect(sim.finish[order[0]]).toBeGreaterThanOrEqual(11_300);
+      expect(sim.finish[order[7]]).toBeLessThan(H.HORSE_RACE_MS - 500);
+      for (let h = 0; h < 8; h++) {
+        expect(sim.progress(h, 0)).toBe(0);
+        expect(sim.progress(h, sim.finish[h] - 1)).toBeLessThan(1);
+        expect(sim.progress(h, sim.finish[h])).toBeGreaterThanOrEqual(1);
+        let last = 0;
+        for (let t = 0; t <= H.HORSE_RACE_MS; t += 100) {
+          const p = sim.progress(h, t);
+          expect(p).toBeGreaterThanOrEqual(last);
+          expect(p).toBe(again.progress(h, t));
+          last = p;
+        }
+      }
+      expect(sim.standings(H.HORSE_RACE_MS)).toEqual(order);
+      expect(H.raceCall(sim, sim.finish[order[0]])).toMatchObject({ kind: "won", horse: order[0] });
+    }
+  });
+});
+
 describe("Tiến Lên rules", () => {
   it("knows the combinations, the chops, and pays back 95% between equal players", async () => {
     const T = await import("../shared/tienlen");
@@ -477,5 +562,78 @@ describe("Bắn Cá odds", () => {
       expect(Number.isInteger((BANCA_RTP * 1_000_000) / f.mult)).toBe(true);
       expect((threshold * f.mult) / 1_000_000).toBeCloseTo(BANCA_RTP, 12);
     }
+  });
+});
+
+describe("Slot 777 Cổ Điển", () => {
+  const { evalLine777: line, PAY3_777, MIX_PAY_777, CHERRY_PAYS_777 } = s7;
+
+  it("pays three of a kind, the BAR/7 mix and left-hand cherries", () => {
+    expect(line(["seven", "seven", "seven"]).mult).toBe(PAY3_777.seven);
+    expect(line(["lemon", "lemon", "lemon"]).mult).toBe(PAY3_777.lemon);
+    expect(line(["bar", "seven", "bar"])).toMatchObject({ mult: MIX_PAY_777, kind: "mix" });
+    expect(line(["cherry", "lemon", "lemon"])).toMatchObject({ mult: CHERRY_PAYS_777[1], kind: "cherry", count: 1 });
+    expect(line(["cherry", "cherry", "bell"])).toMatchObject({ mult: CHERRY_PAYS_777[2], count: 2 });
+    expect(line(["cherry", "cherry", "cherry"]).mult).toBe(PAY3_777.cherry);
+    // Cherries only count from the left reel
+    expect(line(["lemon", "cherry", "cherry"]).mult).toBe(0);
+    expect(line(["bell", "bell", "melon"]).mult).toBe(0);
+    expect(line(["bar", "seven", "bell"]).mult).toBe(0);
+  });
+
+  it("⭐ stands in for anything and doubles the line for each star used", () => {
+    expect(line(["seven", "star", "seven"]).mult).toBe(PAY3_777.seven * 2);
+    expect(line(["star", "seven", "star"]).mult).toBe(PAY3_777.seven * 4);
+    expect(line(["star", "star", "star"])).toMatchObject({ mult: PAY3_777.star, kind: "stars" });
+    expect(line(["bar", "star", "seven"])).toMatchObject({ mult: MIX_PAY_777 * 2, kind: "mix" });
+    expect(line(["cherry", "star", "lemon"])).toMatchObject({ mult: CHERRY_PAYS_777[2] * 2, kind: "cherry" });
+    expect(line(["star", "cherry", "bell"])).toMatchObject({ mult: CHERRY_PAYS_777[2] * 2, kind: "cherry" });
+    expect(line(["star", "star", "lemon"]).mult).toBe(PAY3_777.lemon * 4);
+    // A star alone isn't a cherry
+    expect(line(["star", "lemon", "bell"]).mult).toBe(0);
+    // The top prize beats everything a seven line can make
+    expect(PAY3_777.star).toBeGreaterThan(PAY3_777.seven * 4);
+  });
+
+  it("every payline returns exactly the published RTP, by enumerating every stop combination", () => {
+    const first = s7.exactRtp777(0);
+    expect(first.combos).toBe(s7.STRIPS_777.reduce((a, r) => a * r.length, 1));
+    const rtp = (first.paid / first.combos) * 100;
+    expect(Math.round(rtp * 100) / 100).toBe(s7.SLOT777_RTP);
+    expect(rtp).toBeGreaterThan(95.5);
+    expect(rtp).toBeLessThan(96.5);
+    // Same distribution on every line (each cell is uniform over its strip, reels independent)
+    for (let l = 1; l < s7.PAYLINES_777.length; l++) expect(s7.exactRtp777(l)).toEqual(first);
+  });
+
+  it("the server's spin pays exactly what the enumeration counts, over every combination and line count", () => {
+    const [a, b, c] = s7.STRIPS_777;
+    const ref = s7.exactRtp777(0);
+    for (const lines of s7.LINE_OPTIONS_777) {
+      let paid = 0;
+      for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) for (let k = 0; k < c.length; k++) {
+        const stops = [i, j, k];
+        let n = 0;
+        const o = play777(lines, 100, (max) => { if (max !== s7.STRIPS_777[n].length) throw new Error("wrong range"); return stops[n++]; });
+        if (o.stops.join() !== stops.join() || o.totalBet !== lines * 100) throw new Error(`bad spin ${stops}`);
+        if (o.winAmount !== o.lineWins.reduce((x, w) => x + w.payout, 0)) throw new Error(`bad total ${stops}`);
+        for (const w of o.lineWins) {
+          const symbols = s7.PAYLINES_777[w.line - 1].map((row, reel) => o.reels[reel][row]);
+          if (w.line > lines || w.symbols.join() !== symbols.join() || w.payout !== line(symbols).mult * 100) throw new Error(`bad line ${stops} ${w.line}`);
+        }
+        paid += o.winAmount;
+      }
+      // Every line returns the same, so any number of lines returns the published figure
+      expect(paid).toBe(lines * 100 * ref.paid);
+    }
+  });
+
+  it("only takes the listed lines and line bets, up to 1,000,000 a spin", () => {
+    expect(s7.isValidBet777(5, 200_000)).toBe(true);
+    expect(s7.isValidBet777(1, 100)).toBe(true);
+    expect(s7.isValidBet777(2, 100)).toBe(false);
+    expect(s7.isValidBet777(5, 150)).toBe(false);
+    expect(s7.isValidBet777(5.5 as number, 100)).toBe(false);
+    expect(Math.max(...s7.LINE_BETS_777) * 5).toBeLessThanOrEqual(s7.MAX_TOTAL_BET_777);
   });
 });

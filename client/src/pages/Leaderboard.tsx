@@ -4,10 +4,15 @@ import { useLang } from "@/lib/lang-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Medal } from "lucide-react";
+import { Avatar } from "@/components/Avatar";
+import { usePlayerSheet } from "@/components/PlayerSheet";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Leaderboard() {
   const { data: leaderboard, isLoading } = useLeaderboard();
   const { t } = useLang();
+  const { user } = useAuth();
+  const showPlayer = usePlayerSheet();
 
   const getRankIcon = (index: number) => {
     if (index === 0) return <Medal className="w-6 h-6 text-yellow-500" />; // Gold
@@ -23,7 +28,7 @@ export default function Leaderboard() {
       <div className="absolute bottom-0 left-0 w-[40%] h-[40%] bg-yellow-500/5 blur-[100px] rounded-full pointer-events-none" />
 
       <Header />
-      <div className="container mx-auto px-6 py-12 max-w-4xl relative z-10">
+      <div className="container mx-auto px-3 sm:px-6 py-6 sm:py-12 max-w-4xl relative z-10">
         <Card className="border-0 shadow-2xl bg-black/40 backdrop-blur-2xl rounded-[2.5rem] overflow-hidden">
           <CardHeader className="text-center pt-10 pb-6 border-b border-white/5">
             <CardTitle className="text-5xl font-display gold-gradient-text tracking-tight uppercase">{t.leaderboard}</CardTitle>
@@ -38,9 +43,9 @@ export default function Leaderboard() {
               <Table>
                 <TableHeader className="bg-white/5">
                   <TableRow className="hover:bg-transparent border-white/5 h-16">
-                    <TableHead className="w-[120px] text-center font-black uppercase text-[10px] tracking-widest text-primary/70">{t.rank}</TableHead>
+                    <TableHead className="w-[56px] sm:w-[120px] text-center font-black uppercase text-[10px] tracking-widest text-primary/70">{t.rank}</TableHead>
                     <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/70">{t.username}</TableHead>
-                    <TableHead className="text-right pr-10 font-black uppercase text-[10px] tracking-widest text-primary/70">{t.balance}</TableHead>
+                    <TableHead className="text-right pr-4 sm:pr-10 font-black uppercase text-[10px] tracking-widest text-primary/70">{t.balance}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -49,8 +54,17 @@ export default function Leaderboard() {
                       <TableCell className="text-center font-medium">
                         <div className="flex justify-center scale-125">{getRankIcon(index)}</div>
                       </TableCell>
-                      <TableCell className="font-black text-lg text-white/80 tracking-tight">{entry.username}</TableCell>
-                      <TableCell className="text-right pr-10 font-mono font-black text-2xl text-yellow-400 drop-shadow-sm">
+                      <TableCell className="font-black text-lg text-white/80 tracking-tight">
+                        {user ? (
+                          <button type="button" onClick={() => showPlayer(entry.username)} className="flex items-center gap-2.5 min-w-0 text-left" data-testid={`leader-${entry.username}`}>
+                            <Avatar user={entry} size={36} />
+                            <span className="truncate">{entry.username}</span>
+                          </button>
+                        ) : (
+                          <span className="flex items-center gap-2.5 min-w-0"><Avatar user={entry} size={36} /><span className="truncate">{entry.username}</span></span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right pr-4 sm:pr-10 font-mono font-black text-lg sm:text-2xl whitespace-nowrap text-yellow-400 drop-shadow-sm">
                         {entry.balance.toLocaleString()} <span className="text-lg">🪙</span>
                       </TableCell>
                     </TableRow>

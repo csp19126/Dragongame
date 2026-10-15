@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, bigint, boolean, timestamp, varchar, json, index, jsonb, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, bigint, boolean, timestamp, varchar, json, index, jsonb, primaryKey, uniqueIndex, customType } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -177,6 +177,34 @@ export const lotoTickets = pgTable("loto_tickets", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [index("loto_tickets_round").on(t.round, t.userId), index("loto_tickets_unsettled").on(t.settled, t.round)]);
 
+// Đua Ngựa: each race's prices and result, drawn when the race is first needed and kept secret
+// until the gates open; and the bets, each paid once when its race is over.
+export const horseRounds = pgTable("horse_rounds", {
+  round: integer("round").primaryKey(),
+  /** Win chance of each horse (basis points), by horse index */
+  chances: jsonb("chances").$type<number[]>().notNull(),
+  /** Price of each horse in tenths (35 = ×3.5), by horse index */
+  odds: jsonb("odds").$type<number[]>().notNull(),
+  winner: integer("winner").notNull(),
+  /** Horse indexes, first to last */
+  finishOrder: jsonb("finish_order").$type<number[]>().notNull(),
+  seed: integer("seed").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const horseBets = pgTable("horse_bets", {
+  id: serial("id").primaryKey(),
+  round: integer("round").notNull(),
+  userId: varchar("user_id").notNull(),
+  horse: integer("horse").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  /** The price when the bet was placed, in tenths */
+  odds: integer("odds").notNull(),
+  payout: bigint("payout", { mode: "number" }),
+  settled: boolean("settled").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("horse_bets_round").on(t.round, t.userId), index("horse_bets_unsettled").on(t.settled, t.round)]);
+
 // Tiến Lên against three computer players: one game in progress per player
 export const tienlenGames = pgTable("tienlen_games", {
   id: serial("id").primaryKey(),
@@ -224,6 +252,61 @@ export const chatReports = pgTable("chat_reports", {
   reporterId: varchar("reporter_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [uniqueIndex("chat_reports_once").on(t.messageId, t.reporterId)]);
+
+// ---- Social: profile photos, private messages, blocks and reports ----
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+// One profile photo per player (a small square JPEG/PNG/WebP, checked by its bytes).
+// users.profile_image_url points at /api/avatar/<key> while a photo is set: the key is random
+// and new for every upload, so the URL can be cached forever and never reveals the player's id.
+export const userAvatars = pgTable("user_avatars", {
+  userId: varchar("user_id").primaryKey(),
+  key: text("key").notNull(),
+  data: bytea("data").notNull(),
+  mime: text("mime").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("user_avatars_key").on(t.key)]);
+
+// Private messages between two players: text or a sticker the sender owns
+export const directMessages = pgTable("direct_messages", {
+  id: serial("id").primaryKey(),
+  fromId: varchar("from_id").notNull(),
+  toId: varchar("to_id").notNull(),
+  text: text("text"),
+  sticker: text("sticker"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  readAt: timestamp("read_at"),
+  deleted: boolean("deleted").default(false).notNull(),
+}, (t) => [
+  index("direct_messages_pair").on(t.fromId, t.toId, t.id),
+  index("direct_messages_to").on(t.toId, t.readAt),
+  index("direct_messages_created").on(t.createdAt),
+]);
+
+export const userBlocks = pgTable("user_blocks", {
+  blockerId: varchar("blocker_id").notNull(),
+  blockedId: varchar("blocked_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.blockerId, t.blockedId] }), index("user_blocks_blocked").on(t.blockedId)]);
+
+// A private message reported by the player who received it (admins can read only these)
+export const dmReports = pgTable("dm_reports", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull(),
+  reporterId: varchar("reporter_id").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("dm_reports_once").on(t.messageId, t.reporterId)]);
+
+// A profile (photo or name) reported by another player
+export const profileReports = pgTable("profile_reports", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  reporterId: varchar("reporter_id").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("profile_reports_once").on(t.userId, t.reporterId)]);
 
 // The sticker album: how many of each sticker a player holds
 export const userStickers = pgTable("user_stickers", {

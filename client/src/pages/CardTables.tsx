@@ -13,6 +13,8 @@ import { apiRequest, ApiError, queryClient } from "@/lib/queryClient";
 import { soundManager } from "@/lib/sound";
 import { coinBurst } from "@/lib/celebrate";
 import { AppFooter } from "@/pages/Home";
+import { Avatar } from "@/components/Avatar";
+import { usePlayerSheet } from "@/components/PlayerSheet";
 import {
   TABLE_SEATS, PLAYER_STAND_MIN, BANKER_STAND_MIN, XI_BAN_PAYS, XI_DACH_PAYS, NGU_LINH_PAYS,
   type TableMode, type TableView, type TableSummary, type Card,
@@ -140,6 +142,7 @@ function Lobby({ onOpen }: { onOpen: (code: string) => void }) {
 
 function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
   const { tr, srv } = useLang();
+  const showPlayer = usePlayerSheet();
   const { toast } = useToast();
   const setBalance = useSetBalance();
   const [s, setS] = useState<TableView | null>(null);
@@ -222,7 +225,9 @@ function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
     return (
       <div key={i} className={`relative rounded-2xl p-2 min-h-[5.5rem] ${turn ? "bg-yellow-400/20 ring-2 ring-yellow-300" : "bg-black/30"} ${!p.online ? "opacity-60" : ""}`} data-testid={`seat-${i}`}>
         <div className="flex items-center gap-1 text-[11px] font-black text-white truncate">
-          {p.banker && <Crown className="w-3.5 h-3.5 text-yellow-300 shrink-0" />}<span className="truncate">{p.username}</span>
+          {p.bot ? <Avatar user={p} size={22} /> : <Avatar user={p} size={22} onClick={() => showPlayer(p.username)} testid={`seat-avatar-${i}`} />}
+          {p.banker && <Crown className="w-3.5 h-3.5 text-yellow-300 shrink-0" />}
+          {p.bot ? <span className="truncate">{p.username}</span> : <button type="button" onClick={() => showPlayer(p.username)} className="truncate text-left">{p.username}</button>}
           {p.bot && <span className="shrink-0 rounded-full bg-white/15 px-1.5 text-[9px] text-white/80">{tr("máy", "computer", "電腦")}</span>}
         </div>
         <div className="flex -space-x-4 mt-1">
@@ -267,7 +272,7 @@ function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
       {me ? (
         <section className={`rounded-3xl p-3 ${myTurn ? "bg-yellow-400/15 ring-2 ring-yellow-300" : "bg-white/[0.04]"} border border-white/10`}>
           <div className="flex items-center justify-between">
-            <div className="text-xs font-black text-white flex items-center gap-1">{me.banker && <Crown className="w-4 h-4 text-yellow-300" />}{tr("Bạn", "You", "你")}{me.banker ? tr(" · nhà cái", " · banker", " · 莊家") : ""}</div>
+            <div className="text-xs font-black text-white flex items-center gap-1.5"><Avatar user={me} size={24} />{me.banker && <Crown className="w-4 h-4 text-yellow-300" />}{tr("Bạn", "You", "你")}{me.banker ? tr(" · nhà cái", " · banker", " · 莊家") : ""}</div>
             {me.total !== null && me.playing && <div className="font-black text-yellow-300 text-lg">{me.total}</div>}
           </div>
           <div className="flex justify-center -space-x-3 my-2 min-h-[4.25rem]">{me.playing ? (me.cards ?? []).map((c, k) => <PlayingCard key={k} c={c} i={k} />) : <span className="text-sm text-white/50 self-center">{tr("Bạn sẽ vào ván sau", "You're in from the next round", "你將從下一局開始加入")}</span>}</div>

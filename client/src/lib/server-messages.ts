@@ -96,6 +96,12 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "At most 6 tickets a round": { vi: "Tối đa 6 vé mỗi ván", zh: "每輪最多 6 張賓果卡" },
   "Pick a ticket price": { vi: "Hãy chọn giá vé", zh: "請選擇賓果卡價格" },
 
+  // Đua Ngựa
+  "Pick a horse": { vi: "Hãy chọn một con ngựa", zh: "請選一匹馬" },
+  "Bets come in chips of 1,000 coins or more": { vi: "Mức cược tối thiểu là phỉnh 1.000 xu", zh: "押注以 1,000 金幣籌碼為單位" },
+  "At most 5,000,000 coins on one race": { vi: "Tối đa 5.000.000 xu cho một cuộc đua", zh: "每場比賽最多押注 5,000,000 金幣" },
+  "Betting has closed for this race. Wait for the next one!": { vi: "Đã hết giờ đặt cược cuộc đua này. Hãy chờ cuộc sau nhé!", zh: "本場已停止下注，請等下一場！" },
+
   // Tiến Lên
   "Pick a stake": { vi: "Hãy chọn mức cược", zh: "請選擇底注" },
   "Finish the game you're playing first": { vi: "Hãy chơi xong ván hiện tại trước", zh: "請先完成目前的牌局" },
@@ -122,4 +128,12 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "Who and which sticker?": { vi: "Tặng ai và nhãn dán nào?", zh: "要送給誰、哪張貼圖？" },
   "That's your own message": { vi: "Đó là tin nhắn của chính bạn", zh: "這是你自己的訊息" },
   "Not on yourself": { vi: "Không thể áp dụng cho chính bạn", zh: "不能對自己使用" },
+
+  // Profile photos & private messages
+  "Photo must be a JPEG, PNG or WebP image": { vi: "Ảnh phải là JPEG, PNG hoặc WebP", zh: "照片必須是 JPEG、PNG 或 WebP 格式" },
+  "Photo is too big (150 KB max)": { vi: "Ảnh quá lớn (tối đa 150 KB)", zh: "照片太大（最多 150 KB）" },
+  "Too many photo changes today": { vi: "Hôm nay bạn đổi ảnh quá nhiều lần rồi", zh: "今天更換照片的次數太多了" },
+  "request entity too large": { vi: "Dữ liệu gửi lên quá lớn", zh: "上傳的資料太大" },
+  "Can't message this player": { vi: "Không thể nhắn tin cho người chơi này", zh: "無法傳訊息給這位玩家" },
+  "You can't message yourself": { vi: "Bạn không thể tự nhắn cho mình", zh: "不能傳訊息給自己" },
 };

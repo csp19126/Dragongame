@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { PhotoUploader } from "@/components/PhotoUploader";
+import { usePlayerSheet } from "@/components/PlayerSheet";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -33,6 +34,7 @@ export default function Profile() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const { t, tr, locale, srv } = useLang();
   const { toast } = useToast();
+  const showPlayer = usePlayerSheet();
 
   const { data: profile, isLoading: isProfileLoading } = useQuery<ProfileData>({
     queryKey: ["/api/user/profile"],
@@ -98,7 +100,6 @@ export default function Profile() {
     );
   }
 
-  const initials = (profile.firstName?.[0] || "") + (profile.lastName?.[0] || "") || profile.username.slice(0, 2).toUpperCase();
   const memberDate = profile.createdAt ? new Date(profile.createdAt).toLocaleDateString(locale) : tr("N/A", "N/A", "不詳");
 
   return (
@@ -119,15 +120,14 @@ export default function Profile() {
           </div>
 
           <Card className="bg-purple-950/60 border-yellow-500/20 p-6" data-testid="card-profile-info">
-            <div className="flex items-center gap-4 mb-6">
-              <Avatar className="w-16 h-16 border-2 border-yellow-500/30">
-                <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white text-xl font-black" data-testid="avatar-profile">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div>
+            <div className="flex flex-col items-center gap-2 mb-6" data-testid="avatar-profile">
+              <PhotoUploader />
+              <div className="text-center">
                 <h2 className="text-xl font-black text-yellow-100" data-testid="text-profile-username">{profile.username}</h2>
                 <p className="text-sm text-yellow-100/50">{t.memberSince}: {memberDate}</p>
+                <button type="button" onClick={() => showPlayer(profile.username)} className="mt-1 text-xs font-bold text-yellow-300/80 underline underline-offset-2" data-testid="button-view-card">
+                  {tr("Xem hồ sơ như người khác thấy", "See your profile as others do", "查看別人看到的個人檔案")}
+                </button>
               </div>
             </div>
 
