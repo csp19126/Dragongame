@@ -290,6 +290,30 @@ class SoundManager {
   countUp() {
     this.playTone(1200 + Math.random() * 400, 0.02, 'sine', 0.04);
   }
+
+  /** Classic 777: the lever pulled and the reels whirring off */
+  leverPull() {
+    this.playNoise(0.12, 0.05);
+    this.playSweep(140, 70, 0.18, 'square', 0.06);
+    this.playSweep(250, 900, 0.22, 'sawtooth', 0.03, 0.06);
+  }
+
+  /** Classic 777: a reel slamming to a stop (each reel a little lower) */
+  clunk(reel = 0) {
+    this.playTone(130 - reel * 15, 0.14, 'square', 0.1);
+    this.playTone(65 - reel * 6, 0.18, 'sine', 0.14);
+    this.playNoise(0.05, 0.06);
+    this.playTone(1800 - reel * 200, 0.025, 'triangle', 0.04, 0.01);
+  }
+
+  /** Classic 777: the ding-ding of a winning line, higher for bigger wins */
+  bellDing(level = 0) {
+    const base = 1046 + level * 131;
+    this.playTone(base, 0.35, 'sine', 0.09);
+    this.playTone(base * 2.01, 0.25, 'sine', 0.03);
+    this.playTone(base * 1.26, 0.35, 'sine', 0.07, 0.11);
+    this.playTone(base * 2.52, 0.25, 'sine', 0.025, 0.11);
+  }
 }
 
 export const soundManager = new SoundManager();
