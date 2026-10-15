@@ -39,11 +39,14 @@ const PHONE_RE = /(\d[\s.-]?){8,}/;
 
 export type ChatCheck = { ok: true; text: string } | { ok: false; reason: "empty" | "long" | "link" | "phone" | "trade" };
 
-/** Checks a message and returns it cleaned (whitespace tidied, swearing masked) */
-export function checkChat(raw: string): ChatCheck {
+/**
+ * Checks a message and returns it cleaned (whitespace tidied, swearing masked).
+ * Used for the public chat and for private messages (which allow longer text).
+ */
+export function checkChat(raw: string, maxLen = CHAT_MAX_LEN): ChatCheck {
   const text = raw.replace(/\s+/g, " ").trim();
   if (!text) return { ok: false, reason: "empty" };
-  if (text.length > CHAT_MAX_LEN) return { ok: false, reason: "long" };
+  if (text.length > maxLen) return { ok: false, reason: "long" };
   if (URL_RE.test(text)) return { ok: false, reason: "link" };
   if (PHONE_RE.test(text)) return { ok: false, reason: "phone" };
   const f = ` ${fold(text).replace(/[^a-z0-9]+/g, " ")} `;

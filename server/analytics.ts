@@ -52,6 +52,7 @@ export async function analytics(days: number, hideAdmins: boolean): Promise<Admi
       (select coalesce(sum(u.balance), 0) from users u where ${userWho}) as coins_held,
       (select coalesce(sum(x.amount), 0) from deposits x where ${who(sql`x.user_id`)} and x.created_at >= ${since}) as given_away,
       (select count(*) from chat_messages c where ${who(sql`c.user_id`)} and c.created_at >= ${todayStart} and not c.deleted) as chat_today,
+      (select count(*) from direct_messages m where ${who(sql`m.from_id`)} and m.created_at >= ${todayStart}) as dm_today,
       (select min(created_at) from game_plays) as tracking_since
   `);
 
@@ -138,6 +139,7 @@ export async function analytics(days: number, hideAdmins: boolean): Promise<Admi
       dau: num(k.dau), wau: num(k.wau), mau: num(k.mau), onlineNow: num(k.online_now),
       playsToday: num(k.plays_today), wageredToday: num(k.wagered_today), paidToday: num(k.paid_today),
       coinsHeld: num(k.coins_held), givenAway: num(k.given_away), chatToday: num(k.chat_today),
+      dmToday: num(k.dm_today),
     },
     daily: daily.map((d) => ({ day: String(d.day), signups: num(d.signups), active: num(d.active), plays: num(d.plays), players: num(d.players), wagered: num(d.wagered), paid: num(d.paid) })),
     games: games.map((g) => ({ game: String(g.game), plays: num(g.plays), players: num(g.players), wagered: num(g.wagered), paid: num(g.paid), biggest: num(g.biggest) })),
@@ -188,6 +190,7 @@ export async function playerDetail(id: string): Promise<AdminPlayer | null> {
     gamesPlayed: num(u.games_played), totalWins: num(u.total_wins), maxWin: num(u.max_win),
     invitedBy: u.invited_by ? String(u.invited_by) : null, invited: num(u.invited),
     daysActive: num(u.days_active), chatMessages: num(u.chat_messages),
+    avatarUrl: u.profile_image_url ? String(u.profile_image_url) : null,
     pool: { won: num(u.pool_won), lost: num(u.pool_lost) },
     activeDays: days.map((d) => String(d.day)),
     games: games.map((g) => ({ game: String(g.game), plays: num(g.plays), wagered: num(g.wagered), paid: num(g.paid), biggest: num(g.biggest), lastAt: iso(g.last_at) })),
