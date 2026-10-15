@@ -8,6 +8,7 @@ export const GAME_NAMES: Record<string, { label: string; icon: string }> = {
   baucua: { label: "Bầu Cua", icon: "🦀" },
   pool: { label: "8-ball pool", icon: "🎱" },
   loto: { label: "Lô Tô", icon: "🎱" },
+  horse: { label: "Horse racing", icon: "🏇" },
   tienlen: { label: "Tiến Lên", icon: "🂡" },
   banca: { label: "Bắn Cá", icon: "🐟" },
   slot777: { label: "Classic 777", icon: "7️⃣" },

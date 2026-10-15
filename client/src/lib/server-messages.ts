@@ -96,6 +96,12 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "At most 6 tickets a round": { vi: "Tối đa 6 vé mỗi ván", zh: "每輪最多 6 張賓果卡" },
   "Pick a ticket price": { vi: "Hãy chọn giá vé", zh: "請選擇賓果卡價格" },
 
+  // Đua Ngựa
+  "Pick a horse": { vi: "Hãy chọn một con ngựa", zh: "請選一匹馬" },
+  "Bets come in chips of 1,000 coins or more": { vi: "Mức cược tối thiểu là phỉnh 1.000 xu", zh: "押注以 1,000 金幣籌碼為單位" },
+  "At most 5,000,000 coins on one race": { vi: "Tối đa 5.000.000 xu cho một cuộc đua", zh: "每場比賽最多押注 5,000,000 金幣" },
+  "Betting has closed for this race. Wait for the next one!": { vi: "Đã hết giờ đặt cược cuộc đua này. Hãy chờ cuộc sau nhé!", zh: "本場已停止下注，請等下一場！" },
+
   // Tiến Lên
   "Pick a stake": { vi: "Hãy chọn mức cược", zh: "請選擇底注" },
   "Finish the game you're playing first": { vi: "Hãy chơi xong ván hiện tại trước", zh: "請先完成目前的牌局" },

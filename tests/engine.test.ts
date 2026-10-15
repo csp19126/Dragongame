@@ -435,6 +435,89 @@ describe("Lô Tô", () => {
   });
 });
 
+describe("Đua Ngựa", () => {
+  it("prices every horse to return between 94.5% and 95%", async () => {
+    const H = await import("../shared/horse");
+    expect(H.HORSE_CHANCES.reduce((a, b) => a + b, 0)).toBe(10000);
+    expect(H.HORSE_CHANCES.length).toBe(H.HORSES.length);
+    for (const bp of H.HORSE_CHANCES) {
+      const p = bp / 10000, m = H.horseOdds10(bp) / 10;
+      expect(m).toBe(Math.floor((0.95 / p) * 10 + 1e-9) / 10);
+      expect(p * m).toBeLessThanOrEqual(0.95 + 1e-12);
+      expect(p * m).toBeGreaterThanOrEqual(0.93);
+      expect(H.horseRtp(bp)).toBeCloseTo(p * m, 12);
+    }
+    // The figures in the rules
+    expect(H.HORSE_RTP_MIN).toBe(0.945);
+    expect(H.HORSE_RTP_MAX).toBe(0.95);
+    expect(H.horsePayout(10000, 35)).toBe(35000);
+    expect(H.horseOdds10(2700)).toBe(35);
+    expect(H.horseOdds10(400)).toBe(237);
+    // Rounds run back to back: 40s betting, 15s race, 5s results
+    const r = H.horseRoundAt(Date.UTC(2026, 5, 1, 12, 0, 30));
+    expect(r.raceStart - r.start).toBe(40_000);
+    expect(r.raceEnd - r.raceStart).toBe(15_000);
+    expect(r.end - r.start).toBe(60_000);
+    expect(H.horseRoundAt(r.end).round).toBe(r.round + 1);
+    expect(H.horseRoundTimes(r.round)).toEqual(r);
+  });
+
+  it("draws the finishing order by the win chances", async () => {
+    const H = await import("../shared/horse");
+    const rand = (n: number) => Math.floor(Math.random() * n);
+    const chances = H.shuffled(H.HORSE_CHANCES, rand);
+    expect([...chances].sort((a, b) => b - a)).toEqual(H.HORSE_CHANCES);
+    const N = 200_000;
+    const wins = Array(8).fill(0);
+    const seconds = Array(8).fill(0);
+    for (let i = 0; i < N; i++) {
+      const o = H.drawOrder(chances, rand);
+      wins[o[0]]++;
+      seconds[o[1]]++;
+      if (i < 1000) expect([...o].sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    }
+    // Within 5 standard errors of each horse's chance
+    chances.forEach((bp, h) => {
+      const p = bp / 10000;
+      expect(Math.abs(wins[h] / N - p)).toBeLessThan(5 * Math.sqrt((p * (1 - p)) / N));
+    });
+    // Second place is drawn from the rest by their chances, so the favourite is second more than the long shot
+    const fav = chances.indexOf(2700), long = chances.indexOf(400);
+    expect(seconds[fav]).toBeGreaterThan(seconds[long] * 3);
+    // Every value of rand is used: lowest picks the first horse, highest the last
+    expect(H.drawOrder([5, 5], () => 0)).toEqual([0, 1]);
+    expect(H.drawOrder([5, 5], (n) => n - 1)).toEqual([1, 0]);
+  });
+
+  it("plays the same race from the same seed, and the horses cross the line in the drawn order", async () => {
+    const H = await import("../shared/horse");
+    for (let s = 0; s < 100; s++) {
+      const seed = (s * 2654435761) >>> 1;
+      const order = H.shuffled([0, 1, 2, 3, 4, 5, 6, 7], (n) => (seed + s * 7) % n);
+      const sim = H.simulateRace(seed, order);
+      const again = H.simulateRace(seed, order);
+      // Finishing times follow the order, all inside the race window
+      for (let k = 1; k < 8; k++) expect(sim.finish[order[k]]).toBeGreaterThan(sim.finish[order[k - 1]]);
+      expect(sim.finish[order[0]]).toBeGreaterThanOrEqual(11_300);
+      expect(sim.finish[order[7]]).toBeLessThan(H.HORSE_RACE_MS - 500);
+      for (let h = 0; h < 8; h++) {
+        expect(sim.progress(h, 0)).toBe(0);
+        expect(sim.progress(h, sim.finish[h] - 1)).toBeLessThan(1);
+        expect(sim.progress(h, sim.finish[h])).toBeGreaterThanOrEqual(1);
+        let last = 0;
+        for (let t = 0; t <= H.HORSE_RACE_MS; t += 100) {
+          const p = sim.progress(h, t);
+          expect(p).toBeGreaterThanOrEqual(last);
+          expect(p).toBe(again.progress(h, t));
+          last = p;
+        }
+      }
+      expect(sim.standings(H.HORSE_RACE_MS)).toEqual(order);
+      expect(H.raceCall(sim, sim.finish[order[0]])).toMatchObject({ kind: "won", horse: order[0] });
+    }
+  });
+});
+
 describe("Tiến Lên rules", () => {
   it("knows the combinations, the chops, and pays back 95% between equal players", async () => {
     const T = await import("../shared/tienlen");

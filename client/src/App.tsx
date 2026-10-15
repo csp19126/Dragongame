@@ -55,6 +55,7 @@ const Pool = lazyPage(() => import("@/pages/Pool"));
 const Community = lazyPage(() => import("@/pages/Community"));
 const Tournament = lazyPage(() => import("@/pages/Tournament"));
 const Loto = lazyPage(() => import("@/pages/Loto"));
+const HorseRacing = lazyPage(() => import("@/pages/HorseRacing"));
 const TienLen = lazyPage(() => import("@/pages/TienLen"));
 const Banca = lazyPage(() => import("@/pages/Banca"));
 const CardTables = lazyPage(() => import("@/pages/CardTables"));
@@ -117,6 +118,7 @@ function Router() {
         <Route path="/community" component={Community} />
         <Route path="/tournament" component={Tournament} />
         <Route path="/loto" component={Loto} />
+        <Route path="/dua-ngua" component={HorseRacing} />
         <Route path="/tien-len" component={TienLen} />
         <Route path="/ban-ca" component={Banca} />
         <Route path="/ban-bai" component={CardTables} />
