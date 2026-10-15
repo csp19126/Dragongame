@@ -15,6 +15,7 @@ import { registerTienLenRoutes } from "./tienlen";
 import { registerBancaRoutes } from "./banca";
 import { registerCardTableRoutes } from "./cardtables";
 import { registerSocialRoutes, markActive } from "./social";
+import { play777, spin777Schema } from "./slot777";
 import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
 import {
@@ -233,6 +234,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if ("error" in result) return res.status(400).json({ message: "Insufficient balance", code: result.error });
     recordBigWin(res.locals.user, result.winAmount, total);
     res.json(result);
+  });
+
+  // Slot 777 Cổ Điển: 3 reels, 1/3/5 lines; stake and win settled in one transaction
+  app.post("/api/slot777/spin", requireUser, async (req, res) => {
+    const parsed = spin777Schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid bet" });
+    const { lines, lineBet } = parsed.data;
+    const result = await storage.playTable(res.locals.user.id, "slot777", lines * lineBet, () => play777(lines, lineBet));
+    if ("error" in result) return res.status(400).json({ message: "Insufficient balance", code: result.error });
+    recordBigWin(res.locals.user, result.winAmount, result.totalBet);
+    res.json({ ...result, payout: result.winAmount, balance: result.newBalance });
   });
 
   app.post("/api/games/roulette", requireUser, async (req, res) => {

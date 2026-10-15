@@ -1581,6 +1581,70 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("Slot 777 Cổ Điển", () => {
+    it("validates the bet strictly", async () => {
+      const p = new Player();
+      await p.register();
+      for (const body of [
+        {}, { lines: 2, lineBet: 100 }, { lines: 5, lineBet: 150 }, { lines: 5, lineBet: -100 }, { lines: "5", lineBet: 100 },
+        { lines: 5, lineBet: 100.5 }, { lines: 1, lineBet: 100, extra: 1 }, { lines: 5, lineBet: 400_000 },
+      ]) {
+        const r = await p.req("POST", "/api/slot777/spin", body);
+        expect(r.status, JSON.stringify(body)).toBe(400);
+        expect(r.body.message).toBe("Invalid bet");
+      }
+      expect((await p.state()).balance).toBe(TEST_START);
+      expect((await new Player().req("POST", "/api/slot777/spin", { lines: 1, lineBet: 100 })).status).toBe(401);
+    });
+
+    it("takes lines × line bet, pays the line wins, and logs every spin", async () => {
+      const { evalLine777, PAYLINES_777 } = await import("../shared/slot777");
+      const p = new Player();
+      const pu = await p.register();
+      let expected = TEST_START, bet = 0, won = 0;
+      for (let i = 0; i < 30; i++) {
+        const lines = [1, 3, 5][i % 3];
+        const r = await p.req("POST", "/api/slot777/spin", { lines, lineBet: 200 });
+        expect(r.status).toBe(200);
+        expect(r.body.reels).toHaveLength(3);
+        for (const col of r.body.reels) expect(col).toHaveLength(3);
+        let sum = 0;
+        for (let l = 1; l <= lines; l++) {
+          const symbols = PAYLINES_777[l - 1].map((row, reel) => r.body.reels[reel][row]);
+          const mult = evalLine777(symbols).mult;
+          const w = r.body.lineWins.find((x: any) => x.line === l);
+          expect(w?.payout ?? 0).toBe(mult * 200);
+          sum += mult * 200;
+        }
+        expect(r.body.lineWins.every((w: any) => w.line <= lines)).toBe(true);
+        expect(r.body.payout).toBe(sum);
+        expected += r.body.payout - lines * 200;
+        bet += lines * 200; won += r.body.payout;
+        expect(r.body.balance).toBe(expected);
+      }
+      expect((await p.state()).balance).toBe(expected);
+      const [tot] = (await pool.query("select count(*)::int as n, sum(bet)::int as bet, sum(payout)::int as payout from game_plays where user_id = $1 and game = 'slot777'", [pu.id])).rows;
+      expect(tot).toEqual({ n: 30, bet, payout: won });
+    });
+
+    it("can't overdraw, even with many spins at once", async () => {
+      const p = new Player();
+      await p.register();
+      await setBalance(p.username, 5000);
+      const rs = await Promise.all(Array.from({ length: 12 }, () => p.req("POST", "/api/slot777/spin", { lines: 5, lineBet: 200 })));
+      const ok = rs.filter((r) => r.status === 200);
+      for (const r of rs) expect([200, 400]).toContain(r.status);
+      const final = (await p.state()).balance;
+      expect(final).toBeGreaterThanOrEqual(0);
+      expect(final).toBe(5000 - ok.length * 1000 + ok.reduce((a, r) => a + r.body.payout, 0));
+      await setBalance(p.username, 999);
+      const r = await p.req("POST", "/api/slot777/spin", { lines: 5, lineBet: 200 });
+      expect(r.status).toBe(400);
+      expect(r.body.message).toBe("Insufficient balance");
+      expect((await p.state()).balance).toBe(999);
+    });
+  });
+
   describe("live card tables", () => {
     async function seatWs(p: Player, code: string) {
       const { WebSocket } = await import("ws");
