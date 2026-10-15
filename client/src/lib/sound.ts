@@ -290,6 +290,55 @@ class SoundManager {
   countUp() {
     this.playTone(1200 + Math.random() * 400, 0.02, 'sine', 0.04);
   }
+
+  /** The starting bell: a quick ring of a brass bell */
+  raceBell() {
+    for (let i = 0; i < 6; i++) {
+      this.playTone(1320, 0.22, 'triangle', 0.09, i * 0.11);
+      this.playTone(1980, 0.16, 'sine', 0.04, i * 0.11);
+      this.playTone(2640, 0.1, 'sine', 0.02, i * 0.11);
+    }
+  }
+
+  /** One stride of galloping hooves (call it every ~400 ms while the race runs) */
+  hooves() {
+    const beats = [0, 0.07, 0.13, 0.24];
+    beats.forEach((d, i) => {
+      this.playTone(85 + Math.random() * 30, 0.06, 'triangle', i === 3 ? 0.09 : 0.06, d);
+      this.playTone(240 + Math.random() * 80, 0.025, 'square', 0.015, d);
+    });
+  }
+
+  /** The crowd roars as the winner crosses the line */
+  cheer() {
+    const ctx = this.audioContext;
+    if (!ctx || !this.masterGain) return;
+    this.ensureContext();
+    const duration = 2.2;
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * duration), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const source = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    filter.type = 'bandpass';
+    filter.frequency.value = 1100;
+    filter.Q.value = 0.7;
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    const t = ctx.currentTime;
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.exponentialRampToValueAtTime(0.22, t + 0.35);
+    gain.gain.setValueAtTime(0.22, t + 1.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    source.start(t);
+    source.stop(t + duration);
+    // A few whistles over the roar
+    this.playSweep(1800, 2600, 0.25, 'sine', 0.03, 0.3);
+    this.playSweep(2000, 1500, 0.3, 'sine', 0.025, 0.8);
+  }
 }
 
 export const soundManager = new SoundManager();

@@ -177,6 +177,34 @@ export const lotoTickets = pgTable("loto_tickets", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [index("loto_tickets_round").on(t.round, t.userId), index("loto_tickets_unsettled").on(t.settled, t.round)]);
 
+// Đua Ngựa: each race's prices and result, drawn when the race is first needed and kept secret
+// until the gates open; and the bets, each paid once when its race is over.
+export const horseRounds = pgTable("horse_rounds", {
+  round: integer("round").primaryKey(),
+  /** Win chance of each horse (basis points), by horse index */
+  chances: jsonb("chances").$type<number[]>().notNull(),
+  /** Price of each horse in tenths (35 = ×3.5), by horse index */
+  odds: jsonb("odds").$type<number[]>().notNull(),
+  winner: integer("winner").notNull(),
+  /** Horse indexes, first to last */
+  finishOrder: jsonb("finish_order").$type<number[]>().notNull(),
+  seed: integer("seed").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const horseBets = pgTable("horse_bets", {
+  id: serial("id").primaryKey(),
+  round: integer("round").notNull(),
+  userId: varchar("user_id").notNull(),
+  horse: integer("horse").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  /** The price when the bet was placed, in tenths */
+  odds: integer("odds").notNull(),
+  payout: bigint("payout", { mode: "number" }),
+  settled: boolean("settled").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("horse_bets_round").on(t.round, t.userId), index("horse_bets_unsettled").on(t.settled, t.round)]);
+
 // Tiến Lên against three computer players: one game in progress per player
 export const tienlenGames = pgTable("tienlen_games", {
   id: serial("id").primaryKey(),

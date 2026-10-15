@@ -11,6 +11,7 @@ import { registerTournamentRoutes } from "./tournament";
 import { registerLeagueRoutes } from "./league";
 import { registerAnalyticsRoutes } from "./analytics";
 import { registerLotoRoutes } from "./loto";
+import { registerHorseRoutes } from "./horse";
 import { registerTienLenRoutes } from "./tienlen";
 import { registerBancaRoutes } from "./banca";
 import { registerCardTableRoutes } from "./cardtables";
@@ -250,6 +251,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerLeagueRoutes(app, requireUser);
   registerAnalyticsRoutes(app, requireAdmin);
   registerLotoRoutes(app, requireUser);
+  registerHorseRoutes(app, requireUser);
   registerTienLenRoutes(app, requireUser);
   registerBancaRoutes(app, requireUser);
   registerCardTableRoutes(app, requireUser);

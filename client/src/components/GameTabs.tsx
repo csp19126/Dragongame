@@ -9,6 +9,7 @@ const GAMES = [
   { href: "/ban-bai", icon: "🀄", key: "gameCardTables" },
   { href: "/pool", icon: "🎱", key: "gamePool" },
   { href: "/loto", icon: "🎟️", key: "gameLoto" },
+  { href: "/dua-ngua", icon: "🏇", key: "gameHorse" },
   { href: "/tien-len", icon: "🂡", key: "gameTienLen" },
   { href: "/ban-ca", icon: "🐟", key: "gameBanca" },
 ] as const;

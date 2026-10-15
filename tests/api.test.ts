@@ -1273,6 +1273,97 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("Đua Ngựa", () => {
+    it("takes bets only while betting is open, hides the result until the off, and pays each bet once", async () => {
+      const { placeHorseBets, settleHorse, horseView, horseRound } = await import("../server/horse");
+      const H = await import("../shared/horse");
+      const p = new Player();
+      const pu = await p.register();
+      await setBalance(p.username, 10_000_000);
+      const user = (await pool.query("select * from users where id = $1", [pu.id])).rows[0];
+      // A race far in the future, so the live timer leaves it alone until we say
+      const t = H.horseRoundTimes(H.horseRoundAt(Date.now()).round + 2000);
+      const betting = t.start + 5000;
+
+      // Bad bets
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 8, amount: 1000 }] }, betting)).toHaveProperty("error");
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 0, amount: 1500 }] }, betting)).toHaveProperty("error");
+      expect(await placeHorseBets(pu.id, { bets: [] }, betting)).toHaveProperty("error");
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 0, amount: 6_000_000 }] }, betting)).toHaveProperty("error");
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 0, amount: 1000 }] }, t.raceStart - 500)).toMatchObject({ code: "closed" });
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: 0, amount: 1000 }] }, t.raceStart + 100)).toMatchObject({ code: "closed" });
+
+      // Before the off nothing about the result leaves the server
+      const before = await horseView(user, betting);
+      expect(before.race).toBeNull();
+      const json = JSON.stringify(before);
+      expect(json).not.toMatch(/seed|order|chances/i);
+      expect(before.winners.every((x) => x.round < t.round)).toBe(true);
+      const row = await horseRound(t.round);
+      expect(before.odds10).toEqual(row.odds);
+      expect([...row.chances].sort((a, b) => b - a)).toEqual(H.HORSE_CHANCES);
+      expect(row.odds).toEqual(row.chances.map(H.horseOdds10));
+      expect(row.finishOrder[0]).toBe(row.winner);
+      expect(await horseRound(t.round)).toEqual(row); // made once
+
+      // Bet on the winner and on two losers; one horse twice in one slip is one bet
+      const w = row.winner, l1 = row.finishOrder[1], l2 = row.finishOrder[7];
+      const r1 = await placeHorseBets(pu.id, { bets: [{ horse: w, amount: 150_000 }, { horse: w, amount: 150_000 }, { horse: l1, amount: 20_000 }] }, betting);
+      expect(r1).not.toHaveProperty("error");
+      expect((r1 as any).balance).toBe(10_000_000 - 320_000);
+      expect((r1 as any).bets).toHaveLength(2);
+      await placeHorseBets(pu.id, { bets: [{ horse: l2, amount: 30_000 }] }, betting);
+      // 5M a race at most, counting what's already on
+      expect(await placeHorseBets(pu.id, { bets: [{ horse: l2, amount: 4_651_000 }] }, betting)).toMatchObject({ error: "At most 5,000,000 coins on one race" });
+      // Not enough coins
+      const poor = new Player();
+      const poorU = await poor.register();
+      expect(await placeHorseBets(poorU.id, { bets: [{ horse: 0, amount: 100_000 }] }, betting)).toMatchObject({ error: "Not enough coins" });
+
+      // The room sees what's been bet; the bets are pending
+      const mid = await horseView(user, betting + 1000);
+      expect(mid.pool[w]).toEqual({ amount: 300_000, players: 1 });
+      expect(mid.players).toBe(1);
+      expect(mid.mine.every((b) => b.status === "pending" && b.payout === null)).toBe(true);
+
+      // The off: seed and order are revealed
+      const racing = await horseView(user, t.raceStart + 10);
+      expect(racing.race).toEqual({ seed: row.seed, order: row.finishOrder });
+
+      // Nothing is paid during the race; everything after it, once
+      await settleHorse(t.raceEnd - 100);
+      expect((await pool.query("select count(*)::int as n from horse_bets where round = $1 and settled", [t.round])).rows[0].n).toBe(0);
+      const bal = (await p.state()).balance;
+      await Promise.all([settleHorse(t.raceEnd + 10), settleHorse(t.raceEnd + 20)]);
+      await settleHorse(t.raceEnd + 1000);
+      const win = H.horsePayout(300_000, row.odds[w]);
+      expect((await p.state()).balance).toBe(bal + win);
+      const plays = (await pool.query("select bet, payout from game_plays where user_id = $1 and game = 'horse' order by id", [pu.id])).rows;
+      expect(plays).toHaveLength(3);
+      expect(plays.reduce((a: number, x: any) => a + Number(x.bet), 0)).toBe(350_000);
+      expect(plays.reduce((a: number, x: any) => a + Number(x.payout), 0)).toBe(win);
+      const after = await horseView(user, t.raceEnd + 2000);
+      expect(after.mine.find((b) => b.horse === w)).toMatchObject({ status: "won", payout: win });
+      expect(after.mine.filter((b) => b.status === "lost")).toHaveLength(2);
+      expect(after.winners[0]).toEqual({ round: t.round, horse: w, odds10: row.odds[w] });
+      // A big win is announced in the chat
+      expect(win).toBeGreaterThanOrEqual(H.HORSE_BIG_WIN);
+      const chat = (await pool.query("select text from chat_messages where username = '🏇 Đua Ngựa' and text like $1", [`%${p.username}%`])).rows;
+      expect(chat).toHaveLength(1);
+    });
+
+    it("serves the race over HTTP", async () => {
+      const p = new Player();
+      await p.register();
+      const r = await p.req("GET", "/api/horse");
+      expect(r.status).toBe(200);
+      expect(r.body.odds10).toHaveLength(8);
+      if (Date.now() < r.body.raceStart) expect(r.body.race).toBeNull();
+      expect((await p.req("POST", "/api/horse/bet", { bets: [{ horse: 0, amount: 999 }] })).status).toBe(400);
+      expect((await new Player().req("GET", "/api/horse")).status).toBe(401);
+    });
+  });
+
   describe("Tiến Lên", () => {
     it("deals, checks every move, plays the computer players and pays by finishing place", async () => {
       const T = await import("../shared/tienlen");

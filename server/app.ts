@@ -9,6 +9,7 @@ import { attachPoolSockets, recoverPoolMatches } from "./pool";
 import { startTournamentScheduler } from "./tournament";
 import { startLeagueScheduler } from "./league";
 import { startLotoScheduler } from "./loto";
+import { startHorseScheduler } from "./horse";
 import { startBancaLogger } from "./banca";
 import { attachCardTableSockets, recoverTableEscrows } from "./cardtables";
 
@@ -75,6 +76,7 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   startTournamentScheduler(httpServer);
   startLeagueScheduler(httpServer);
   startLotoScheduler(httpServer);
+  startHorseScheduler(httpServer);
   startBancaLogger(httpServer);
 
   // Errors always come back as JSON, never an HTML stack trace

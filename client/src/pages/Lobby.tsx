@@ -21,6 +21,7 @@ const short = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M`
 const GAMES = [
   { href: "/pool", icon: "🎱", vi: "Bi-a 8 bóng", en: "8-Ball Pool", tagVi: "Trực tuyến · League", tagEn: "Online · League", zh: "8號球撞球", tagZh: "線上對戰 · 聯賽", from: "from-emerald-500", to: "to-teal-900", live: true },
   { href: "/loto", icon: "🎟️", vi: "Lô Tô", en: "Lô Tô bingo", tagVi: "Gọi số trực tiếp · ×50", tagEn: "Live calls · up to ×50", zh: "賓果 (Lô Tô)", tagZh: "即時開號 · 最高 ×50", from: "from-red-500", to: "to-rose-950", live: true },
+  { href: "/dua-ngua", icon: "🏇", vi: "Đua Ngựa", en: "Horse Racing", tagVi: "8 chiến mã · mỗi phút một cuộc đua", tagEn: "8 horses · a race every minute", zh: "賽馬", tagZh: "8 匹駿馬 · 每分鐘一場", from: "from-lime-500", to: "to-green-950", live: true },
   { href: "/ban-ca", icon: "🐟", vi: "Bắn Cá", en: "Fish hunter", tagVi: "Rồng vàng ×300", tagEn: "Golden dragon ×300", zh: "捕魚", tagZh: "黃金龍 ×300", from: "from-sky-500", to: "to-blue-950" },
   { href: "/tien-len", icon: "🂡", vi: "Tiến Lên", en: "Tiến Lên", tagVi: "Miền Nam · chặt heo", tagEn: "Southern rules · vs 3", zh: "大老二 (Tiến Lên)", tagZh: "南方規則 · 對戰 3 人", from: "from-emerald-500", to: "to-green-950" },
   { href: "/ban-bai", icon: "🀄", vi: "Xì Dách Online", en: "Live Xì Dách", tagVi: "Đấu với người thật · làm cái", tagEn: "Play real people · be the banker", zh: "線上 21點", tagZh: "真人對戰 · 當莊家", from: "from-indigo-500", to: "to-indigo-950", live: true },
