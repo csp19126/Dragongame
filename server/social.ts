@@ -5,6 +5,7 @@
  */
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
+import { randomBytes } from "crypto";
 import { and, desc, eq, gt, inArray, isNull, lt, or, sql, count } from "drizzle-orm";
 import { db } from "./db";
 import {
@@ -41,7 +42,6 @@ export function isOnline(userId: string, lastSeenAt: Date | string | null | unde
 // ---------------- Profile photos ----------------
 
 export const AVATAR_ROUTE = "/api/profile/photo";
-const avatarUrl = (userId: string, at: Date) => `/api/avatar/${userId}?v=${at.getTime()}`;
 const photoChanges = new Map<string, { day: string; n: number }>();
 const today = () => new Date().toISOString().slice(0, 10);
 function photoChangesLeft(userId: string) {
@@ -127,9 +127,11 @@ function toDm(m: typeof directMessages.$inferSelect, me: string): DmMessage {
 const between = (a: string, b: string) =>
   or(and(eq(directMessages.fromId, a), eq(directMessages.toId, b)), and(eq(directMessages.fromId, b), eq(directMessages.toId, a)));
 
+/** Unread private messages (not counting senders who have since been banned: their conversations are hidden) */
 export async function unreadTotal(userId: string) {
   const [{ n }] = await db.select({ n: count() }).from(directMessages)
-    .where(and(eq(directMessages.toId, userId), isNull(directMessages.readAt), eq(directMessages.deleted, false)));
+    .where(and(eq(directMessages.toId, userId), isNull(directMessages.readAt), eq(directMessages.deleted, false),
+      sql`${directMessages.fromId} not in (select id from ${users} where banned)`));
   return n;
 }
 
@@ -214,9 +216,10 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     const photo = decodePhoto(req.body?.photo);
     if ("error" in photo) return res.status(400).json({ message: photo.error });
     const at = new Date();
-    await db.insert(userAvatars).values({ userId: u.id, data: photo.data, mime: photo.mime, updatedAt: at })
-      .onConflictDoUpdate({ target: userAvatars.userId, set: { data: photo.data, mime: photo.mime, updatedAt: at } });
-    const url = avatarUrl(u.id, at);
+    const key = randomBytes(16).toString("hex");
+    await db.insert(userAvatars).values({ userId: u.id, key, data: photo.data, mime: photo.mime, updatedAt: at })
+      .onConflictDoUpdate({ target: userAvatars.userId, set: { key, data: photo.data, mime: photo.mime, updatedAt: at } });
+    const url = `/api/avatar/${key}`;
     await db.update(users).set({ profileImageUrl: url }).where(eq(users.id, u.id));
     countPhotoChange(u.id);
     res.json({ profileImageUrl: url });
@@ -230,14 +233,14 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     res.json({ profileImageUrl: null });
   });
 
-  // Public: the URL carries the version, so it can be cached for a long time
-  app.get("/api/avatar/:userId", async (req, res) => {
-    const id = String(req.params.userId);
-    if (!/^[\w-]{1,64}$/.test(id)) return res.status(404).json({ message: "Not found" });
-    const [a] = await db.select().from(userAvatars).where(eq(userAvatars.userId, id));
+  // Public: every upload gets a new random key, so a photo's URL never changes and can be cached for a year
+  app.get("/api/avatar/:key", async (req, res) => {
+    const key = String(req.params.key);
+    if (!/^[0-9a-f]{32}$/.test(key)) return res.status(404).json({ message: "Not found" });
+    const [a] = await db.select().from(userAvatars).where(eq(userAvatars.key, key));
     if (!a) return res.status(404).json({ message: "Not found" });
-    const etag = `"${a.updatedAt.getTime()}"`;
-    res.setHeader("Cache-Control", req.query.v ? "public, max-age=31536000, immutable" : "public, max-age=300");
+    const etag = `"${key}"`;
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.setHeader("ETag", etag);
     res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'");
     if (req.headers["if-none-match"] === etag) return res.status(304).end();

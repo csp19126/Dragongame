@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS "profile_reports" (
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "user_avatars" (
 	"user_id" varchar PRIMARY KEY NOT NULL,
+	"key" text NOT NULL,
 	"data" bytea NOT NULL,
 	"mime" text NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -45,4 +46,5 @@ CREATE INDEX IF NOT EXISTS "direct_messages_to" ON "direct_messages" USING btree
 CREATE INDEX IF NOT EXISTS "direct_messages_created" ON "direct_messages" USING btree ("created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "dm_reports_once" ON "dm_reports" USING btree ("message_id","reporter_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "profile_reports_once" ON "profile_reports" USING btree ("user_id","reporter_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "user_avatars_key" ON "user_avatars" USING btree ("key");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "user_blocks_blocked" ON "user_blocks" USING btree ("blocked_id");

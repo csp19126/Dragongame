@@ -89,6 +89,7 @@ export interface LeaderboardEntry {
   totalWins: number;
   maxWin: number;
   maxStreak: number;
+  avatarUrl: string | null;
 }
 
 export function useGameState(enabled = true) {

@@ -230,13 +230,15 @@ export const chatReports = pgTable("chat_reports", {
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 
 // One profile photo per player (a small square JPEG/PNG/WebP, checked by its bytes).
-// users.profile_image_url points at /api/avatar/<id>?v=<updated ms> while a photo is set.
+// users.profile_image_url points at /api/avatar/<key> while a photo is set: the key is random
+// and new for every upload, so the URL can be cached forever and never reveals the player's id.
 export const userAvatars = pgTable("user_avatars", {
   userId: varchar("user_id").primaryKey(),
+  key: text("key").notNull(),
   data: bytea("data").notNull(),
   mime: text("mime").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => [uniqueIndex("user_avatars_key").on(t.key)]);
 
 // Private messages between two players: text or a sticker the sender owns
 export const directMessages = pgTable("direct_messages", {

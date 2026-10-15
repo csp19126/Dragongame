@@ -4,6 +4,8 @@ import { InstallDialog } from "@/components/InstallApp";
 import { AnnouncementBar, CommunityStrip } from "@/components/CommunityStrip";
 import { TournamentPromo } from "@/components/TournamentBits";
 import { useGameState, useAchievements, useLeaderboard, useRecentWins, useJackpot } from "@/hooks/use-game";
+import { Avatar } from "@/components/Avatar";
+import { usePlayerSheet } from "@/components/PlayerSheet";
 import { SlotMachine } from "@/components/SlotMachine";
 import { Header } from "@/components/Header";
 import { StreakDisplay } from "@/components/StreakDisplay";
@@ -298,6 +300,7 @@ export function SlotPage() {
 
 function MiniLeaderboard() {
   const { t } = useLang();
+  const showPlayer = usePlayerSheet();
   const { data: entries = [], isLoading } = useLeaderboard();
   const top5 = entries.slice(0, 5);
 
@@ -316,7 +319,10 @@ function MiniLeaderboard() {
       {top5.map((e) => (
         <div key={e.rank} className="flex items-center gap-2 p-2 rounded-md bg-purple-800/20 border border-yellow-500/10">
           <div className="w-6 flex justify-center">{rankIcon(e.rank)}</div>
-          <div className="flex-1 min-w-0 text-sm font-bold text-yellow-100 truncate">{e.username}</div>
+          <button type="button" onClick={() => showPlayer(e.username)} className="flex-1 min-w-0 flex items-center gap-2 text-left">
+            <Avatar user={e} size={26} />
+            <span className="min-w-0 text-sm font-bold text-yellow-100 truncate">{e.username}</span>
+          </button>
           <div className="text-sm font-black text-yellow-400 shrink-0">{e.balance.toLocaleString()}</div>
         </div>
       ))}

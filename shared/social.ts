@@ -36,7 +36,7 @@ export function sniffImage(b: Uint8Array): ImageMime | null {
 
 /** Only our own avatar URLs are ever put in an <img> */
 export function safeAvatarUrl(url: string | null | undefined): string | null {
-  return typeof url === "string" && /^\/api\/avatar\/[\w-]+(\?v=\d+)?$/.test(url) ? url : null;
+  return typeof url === "string" && /^\/api\/avatar\/[0-9a-f]{32}$/.test(url) ? url : null;
 }
 
 /** A stable colour for a player without a photo, from their name */

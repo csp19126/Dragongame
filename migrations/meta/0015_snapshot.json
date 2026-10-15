@@ -1,5 +1,5 @@
 {
-  "id": "9ec4a68f-14bc-4962-a8c9-032c6a7e7650",
+  "id": "02312313-8250-4cd3-8ea9-a6395b611fea",
   "prevId": "de97809e-a875-4eaf-9cde-fd7653b9f29b",
   "version": "7",
   "dialect": "postgresql",
@@ -1801,6 +1801,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "data": {
           "name": "data",
           "type": "bytea",
@@ -1821,7 +1827,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "user_avatars_key": {
+          "name": "user_avatars_key",
+          "columns": [
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

@@ -813,7 +813,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(sniffImage(webp())).toBe("image/webp");
       expect(sniffImage(Buffer.from("<svg onload=alert(1)>"))).toBeNull();
       expect(sniffImage(Buffer.from("GIF89a......"))).toBeNull();
-      expect(safeAvatarUrl("/api/avatar/abc-1?v=123")).toBe("/api/avatar/abc-1?v=123");
+      expect(safeAvatarUrl("/api/avatar/0123456789abcdef0123456789abcdef")).toBe("/api/avatar/0123456789abcdef0123456789abcdef");
       expect(safeAvatarUrl("javascript:alert(1)")).toBeNull();
       expect(safeAvatarUrl("https://evil.example/x.png")).toBeNull();
       expect(initialOf("đức")).toBe("Đ");
@@ -840,7 +840,8 @@ describe.skipIf(!TEST_DB)("API", () => {
 
       const ok = await newbie.req("POST", "/api/profile/photo", { photo: png().toString("base64") });
       expect(ok.status).toBe(200);
-      expect(ok.body.profileImageUrl).toBe(`/api/avatar/${me.id}?v=${ok.body.profileImageUrl.split("v=")[1]}`);
+      expect(ok.body.profileImageUrl).toMatch(/^\/api\/avatar\/[0-9a-f]{32}$/);
+      expect(ok.body.profileImageUrl).not.toContain(me.id); // never reveals the player's id
       expect((await newbie.req("GET", "/api/me")).body.profileImageUrl).toBe(ok.body.profileImageUrl);
 
       const res = await fetch(base + ok.body.profileImageUrl);
@@ -849,10 +850,15 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(res.headers.get("cache-control")).toContain("max-age=31536000");
       expect(Buffer.from(await res.arrayBuffer()).equals(png())).toBe(true);
       expect((await fetch(`${base}/api/avatar/nobody-here`)).status).toBe(404);
+      // A new upload gets a new URL; the old one stops working
+      const again = await newbie.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
+      expect(again.body.profileImageUrl).not.toBe(ok.body.profileImageUrl);
+      expect((await fetch(base + ok.body.profileImageUrl)).status).toBe(404);
+      expect((await fetch(base + again.body.profileImageUrl)).headers.get("content-type")).toBe("image/jpeg");
 
       expect((await newbie.req("DELETE", "/api/profile/photo")).status).toBe(200);
       expect((await newbie.req("GET", "/api/me")).body.profileImageUrl).toBeNull();
-      expect((await fetch(base + ok.body.profileImageUrl)).status).toBe(404);
+      expect((await fetch(base + again.body.profileImageUrl)).status).toBe(404);
       const left = await pool.query("select count(*) from user_avatars where user_id = $1", [me.id]);
       expect(Number(left.rows[0].count)).toBe(0);
 
@@ -926,6 +932,10 @@ describe.skipIf(!TEST_DB)("API", () => {
       // Nobody else can read the conversation or report into it
       expect((await c.req("GET", `/api/dm/thread/${a.username}`)).body.messages).toEqual([]);
       expect((await c.req("POST", `/api/dm/${m1.body.id}/report`)).status).toBe(404);
+      // A banned sender's conversation is hidden, so it no longer counts as unread
+      await pool.query("update users set banned = true where username = $1", [c.username]);
+      expect((await b.req("GET", "/api/dm/unread")).body.total).toBe(0);
+      expect((await b.req("GET", "/api/dm/conversations")).body.conversations.map((x: any) => x.username)).toEqual([a.username]);
     });
 
     it("blocking stops messages both ways without saying who blocked", async () => {
