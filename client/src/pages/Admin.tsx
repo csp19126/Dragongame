@@ -16,6 +16,7 @@ import { CommunityTab } from "@/components/admin/CommunityTab";
 import { TournamentsTab } from "@/components/admin/TournamentsTab";
 import { OverviewTab } from "@/components/admin/OverviewTab";
 import { PlayerDrawer } from "@/components/admin/PlayerDrawer";
+import { Avatar } from "@/components/Avatar";
 
 function fmt(n: number) { return n?.toLocaleString() ?? "0"; }
 function fmtDate(d: string | null) {
@@ -208,9 +209,9 @@ function UsersTab() {
                 className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/5 transition-colors"
                 onClick={() => setExpandedId(expandedId === user.id ? null : user.id)}
               >
-                <div className="w-10 h-10 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0"
-                  style={{ background: user.isAdmin ? "linear-gradient(135deg,#fbbf24,#f59e0b)" : "rgba(139,92,246,0.3)", color: user.isAdmin ? "#3b0764" : "#c4b5fd" }}>
-                  {user.isAdmin ? <Crown className="w-5 h-5" /> : (user.username || user.firstName || "?")[0]?.toUpperCase()}
+                <div className="relative flex-shrink-0">
+                  <Avatar user={{ username: user.username || "?", avatarUrl: user.profileImageUrl }} size={40} ring={user.isAdmin} />
+                  {user.isAdmin && <Crown className="absolute -top-2 -right-1 w-4 h-4 text-yellow-300 drop-shadow" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

@@ -293,7 +293,7 @@ export function OverviewTab() {
         </Card>
       </div>
 
-      <p className="text-[11px] text-white/40">Chat messages today: {fmt(k.chatToday)}. "Paid back" is the share of staked coins returned as winnings (stake included). Coins are play money only.</p>
+      <p className="text-[11px] text-white/40">Chat messages today: {fmt(k.chatToday)} · private messages today: {fmt(k.dmToday)}. "Paid back" is the share of staked coins returned as winnings (stake included). Coins are play money only.</p>
 
       {player && <PlayerDrawer id={player} onClose={() => setPlayer(null)} />}
     </div>

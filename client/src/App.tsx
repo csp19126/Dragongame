@@ -10,6 +10,7 @@ import { LanguageProvider } from "@/lib/lang-context";
 import { AuthProvider } from "@/hooks/use-auth";
 import Home, { SlotPage } from "@/pages/Home";
 import { BottomNav } from "@/components/BottomNav";
+import { PlayerSheetProvider } from "@/components/PlayerSheet";
 
 const RELOAD_FLAG = "chunk-reload-at";
 
@@ -134,8 +135,10 @@ export default function App() {
           <TooltipProvider>
             <Toaster />
             <ErrorBoundary>
-              <Router />
-              <BottomNav />
+              <PlayerSheetProvider>
+                <Router />
+                <BottomNav />
+              </PlayerSheetProvider>
             </ErrorBoundary>
             <InstallBanner />
           </TooltipProvider>

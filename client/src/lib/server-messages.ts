@@ -122,4 +122,12 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "Who and which sticker?": { vi: "Tặng ai và nhãn dán nào?", zh: "要送給誰、哪張貼圖？" },
   "That's your own message": { vi: "Đó là tin nhắn của chính bạn", zh: "這是你自己的訊息" },
   "Not on yourself": { vi: "Không thể áp dụng cho chính bạn", zh: "不能對自己使用" },
+
+  // Profile photos & private messages
+  "Photo must be a JPEG, PNG or WebP image": { vi: "Ảnh phải là JPEG, PNG hoặc WebP", zh: "照片必須是 JPEG、PNG 或 WebP 格式" },
+  "Photo is too big (150 KB max)": { vi: "Ảnh quá lớn (tối đa 150 KB)", zh: "照片太大（最多 150 KB）" },
+  "Too many photo changes today": { vi: "Hôm nay bạn đổi ảnh quá nhiều lần rồi", zh: "今天更換照片的次數太多了" },
+  "request entity too large": { vi: "Dữ liệu gửi lên quá lớn", zh: "上傳的資料太大" },
+  "Can't message this player": { vi: "Không thể nhắn tin cho người chơi này", zh: "無法傳訊息給這位玩家" },
+  "You can't message yourself": { vi: "Bạn không thể tự nhắn cho mình", zh: "不能傳訊息給自己" },
 };

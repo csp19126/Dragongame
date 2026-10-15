@@ -14,6 +14,7 @@ import { registerLotoRoutes } from "./loto";
 import { registerTienLenRoutes } from "./tienlen";
 import { registerBancaRoutes } from "./banca";
 import { registerCardTableRoutes } from "./cardtables";
+import { registerSocialRoutes, markActive } from "./social";
 import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
 import {
@@ -74,6 +75,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     // "Last seen" for the admin's active-player counts, written at most every 5 minutes
     if (!user.lastSeenAt || Date.now() - user.lastSeenAt.getTime() > 5 * 60_000) void storage.touch(user.id).catch(() => {});
+    markActive(user.id);
     res.locals.user = user;
     next();
   }
@@ -253,6 +255,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerTienLenRoutes(app, requireUser);
   registerBancaRoutes(app, requireUser);
   registerCardTableRoutes(app, requireUser);
+  registerSocialRoutes(app, requireUser, requireAdmin);
 
   // Blackjack: the hand lives on the server; the browser only ever sees publicView()
   const BJ_MAX_BET = 1_000_000;
@@ -323,6 +326,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       totalWins: u.totalWins,
       maxWin: u.maxWin,
       maxStreak: u.maxStreak,
+      avatarUrl: u.profileImageUrl,
     })));
   });
 

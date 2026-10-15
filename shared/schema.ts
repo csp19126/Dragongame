@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, bigint, boolean, timestamp, varchar, json, index, jsonb, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, bigint, boolean, timestamp, varchar, json, index, jsonb, primaryKey, uniqueIndex, customType } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -224,6 +224,61 @@ export const chatReports = pgTable("chat_reports", {
   reporterId: varchar("reporter_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [uniqueIndex("chat_reports_once").on(t.messageId, t.reporterId)]);
+
+// ---- Social: profile photos, private messages, blocks and reports ----
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+// One profile photo per player (a small square JPEG/PNG/WebP, checked by its bytes).
+// users.profile_image_url points at /api/avatar/<key> while a photo is set: the key is random
+// and new for every upload, so the URL can be cached forever and never reveals the player's id.
+export const userAvatars = pgTable("user_avatars", {
+  userId: varchar("user_id").primaryKey(),
+  key: text("key").notNull(),
+  data: bytea("data").notNull(),
+  mime: text("mime").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("user_avatars_key").on(t.key)]);
+
+// Private messages between two players: text or a sticker the sender owns
+export const directMessages = pgTable("direct_messages", {
+  id: serial("id").primaryKey(),
+  fromId: varchar("from_id").notNull(),
+  toId: varchar("to_id").notNull(),
+  text: text("text"),
+  sticker: text("sticker"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  readAt: timestamp("read_at"),
+  deleted: boolean("deleted").default(false).notNull(),
+}, (t) => [
+  index("direct_messages_pair").on(t.fromId, t.toId, t.id),
+  index("direct_messages_to").on(t.toId, t.readAt),
+  index("direct_messages_created").on(t.createdAt),
+]);
+
+export const userBlocks = pgTable("user_blocks", {
+  blockerId: varchar("blocker_id").notNull(),
+  blockedId: varchar("blocked_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.blockerId, t.blockedId] }), index("user_blocks_blocked").on(t.blockedId)]);
+
+// A private message reported by the player who received it (admins can read only these)
+export const dmReports = pgTable("dm_reports", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull(),
+  reporterId: varchar("reporter_id").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("dm_reports_once").on(t.messageId, t.reporterId)]);
+
+// A profile (photo or name) reported by another player
+export const profileReports = pgTable("profile_reports", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  reporterId: varchar("reporter_id").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("profile_reports_once").on(t.userId, t.reporterId)]);
 
 // The sticker album: how many of each sticker a player holds
 export const userStickers = pgTable("user_stickers", {

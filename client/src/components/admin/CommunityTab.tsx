@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Ban, Eye, EyeOff, Flag, Megaphone, MessageCircle, RefreshCw, Search, ShieldCheck, VolumeX } from "lucide-react";
+import { Ban, Check, Eye, EyeOff, Flag, Mail, Megaphone, MessageCircle, RefreshCw, Search, ShieldCheck, Trash2, UserX, VolumeX } from "lucide-react";
+import { Avatar } from "@/components/Avatar";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { STICKER_BY_ID } from "@shared/stickers";
@@ -12,7 +13,16 @@ interface AdminMsg {
 interface Restricted { id: string; username: string; mutedUntil: string | null; banned: boolean }
 interface View { messages: AdminMsg[]; restricted: Restricted[]; announcement: string | null }
 
+interface ReportedProfile { userId: string; username: string; avatarUrl: string | null; reporters: number; reasons: string[]; lastAt: string; mutedUntil: string | null; banned: boolean }
+interface ContextMsg { id: number; from: string; text: string | null; sticker: string | null; createdAt: string; deleted: boolean }
+interface ReportedDm {
+  id: number; fromId: string; fromName: string; fromAvatar: string | null; toName: string; text: string | null; sticker: string | null;
+  createdAt: string; deleted: boolean; reports: number; reasons: string[]; lastAt: string; mutedUntil: string | null; banned: boolean; context: ContextMsg[];
+}
+interface SocialReports { profiles: ReportedProfile[]; messages: ReportedDm[] }
+
 const KEY = ["/api/admin/community/chat"];
+const REPORTS_KEY = ["/api/admin/social/reports"];
 const when = (d: string) => new Date(d).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 const muted = (u: { mutedUntil: string | null }) => !!u.mutedUntil && new Date(u.mutedUntil).getTime() > Date.now();
 
@@ -20,12 +30,13 @@ const muted = (u: { mutedUntil: string | null }) => !!u.mutedUntil && new Date(u
 export function CommunityTab() {
   const { toast } = useToast();
   const view = useQuery<View>({ queryKey: KEY, refetchInterval: 10_000 });
+  const reports = useQuery<SocialReports>({ queryKey: REPORTS_KEY, refetchInterval: 20_000 });
   const users = useQuery<any[]>({ queryKey: ["/api/admin/dashboard/users"] });
   const [filter, setFilter] = useState<"all" | "reported" | "hidden">("all");
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [find, setFind] = useState("");
 
-  const refresh = () => { queryClient.invalidateQueries({ queryKey: KEY }); queryClient.invalidateQueries({ queryKey: ["/api/admin/dashboard/users"] }); };
+  const refresh = () => { queryClient.invalidateQueries({ queryKey: KEY }); queryClient.invalidateQueries({ queryKey: REPORTS_KEY }); queryClient.invalidateQueries({ queryKey: ["/api/admin/dashboard/users"] }); };
   const fail = (e: unknown) => toast({ title: e instanceof ApiError ? e.message : String(e), variant: "destructive" });
 
   const hide = useMutation({
@@ -38,6 +49,11 @@ export function CommunityTab() {
       toast({ title: v.body.banned ? "Banned" : v.body.banned === false ? "Unbanned" : v.body.minutes ? `Muted for ${v.body.minutes >= 1440 ? `${v.body.minutes / 1440} day(s)` : `${v.body.minutes / 60} hour(s)`}` : "Unmuted" });
       refresh();
     },
+    onError: fail,
+  });
+  const social = useMutation({
+    mutationFn: ({ path, body, done }: { path: string; body?: unknown; done: string }) => apiRequest("POST", path, body).then(() => done),
+    onSuccess: (done) => { toast({ title: done }); refresh(); },
     onError: fail,
   });
   const announce = useMutation({
@@ -84,6 +100,57 @@ export function CommunityTab() {
           <button onClick={() => announce.mutate(text)} disabled={announce.isPending} className="px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-400 to-yellow-600 text-purple-950 font-black text-sm" data-testid="button-save-announcement">Save</button>
           {v.announcement && <button onClick={() => announce.mutate("")} className="px-4 py-2 rounded-xl bg-white/5 text-white/70 font-bold text-sm">Remove</button>}
         </div>
+      </section>
+
+      {/* Reported profiles */}
+      <section className="space-y-2" data-testid="admin-reported-profiles">
+        <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 flex items-center gap-2"><UserX className="w-4 h-4" />Reported profiles ({reports.data?.profiles.length ?? 0})</h3>
+        {reports.data?.profiles.length === 0 && <p className="text-sm text-white/40 py-2">No reported photos or profiles.</p>}
+        {reports.data?.profiles.map((r) => (
+          <div key={r.userId} className="rounded-xl px-3 py-2.5 border bg-orange-950/30 border-orange-400/40 flex gap-3" data-testid={`reported-profile-${r.username}`}>
+            <Avatar user={r} size={64} />
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-black text-yellow-200 truncate">{r.username}{r.banned && <span className="ml-1.5 text-red-300">BANNED</span>}{muted(r) && <span className="ml-1.5 text-orange-300">MUTED</span>}</span>
+                <span className="text-orange-300 flex items-center gap-1 shrink-0"><Flag className="w-3 h-3" />{r.reporters} player{r.reporters > 1 ? "s" : ""}</span>
+              </div>
+              {r.reasons.length > 0 && <div className="text-xs text-white/70 break-words">“{r.reasons.join("” · “")}”</div>}
+              <div className="text-[10px] text-white/40">last report {when(r.lastAt)}{r.avatarUrl ? "" : " · no photo now"}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {r.avatarUrl && <button onClick={() => social.mutate({ path: `/api/admin/social/photo/${r.userId}/remove`, done: "Photo removed" })} className="px-2 py-1 rounded-lg bg-red-600/40 text-red-100 text-xs font-bold flex items-center gap-1" data-testid={`button-remove-photo-${r.username}`}><Trash2 className="w-3 h-3" />Remove photo</button>}
+                <button onClick={() => social.mutate({ path: `/api/admin/social/profile/${r.userId}/dismiss`, done: "Dismissed" })} className="px-2 py-1 rounded-lg bg-white/10 text-white/80 text-xs font-bold flex items-center gap-1"><Check className="w-3 h-3" />Dismiss</button>
+                {actions({ id: r.userId, username: r.username, mutedUntil: r.mutedUntil, banned: r.banned })}
+              </div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Reported private messages */}
+      <section className="space-y-2" data-testid="admin-reported-dms">
+        <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 flex items-center gap-2"><Mail className="w-4 h-4" />Reported private messages ({reports.data?.messages.length ?? 0})</h3>
+        <p className="text-[11px] text-white/45">Private messages are only shown here once the player who received one reports it, with the five messages before it for context.</p>
+        {reports.data?.messages.length === 0 && <p className="text-sm text-white/40 py-2">No reported messages.</p>}
+        {reports.data?.messages.map((m) => (
+          <div key={m.id} className="rounded-xl px-3 py-2.5 border bg-orange-950/30 border-orange-400/40 space-y-2" data-testid={`reported-dm-${m.id}`}>
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="flex items-center gap-1.5 min-w-0"><Avatar user={{ username: m.fromName, avatarUrl: m.fromAvatar }} size={22} /><span className="font-black text-yellow-200 truncate">{m.fromName}</span><span className="text-white/40">→ {m.toName}</span></span>
+              <span className="text-orange-300 flex items-center gap-1 shrink-0"><Flag className="w-3 h-3" />{m.reports}</span>
+            </div>
+            <div className="rounded-lg bg-black/30 p-2 space-y-1 text-xs">
+              {m.context.map((c) => (
+                <div key={c.id} className={`text-white/55 break-words ${c.deleted ? "line-through opacity-60" : ""}`}><b className="text-white/70">{c.from}:</b> {c.sticker ? STICKER_BY_ID.get(c.sticker)?.emoji ?? c.sticker : c.text} <span className="text-white/30">{when(c.createdAt)}</span></div>
+              ))}
+              <div className={`text-white break-words rounded-md bg-orange-500/15 px-1.5 py-1 ${m.deleted ? "line-through opacity-60" : ""}`}><b className="text-yellow-200">{m.fromName}:</b> {m.sticker ? <span className="text-2xl">{STICKER_BY_ID.get(m.sticker)?.emoji ?? m.sticker}</span> : m.text} <span className="text-white/40">{when(m.createdAt)}</span></div>
+            </div>
+            {m.reasons.length > 0 && <div className="text-xs text-white/70">Reason: “{m.reasons.join("” · “")}”</div>}
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={() => social.mutate({ path: `/api/admin/social/dm/${m.id}`, body: { action: "delete" }, done: "Message deleted" })} className="px-2 py-1 rounded-lg bg-red-600/40 text-red-100 text-xs font-bold flex items-center gap-1" data-testid={`button-dm-delete-${m.id}`}><Trash2 className="w-3 h-3" />Delete message</button>
+              <button onClick={() => social.mutate({ path: `/api/admin/social/dm/${m.id}`, body: { action: "dismiss" }, done: "Dismissed" })} className="px-2 py-1 rounded-lg bg-white/10 text-white/80 text-xs font-bold flex items-center gap-1"><Check className="w-3 h-3" />Dismiss</button>
+              {actions({ id: m.fromId, username: m.fromName, mutedUntil: m.mutedUntil, banned: m.banned })}
+            </div>
+          </div>
+        ))}
       </section>
 
       {/* Find a player */}

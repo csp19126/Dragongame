@@ -13,6 +13,7 @@ import { eq, desc, sql, and, or, isNull, lt, count, sum } from "drizzle-orm";
 import { randomInt } from "crypto";
 import { spin as runSpin, type SpinOutcome } from "./game";
 import * as bj from "./blackjack";
+import { deleteSocialData } from "./social";
 
 /** Unambiguous characters (no 0/O, 1/I/L) so codes are easy to read out and type */
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -563,6 +564,8 @@ export class DatabaseStorage {
       await tx.delete(chatReports).where(eq(chatReports.reporterId, userId));
       await tx.delete(chatMessages).where(eq(chatMessages.userId, userId));
       await tx.delete(tournamentPlayers).where(eq(tournamentPlayers.userId, userId));
+      // Profile photo, private messages (both ways), blocks and reports
+      await deleteSocialData(tx, userId);
       await tx.update(users).set({ referredBy: null }).where(eq(users.referredBy, userId));
       await tx.delete(users).where(eq(users.id, userId));
     });

@@ -38,6 +38,8 @@ export interface AdminAnalytics {
     dau: number; wau: number; mau: number; onlineNow: number;
     playsToday: number; wageredToday: number; paidToday: number;
     coinsHeld: number; givenAway: number; chatToday: number;
+    /** Private messages sent today */
+    dmToday: number;
   };
   daily: { day: string; signups: number; active: number; plays: number; players: number; wagered: number; paid: number }[];
   games: { game: string; plays: number; players: number; wagered: number; paid: number; biggest: number }[];
@@ -61,6 +63,8 @@ export interface AdminPlayer {
   gamesPlayed: number; totalWins: number; maxWin: number;
   invitedBy: string | null; invited: number;
   daysActive: number; chatMessages: number;
+  /** Their profile photo, if they have one */
+  avatarUrl: string | null;
   pool: { won: number; lost: number };
   /** Days active in the last 30 (YYYY-MM-DD, Vietnam time) */
   activeDays: string[];
