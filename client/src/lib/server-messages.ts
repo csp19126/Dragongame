@@ -101,6 +101,10 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "Bets come in chips of 1,000 coins or more": { vi: "Mức cược tối thiểu là phỉnh 1.000 xu", zh: "押注以 1,000 金幣籌碼為單位" },
   "At most 5,000,000 coins on one race": { vi: "Tối đa 5.000.000 xu cho một cuộc đua", zh: "每場比賽最多押注 5,000,000 金幣" },
   "Betting has closed for this race. Wait for the next one!": { vi: "Đã hết giờ đặt cược cuộc đua này. Hãy chờ cuộc sau nhé!", zh: "本場已停止下注，請等下一場！" },
+  "Pick a bet type": { vi: "Hãy chọn kiểu cược", zh: "請選擇押注類型" },
+  "Pick the horses for 1st and 2nd": { vi: "Hãy chọn ngựa về nhất và về nhì", zh: "請選出第 1 名和第 2 名的馬" },
+  "Pick two different horses for 1st and 2nd": { vi: "Ngựa về nhất và về nhì phải khác nhau", zh: "第 1 名和第 2 名必須是不同的馬" },
+  "Cheer once the race is on!": { vi: "Hãy cổ vũ khi cuộc đua bắt đầu nhé!", zh: "比賽開始後再來加油吧！" },
 
   // Tiến Lên
   "Pick a stake": { vi: "Hãy chọn mức cược", zh: "請選擇底注" },

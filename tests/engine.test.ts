@@ -436,54 +436,119 @@ describe("Lô Tô", () => {
 });
 
 describe("Đua Ngựa", () => {
-  it("prices every horse to return between 94.5% and 95%", async () => {
+  it("prices every bet from its exact chance, so each returns between the published figures", async () => {
     const H = await import("../shared/horse");
     expect(H.HORSE_CHANCES.reduce((a, b) => a + b, 0)).toBe(10000);
     expect(H.HORSE_CHANCES.length).toBe(H.HORSES.length);
-    for (const bp of H.HORSE_CHANCES) {
-      const p = bp / 10000, m = H.horseOdds10(bp) / 10;
-      expect(m).toBe(Math.floor((0.95 / p) * 10 + 1e-9) / 10);
-      expect(p * m).toBeLessThanOrEqual(0.95 + 1e-12);
-      expect(p * m).toBeGreaterThanOrEqual(0.93);
-      expect(H.horseRtp(bp)).toBeCloseTo(p * m, 12);
+    // The exact formulas, by hand, against horseProbs (exact fractions turned into numbers)
+    const p = H.HORSE_CHANCES.map((c) => c / 10000);
+    const P = H.horseProbs(H.HORSE_CHANCES);
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      expect(P.win[i]).toBeCloseTo(p[i], 14);
+      let t2 = p[i];
+      for (let j = 0; j < n; j++) if (j !== i) t2 += (p[j] * p[i]) / (1 - p[j]);
+      expect(P.top2[i]).toBeCloseTo(t2, 12);
+      let t3 = t2;
+      for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) {
+        if (a !== b && a !== i && b !== i) t3 += p[a] * (p[b] / (1 - p[a])) * (p[i] / (1 - p[a] - p[b]));
+      }
+      expect(P.top3[i]).toBeCloseTo(t3, 12);
+      for (let j = 0; j < n; j++) expect(P.forecast[i][j]).toBeCloseTo(i === j ? 0 : (p[i] * p[j]) / (1 - p[i]), 14);
     }
-    // The figures in the rules
-    expect(H.HORSE_RTP_MIN).toBe(0.945);
-    expect(H.HORSE_RTP_MAX).toBe(0.95);
-    expect(H.horsePayout(10000, 35)).toBe(35000);
-    expect(H.horseOdds10(2700)).toBe(35);
-    expect(H.horseOdds10(400)).toBe(237);
-    // Rounds run back to back: 40s betting, 15s race, 5s results
+    // They add up: 1 winner, 2 in the top 2, 3 in the top 3, one forecast
+    const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+    expect(sum(P.win)).toBeCloseTo(1, 12);
+    expect(sum(P.top2)).toBeCloseTo(2, 12);
+    expect(sum(P.top3)).toBeCloseTo(3, 12);
+    expect(sum(P.forecast.flat())).toBeCloseTo(1, 12);
+
+    // Prices: floor(0.95 / chance, two decimals), at least x1.01, checked with exact fractions
+    const X = H.horseExact(H.HORSE_CHANCES);
+    const M = H.horseMarket(H.HORSE_CHANCES);
+    let min = Infinity, max = 0;
+    const check = (f: { n: bigint; d: bigint }, odds: number) => {
+      expect(odds).toBe(Math.max(101, Number((95n * f.d) / f.n)));
+      // Never more than 95%: chance * odds/100 <= 0.95  <=>  n * odds <= 95 * d
+      expect(f.n * BigInt(odds) <= 95n * f.d).toBe(true);
+      const r = (Number(f.n) / Number(f.d)) * odds / 100;
+      min = Math.min(min, r); max = Math.max(max, r);
+    };
+    for (let i = 0; i < n; i++) {
+      check(X.win[i], M.win[i]); check(X.top2[i], M.top2[i]); check(X.top3[i], M.top3[i]);
+      for (let j = 0; j < n; j++) if (i !== j) check(X.forecast[i][j], M.forecast[i][j]);
+      expect(M.forecast[i][i]).toBe(0);
+    }
+    // Every round hands out the same chances in some order, and a price depends only on the chances
+    // involved, so every possible round has exactly these prices (checked on a few hundred orders)
+    const rand = (k: number) => Math.floor(Math.random() * k);
+    for (let s = 0; s < 300; s++) {
+      const ch = H.shuffled(H.HORSE_CHANCES, rand);
+      const m = H.horseMarket(ch);
+      const r = H.horseRtpRange(ch);
+      expect(r.min).toBeCloseTo(min, 12);
+      expect(r.max).toBeCloseTo(max, 12);
+      for (let i = 0; i < n; i++) {
+        const k = H.HORSE_CHANCES.indexOf(ch[i]);
+        expect([m.win[i], m.top2[i], m.top3[i]]).toEqual([M.win[k], M.top2[k], M.top3[k]]);
+        for (let j = 0; j < n; j++) expect(m.forecast[i][j]).toBe(M.forecast[k][H.HORSE_CHANCES.indexOf(ch[j])]);
+      }
+    }
+    // The figures in the rules: 94.57% to 95%
+    expect(min).toBeGreaterThanOrEqual(0.93);
+    expect(H.HORSE_RTP_MIN).toBe(0.9457);
+    expect(min).toBeGreaterThanOrEqual(H.HORSE_RTP_MIN);
+    expect(min).toBeLessThan(H.HORSE_RTP_MIN + 0.0001);
+    expect(max).toBeLessThanOrEqual(H.HORSE_RTP_MAX);
+    expect(max).toBeGreaterThan(0.9499);
+    // A few prices by hand
+    expect(M.win[0]).toBe(351); // 0.95 / 0.27 = 3.5185…
+    expect(M.win[6]).toBe(1900); // 0.95 / 0.05 exactly
+    expect(M.forecast[0][1]).toBe(Math.floor(95 / (0.27 * 0.21 / 0.73))); // 12.23
+    expect(H.horsePayout(10000, 351)).toBe(35100);
+    expect(H.horseBetOdds(M, "forecast", 2, 2)).toBe(0);
+    expect(H.horseBetOdds(M, "top3", 4)).toBe(M.top3[4]);
+    // Which bets come in
+    const order = [3, 1, 6, 0, 2, 4, 5, 7];
+    expect(H.horseBetWins("win", 3, null, order)).toBe(true);
+    expect(H.horseBetWins("win", 1, null, order)).toBe(false);
+    expect(H.horseBetWins("top2", 1, null, order)).toBe(true);
+    expect(H.horseBetWins("top2", 6, null, order)).toBe(false);
+    expect(H.horseBetWins("top3", 6, null, order)).toBe(true);
+    expect(H.horseBetWins("top3", 0, null, order)).toBe(false);
+    expect(H.horseBetWins("forecast", 3, 1, order)).toBe(true);
+    expect(H.horseBetWins("forecast", 1, 3, order)).toBe(false);
+    // Rounds run back to back: 35s betting, 20s race, 5s results
     const r = H.horseRoundAt(Date.UTC(2026, 5, 1, 12, 0, 30));
-    expect(r.raceStart - r.start).toBe(40_000);
-    expect(r.raceEnd - r.raceStart).toBe(15_000);
+    expect(r.raceStart - r.start).toBe(35_000);
+    expect(r.raceEnd - r.raceStart).toBe(20_000);
     expect(r.end - r.start).toBe(60_000);
     expect(H.horseRoundAt(r.end).round).toBe(r.round + 1);
     expect(H.horseRoundTimes(r.round)).toEqual(r);
   });
 
-  it("draws the finishing order by the win chances", async () => {
+  it("draws the finishing order the Plackett–Luce way, matching the exact chances of every bet", async () => {
     const H = await import("../shared/horse");
     const rand = (n: number) => Math.floor(Math.random() * n);
     const chances = H.shuffled(H.HORSE_CHANCES, rand);
     expect([...chances].sort((a, b) => b - a)).toEqual(H.HORSE_CHANCES);
-    const N = 200_000;
-    const wins = Array(8).fill(0);
-    const seconds = Array(8).fill(0);
+    const P = H.horseProbs(chances);
+    const N = 400_000;
+    const win = Array(8).fill(0), top2 = Array(8).fill(0), top3 = Array(8).fill(0);
+    const fc = Array.from({ length: 8 }, () => Array(8).fill(0));
     for (let i = 0; i < N; i++) {
       const o = H.drawOrder(chances, rand);
-      wins[o[0]]++;
-      seconds[o[1]]++;
+      win[o[0]]++; top2[o[0]]++; top2[o[1]]++; top3[o[0]]++; top3[o[1]]++; top3[o[2]]++;
+      fc[o[0]][o[1]]++;
       if (i < 1000) expect([...o].sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
     }
-    // Within 5 standard errors of each horse's chance
-    chances.forEach((bp, h) => {
-      const p = bp / 10000;
-      expect(Math.abs(wins[h] / N - p)).toBeLessThan(5 * Math.sqrt((p * (1 - p)) / N));
-    });
-    // Second place is drawn from the rest by their chances, so the favourite is second more than the long shot
-    const fav = chances.indexOf(2700), long = chances.indexOf(400);
-    expect(seconds[fav]).toBeGreaterThan(seconds[long] * 3);
+    // Within 5 standard errors of the exact chance
+    const near = (count: number, q: number) => expect(Math.abs(count / N - q)).toBeLessThan(5 * Math.sqrt((q * (1 - q)) / N) + 1e-9);
+    for (let h = 0; h < 8; h++) {
+      expect(P.win[h]).toBeCloseTo(chances[h] / 10000, 12);
+      near(win[h], P.win[h]); near(top2[h], P.top2[h]); near(top3[h], P.top3[h]);
+      for (let j = 0; j < 8; j++) near(fc[h][j], P.forecast[h][j]);
+    }
     // Every value of rand is used: lowest picks the first horse, highest the last
     expect(H.drawOrder([5, 5], () => 0)).toEqual([0, 1]);
     expect(H.drawOrder([5, 5], (n) => n - 1)).toEqual([1, 0]);
@@ -491,15 +556,17 @@ describe("Đua Ngựa", () => {
 
   it("plays the same race from the same seed, and the horses cross the line in the drawn order", async () => {
     const H = await import("../shared/horse");
-    for (let s = 0; s < 100; s++) {
+    let necks = 0, photos = 0;
+    for (let s = 0; s < 120; s++) {
       const seed = (s * 2654435761) >>> 1;
       const order = H.shuffled([0, 1, 2, 3, 4, 5, 6, 7], (n) => (seed + s * 7) % n);
       const sim = H.simulateRace(seed, order);
       const again = H.simulateRace(seed, order);
-      // Finishing times follow the order, all inside the race window
+      // Finishing times follow the order, all inside the race window, before the replay
       for (let k = 1; k < 8; k++) expect(sim.finish[order[k]]).toBeGreaterThan(sim.finish[order[k - 1]]);
-      expect(sim.finish[order[0]]).toBeGreaterThanOrEqual(11_300);
-      expect(sim.finish[order[7]]).toBeLessThan(H.HORSE_RACE_MS - 500);
+      expect(sim.finish[order[0]]).toBeGreaterThanOrEqual(H.HORSE_WIN_FROM);
+      expect(sim.finish[order[0]]).toBeLessThanOrEqual(H.HORSE_WIN_TO);
+      expect(sim.finish[order[7]]).toBeLessThan(H.HORSE_REPLAY_AT - 500);
       for (let h = 0; h < 8; h++) {
         expect(sim.progress(h, 0)).toBe(0);
         expect(sim.progress(h, sim.finish[h] - 1)).toBeLessThan(1);
@@ -514,7 +581,57 @@ describe("Đua Ngựa", () => {
       }
       expect(sim.standings(H.HORSE_RACE_MS)).toEqual(order);
       expect(H.raceCall(sim, sim.finish[order[0]])).toMatchObject({ kind: "won", horse: order[0] });
+      // The race clock (slow motion and the photo freeze) never runs backwards, is the real clock
+      // outside the finish, has caught up before the replay, and the replay shows the line
+      const f = H.raceFinish(sim);
+      if (f.neck) necks++;
+      if (f.photo) photos++;
+      let prev = -1;
+      for (let t = 0; t <= H.HORSE_RACE_MS + H.HORSE_RESULT_MS; t += 25) {
+        const d = H.raceClock(sim, t);
+        expect(d).toBeGreaterThanOrEqual(prev - 1e-9);
+        expect(Math.abs(d - prev)).toBeLessThan(25 * 2.4 + 1); // continuous
+        prev = d;
+        if (t < f.at - 1200 || t >= H.raceClockEnd(sim)) expect(d).toBeCloseTo(t, 6);
+      }
+      expect(H.raceClockEnd(sim)).toBeLessThan(H.HORSE_REPLAY_AT);
+      if (f.photo) expect(H.raceClock(sim, f.at - 1200 + 2400 + 300)).toBe(f.at); // frozen on the line
+      if (!f.neck) expect(H.raceClock(sim, f.at)).toBe(f.at);
+      expect(H.replayClock(sim, H.HORSE_REPLAY_AT - 1)).toBeNull();
+      expect(H.replayClock(sim, H.HORSE_REPLAY_AT)).toBe(f.at - 1800);
+      expect(H.replayClock(sim, H.HORSE_REPLAY_AT + H.HORSE_REPLAY_MS)).toBeNull();
+      expect(H.HORSE_REPLAY_AT + H.HORSE_REPLAY_MS).toBeLessThan(H.HORSE_RACE_MS + H.HORSE_RESULT_MS - 1000);
+      // The commentator only names real horses and calls the right winner
+      for (let t = 0; t < f.at; t += 500) {
+        const c = H.raceCall(sim, t, order[7]);
+        if ("horse" in c) expect(c.horse).toBeGreaterThanOrEqual(0);
+        if (c.kind === "lead") expect(sim.standings(Math.floor(t / H.RACE_CALL_MS) * H.RACE_CALL_MS)[0]).toBe(c.horse);
+      }
     }
+    // Close finishes happen often enough to be exciting, not every race
+    expect(necks).toBeGreaterThan(30);
+    expect(necks).toBeLessThan(100);
+    expect(photos).toBeGreaterThan(15);
+  });
+
+  it("runs each horse to its style: front-runners lead early, closers come late", async () => {
+    const H = await import("../shared/horse");
+    let frontEarly = 0, closerEarly = 0, runs = 0;
+    for (let s = 0; s < 300; s++) {
+      const order = H.shuffled([0, 1, 2, 3, 4, 5, 6, 7], (n) => Math.floor(Math.random() * n));
+      const sim = H.simulateRace(s * 7919 + 1, order);
+      const early = sim.standings(5000);
+      for (let h = 0; h < 8; h++) {
+        const place = early.indexOf(h) - order.indexOf(h); // + is behind where it finishes
+        if (H.HORSES[h].style === "front") frontEarly += place;
+        if (H.HORSES[h].style === "closer") closerEarly += place;
+      }
+      runs++;
+    }
+    // Front-runners are ahead of their finishing place early on; closers behind it
+    expect(frontEarly / runs).toBeLessThan(0);
+    expect(closerEarly / runs).toBeGreaterThan(0);
+    expect(new Set(H.HORSES.map((h) => h.style))).toEqual(new Set(["front", "stalker", "closer"]));
   });
 });
 

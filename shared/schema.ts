@@ -183,8 +183,10 @@ export const horseRounds = pgTable("horse_rounds", {
   round: integer("round").primaryKey(),
   /** Win chance of each horse (basis points), by horse index */
   chances: jsonb("chances").$type<number[]>().notNull(),
-  /** Price of each horse in tenths (35 = ×3.5), by horse index */
+  /** Legacy: the win price of each horse in tenths (35 = ×3.5), by horse index */
   odds: jsonb("odds").$type<number[]>().notNull(),
+  /** The win price of each horse in hundredths (351 = ×3.51), by horse index */
+  odds100: jsonb("odds100").$type<number[]>().notNull(),
   winner: integer("winner").notNull(),
   /** Horse indexes, first to last */
   finishOrder: jsonb("finish_order").$type<number[]>().notNull(),
@@ -196,10 +198,16 @@ export const horseBets = pgTable("horse_bets", {
   id: serial("id").primaryKey(),
   round: integer("round").notNull(),
   userId: varchar("user_id").notNull(),
+  /** "win" | "top2" | "top3" | "forecast" */
+  betType: varchar("bet_type", { length: 10 }).default("win").notNull(),
   horse: integer("horse").notNull(),
+  /** Second place, for a forecast */
+  horse2: integer("horse2"),
   amount: bigint("amount", { mode: "number" }).notNull(),
-  /** The price when the bet was placed, in tenths */
+  /** Legacy: the price in tenths (rounded down) */
   odds: integer("odds").notNull(),
+  /** The price when the bet was placed, in hundredths: this is what is paid */
+  odds100: integer("odds100").notNull(),
   payout: bigint("payout", { mode: "number" }),
   settled: boolean("settled").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

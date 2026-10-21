@@ -120,6 +120,13 @@
       "when": 1792071858355,
       "tag": "0016_horse",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792579539392,
+      "tag": "0017_horse2",
+      "breakpoints": true
     }
   ]
 }
