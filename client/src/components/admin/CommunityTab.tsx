@@ -13,7 +13,7 @@ interface AdminMsg {
 interface Restricted { id: string; username: string; mutedUntil: string | null; banned: boolean }
 interface View { messages: AdminMsg[]; restricted: Restricted[]; announcement: string | null }
 
-interface ReportedProfile { userId: string; username: string; avatarUrl: string | null; reporters: number; reasons: string[]; lastAt: string; mutedUntil: string | null; banned: boolean }
+interface ReportedProfile { userId: string; username: string; avatarUrl: string | null; bio: string | null; reporters: number; reasons: string[]; lastAt: string; mutedUntil: string | null; banned: boolean }
 interface ContextMsg { id: number; from: string; text: string | null; sticker: string | null; createdAt: string; deleted: boolean }
 interface ReportedDm {
   id: number; fromId: string; fromName: string; fromAvatar: string | null; toName: string; text: string | null; sticker: string | null;
@@ -114,10 +114,12 @@ export function CommunityTab() {
                 <span className="font-black text-yellow-200 truncate">{r.username}{r.banned && <span className="ml-1.5 text-red-300">BANNED</span>}{muted(r) && <span className="ml-1.5 text-orange-300">MUTED</span>}</span>
                 <span className="text-orange-300 flex items-center gap-1 shrink-0"><Flag className="w-3 h-3" />{r.reporters} player{r.reporters > 1 ? "s" : ""}</span>
               </div>
+              {r.bio && <div className="text-xs text-sky-100/90 break-words bg-white/5 rounded-lg px-2 py-1" data-testid={`reported-bio-${r.username}`}>Bio: {r.bio}</div>}
               {r.reasons.length > 0 && <div className="text-xs text-white/70 break-words">“{r.reasons.join("” · “")}”</div>}
-              <div className="text-[10px] text-white/40">last report {when(r.lastAt)}{r.avatarUrl ? "" : " · no photo now"}</div>
+              <div className="text-[10px] text-white/40">last report {when(r.lastAt)}{r.avatarUrl ? "" : " · no photo now"}{r.bio ? "" : " · no bio"}</div>
               <div className="flex flex-wrap gap-1.5">
                 {r.avatarUrl && <button onClick={() => social.mutate({ path: `/api/admin/social/photo/${r.userId}/remove`, done: "Photo removed" })} className="px-2 py-1 rounded-lg bg-red-600/40 text-red-100 text-xs font-bold flex items-center gap-1" data-testid={`button-remove-photo-${r.username}`}><Trash2 className="w-3 h-3" />Remove photo</button>}
+                {r.bio && <button onClick={() => social.mutate({ path: `/api/admin/social/bio/${r.userId}/clear`, done: "Bio cleared" })} className="px-2 py-1 rounded-lg bg-red-600/40 text-red-100 text-xs font-bold flex items-center gap-1" data-testid={`button-clear-bio-${r.username}`}><Trash2 className="w-3 h-3" />Clear bio</button>}
                 <button onClick={() => social.mutate({ path: `/api/admin/social/profile/${r.userId}/dismiss`, done: "Dismissed" })} className="px-2 py-1 rounded-lg bg-white/10 text-white/80 text-xs font-bold flex items-center gap-1"><Check className="w-3 h-3" />Dismiss</button>
                 {actions({ id: r.userId, username: r.username, mutedUntil: r.mutedUntil, banned: r.banned })}
               </div>

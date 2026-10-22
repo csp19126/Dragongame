@@ -10,6 +10,11 @@ import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { Avatar } from "@/components/Avatar";
 import { PhotoUploader } from "@/components/PhotoUploader";
 import type { PlayerProfile } from "@shared/social";
+import { LevelBadge, useGameName } from "@/components/SocialBits";
+import { RelationButton, useFriendActions } from "@/components/Friends";
+import { ALL_ACHIEVEMENTS } from "@/components/slot/achievements";
+
+const BADGE_ICON: Record<string, string> = { star: "⭐", flame: "🔥", zap: "⚡", crown: "👑", gem: "💎", trophy: "🏆", target: "🎯", gift: "🎁", mail: "🧧", sparkles: "✨", repeat: "🔁" };
 
 const PlayerSheetContext = createContext<(username: string) => void>(() => {});
 
@@ -47,6 +52,8 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const p = q.data;
+  const gameName = useGameName();
+  const friendAct = useFriendActions();
 
   const fail = (e: unknown) => toast({ title: e instanceof ApiError ? srv(e.message) : String(e), variant: "destructive" });
   const block = async () => {
@@ -92,17 +99,40 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
         ) : (
           <div className="flex flex-col items-center gap-3">
             <Avatar user={p} size={112} ring online={p.online} />
-            <div className="text-center -mt-1">
+            <div className="text-center -mt-1 w-full">
               <div className="font-display text-2xl text-yellow-100 leading-tight break-all" data-testid="sheet-username">{p.admin && "🛡️ "}{p.username}</div>
-              <div className={`text-xs font-bold ${p.online ? "text-emerald-300" : "text-white/45"}`}>{p.online ? tr("Đang online", "Online now", "在線上") : tr("Ngoại tuyến", "Offline", "離線")}</div>
+              <div className={`text-xs font-bold ${p.playing ? "text-yellow-200" : p.online ? "text-emerald-300" : "text-white/45"}`} data-testid="sheet-status">
+                {p.playing ? `🎮 ${tr("Đang chơi", "Playing", "正在玩")} ${gameName(p.playing)}` : p.online ? tr("Đang online", "Online now", "在線上") : tr("Ngoại tuyến", "Offline", "離線")}
+              </div>
+              {/* Level and progress to the next */}
+              <div className="mt-2 mx-auto max-w-[15rem] flex items-center gap-2" data-testid="sheet-level">
+                <LevelBadge level={p.level.level} className="h-5 text-[11px] px-2" />
+                <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-gradient-to-r from-yellow-300 to-orange-500" style={{ width: `${Math.round(p.level.progress * 100)}%` }} /></div>
+                <span className="text-[10px] text-white/45 font-bold">{fmtCoins(p.level.xp)} XP</span>
+              </div>
+              {p.bio && <p className="mt-2 text-sm text-white/85 italic break-words px-2" data-testid="sheet-bio">“{p.bio}”</p>}
+              {p.favGame && <p className="mt-1 text-[11px] text-white/55" data-testid="sheet-fav">{tr("Trò yêu thích: ", "Favourite game: ", "最愛遊戲：")}<b className="text-yellow-200">{gameName(p.favGame)}</b></p>}
             </div>
+            {p.showcase.length > 0 && (
+              <div className="flex justify-center gap-2 w-full" data-testid="sheet-showcase">
+                {p.showcase.map((id) => {
+                  const a = ALL_ACHIEVEMENTS.find((x) => x.id === id);
+                  return (
+                    <div key={id} className="flex-1 max-w-[7rem] rounded-xl bg-gradient-to-b from-yellow-500/25 to-orange-700/20 border border-yellow-400/40 px-1.5 py-2 text-center" title={a ? loc(a.description) : id}>
+                      <div className="text-2xl leading-none">{BADGE_ICON[a?.icon ?? ""] ?? "🏅"}</div>
+                      <div className="text-[10px] font-black text-yellow-100 leading-tight mt-1">{a ? loc(a.name) : id}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2 w-full">
               {stat(tr("Tham gia", "Joined", "加入"), p.memberSince ? new Date(p.memberSince).toLocaleDateString(locale, { month: "short", year: "numeric" }) : "—", "sheet-joined")}
               {stat(tr("Đã chơi", "Games", "已玩局數"), fmtCoins(p.gamesPlayed), "sheet-games")}
               {stat(tr("Thắng lớn nhất", "Biggest win", "最大贏額"), `${fmtCoins(p.biggestWin)} 🪙`, "sheet-maxwin")}
               {stat(tr("Giải bi-a", "Pool league", "撞球聯賽"), p.league ? `${p.league.icon} ${loc(p.league)}` : "—", "sheet-league")}
               {stat(tr("Sticker", "Stickers", "貼圖"), `📒 ${p.stickers}`, "sheet-stickers")}
-              {stat(tr("Hạng", "Rank", "身分"), p.admin ? tr("Quản trị", "Admin", "管理員") : tr("Người chơi", "Player", "玩家"), "sheet-role")}
+              {stat(tr("Bạn bè", "Friends", "好友"), `🤝 ${p.friendsCount}`, "sheet-friends")}
             </div>
 
             {p.you ? (
@@ -113,9 +143,18 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-2 w-full">
-                  <button type="button" onClick={message} className="col-span-3 h-12 rounded-2xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black font-black flex items-center justify-center gap-2 active:scale-[0.98]" data-testid="button-sheet-message">
-                    <MessageCircle className="w-5 h-5" />{tr("Nhắn tin", "Message", "傳訊息")}
-                  </button>
+                  <div className="col-span-3 grid grid-cols-2 gap-2">
+                    {p.blockedByYou ? <span /> : (!p.acceptsRequests && p.relation === "none") ? (
+                      <span className="h-12 rounded-2xl bg-white/5 text-white/45 text-xs font-bold flex items-center justify-center text-center px-2" data-testid="sheet-no-requests">{tr("Không nhận lời mời kết bạn", "Not taking friend requests", "不接受好友邀請")}</span>
+                    ) : (
+                      <RelationButton big relation={p.relation} username={p.username} busy={friendAct.isPending}
+                        onAct={(path) => friendAct.mutate({ path, username: p.username }, { onSuccess: (r) => queryClient.setQueryData<PlayerProfile>(profileKey(username), { ...p, relation: r.relation, friendsCount: p.friendsCount + (r.relation === "friends" && p.relation !== "friends" ? 1 : 0) }) })} />
+                    )}
+                    <button type="button" onClick={message} className="h-12 rounded-2xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black font-black flex items-center justify-center gap-2 active:scale-[0.98]" data-testid="button-sheet-message">
+                      <MessageCircle className="w-5 h-5" />{tr("Nhắn tin", "Message", "傳訊息")}
+                    </button>
+                  </div>
+                  {p.friendsOnlyDm && p.relation !== "friends" && <p className="col-span-3 -mt-1 text-[10px] text-white/45 text-center">{tr("Người này chỉ nhận tin nhắn từ bạn bè", "Only takes messages from friends", "只接受好友的訊息")}</p>}
                   <button type="button" disabled={busy} onClick={block} className={`col-span-2 h-11 rounded-xl font-black text-sm flex items-center justify-center gap-1.5 ${p.blockedByYou ? "bg-emerald-600/25 text-emerald-200 border border-emerald-400/30" : "bg-white/10 text-white/85"}`} data-testid="button-sheet-block">
                     <Ban className="w-4 h-4" />{p.blockedByYou ? tr("Bỏ chặn", "Unblock", "解除封鎖") : tr("Chặn", "Block", "封鎖")}
                   </button>
@@ -125,7 +164,7 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
                 </div>
                 {reporting && (
                   <div className="w-full rounded-2xl bg-black/30 border border-red-400/20 p-3 flex flex-col gap-2" data-testid="report-form">
-                    <p className="text-xs text-white/70">{tr("Báo cáo ảnh hoặc hồ sơ này (ảnh nhạy cảm, ảnh người khác, tên xúc phạm…)", "Report this photo or profile (explicit, someone else's photo, offensive name…)", "檢舉這張照片或個人檔案（不雅內容、盜用他人照片、冒犯性名稱…）")}</p>
+                    <p className="text-xs text-white/70">{tr("Báo cáo ảnh, giới thiệu hoặc hồ sơ này (ảnh nhạy cảm, ảnh người khác, tên hay lời giới thiệu xúc phạm…)", "Report this photo, bio or profile (explicit, someone else's photo, offensive name or bio…)", "檢舉這張照片、自我介紹或個人檔案（不雅內容、盜用他人照片、冒犯性名稱或介紹…）")}</p>
                     <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} placeholder={tr("Lý do (không bắt buộc)", "Reason (optional)", "原因（選填）")}
                       className="w-full rounded-xl bg-black/50 border border-white/15 px-3 py-2.5 text-white text-sm placeholder:text-white/30" data-testid="input-report-reason" />
                     <button type="button" disabled={busy} onClick={report} className="h-10 rounded-xl bg-red-600 text-white font-black text-sm disabled:opacity-50" data-testid="button-report-send">{tr("Gửi báo cáo", "Send report", "送出檢舉")}</button>

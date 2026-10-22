@@ -11,10 +11,12 @@ import { soundManager } from "@/lib/sound";
 import { Avatar } from "@/components/Avatar";
 import { usePlayerSheet, profileKey } from "@/components/PlayerSheet";
 import { DM_UNREAD_KEY } from "@/hooks/use-dm";
+import { useSocial, useSocialEvent, CONV_KEY } from "@/hooks/use-social";
+import { LevelBadge, QuoteBlock, ReplyingBar, ReactionChips, MessageActions, applyReaction } from "@/components/SocialBits";
+import { TYPING_SHOW_MS, TYPING_EVERY_MS } from "@shared/friends";
 import { STICKERS, STICKER_BY_ID, type AlbumView } from "@shared/stickers";
 import { DM_MAX_LEN, SOCIAL_MIN_GAMES, type DmConversation, type DmMessage, type DmThread } from "@shared/social";
 
-const CONV_KEY = ["/api/dm/conversations"];
 
 /** Private messages: the conversation list, or one conversation when `dm` is set */
 export function DmTab({ dm, errs }: { dm: string | null; errs: Record<string, string> }) {
@@ -44,7 +46,8 @@ function Conversations() {
   const { tr, locale, loc } = useLang();
   const [, setLocation] = useLocation();
   const showPlayer = usePlayerSheet();
-  const q = useQuery<{ conversations: DmConversation[] }>({ queryKey: CONV_KEY, refetchInterval: 8_000, staleTime: 0 });
+  const { connected } = useSocial();
+  const q = useQuery<{ conversations: DmConversation[] }>({ queryKey: CONV_KEY, refetchInterval: connected ? 60_000 : 8_000, staleTime: 0 });
   const [to, setTo] = useState("");
   const open = (name: string) => setLocation(`/community?tab=dm&dm=${encodeURIComponent(name)}`);
 
@@ -74,7 +77,7 @@ function Conversations() {
               <Avatar user={c} size={46} online={c.online} onClick={() => showPlayer(c.username)} />
               <button type="button" onClick={() => open(c.username)} className="flex-1 min-w-0 text-left active:opacity-70">
                 <div className="flex items-baseline gap-2">
-                  <span className={`flex-1 truncate ${c.unread ? "font-black text-white" : "font-bold text-white/90"}`}>{c.username}</span>
+                  <span className={`flex-1 min-w-0 flex items-center gap-1.5 ${c.unread ? "font-black text-white" : "font-bold text-white/90"}`}><span className="truncate">{c.username}</span><LevelBadge level={c.level} /></span>
                   <span className={`text-[10px] shrink-0 ${c.unread ? "text-yellow-300 font-bold" : "text-white/40"}`}>{when(c.last.at, locale)}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -95,12 +98,22 @@ function Conversations() {
 
 type ThreadResp = DmThread & { readUpTo: number };
 
+function jumpToDm(id: number) {
+  const el = document.querySelector(`[data-dm-id="${id}"]`) as HTMLElement | null;
+  if (!el) return false;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("msg-flash");
+  window.setTimeout(() => el.classList.remove("msg-flash"), 1600);
+  return true;
+}
+
 function Thread({ username, errs }: { username: string; errs: Record<string, string> }) {
   const { user } = useAuth();
   const { tr, locale, loc, srv } = useLang();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const showPlayer = usePlayerSheet();
+  const { connected, send: wsSend } = useSocial();
   const [msgs, setMsgs] = useState<DmMessage[]>([]);
   const [info, setInfo] = useState<Omit<ThreadResp, "messages"> | null>(null);
   const [missing, setMissing] = useState(false);
@@ -109,11 +122,20 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
   const [sending, setSending] = useState(false);
   const [reportFor, setReportFor] = useState<DmMessage | null>(null);
   const [loadingOld, setLoadingOld] = useState(false);
+  const [active, setActive] = useState<number | null>(null);
+  const [replyTo, setReplyTo] = useState<DmMessage | null>(null);
+  const [typingUntil, setTypingUntil] = useState(0);
+  const [, rerender] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const lastId = useRef(0);
+  const loaded = useRef(false);
+  const lastTypingSent = useRef(0);
   const album = useQuery<AlbumView>({ queryKey: ["/api/stickers"] });
   const ownedStickers = useMemo(() => STICKERS.filter((s) => (album.data?.owned[s.id] ?? 0) > 0), [album.data]);
   const path = `/api/dm/thread/${encodeURIComponent(username)}`;
+  const peerName = info?.peer.username ?? username;
+  const same = (a: string | undefined, b: string) => !!a && a.toLowerCase() === b.toLowerCase();
 
   const nearBottom = () => { const el = listRef.current; return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 120; };
   const toBottom = () => requestAnimationFrame(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; });
@@ -126,24 +148,30 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
     } catch { /* try again on the next poll */ }
   }, [username]);
 
-  const merge = useCallback((r: ThreadResp, first: boolean) => {
+  const addMessages = useCallback((messages: DmMessage[], readUpTo: number, first: boolean) => {
     const stick = first || nearBottom();
-    const { messages, ...rest } = r;
-    setInfo(rest);
     setMsgs((cur) => {
-      const seen = new Set(cur.map((m) => m.id));
-      const next = [...cur, ...messages.filter((m) => !seen.has(m.id))].map((m) => (m.mine && m.id <= r.readUpTo ? { ...m, read: true } : m));
+      const byId = new Map(cur.map((m) => [m.id, m]));
+      for (const m of messages) byId.set(m.id, { ...byId.get(m.id), ...m });
+      const next = [...byId.values()].sort((a, b) => a.id - b.id).map((m) => (m.mine && m.id <= readUpTo ? { ...m, read: true } : m));
       if (next.length) lastId.current = Math.max(lastId.current, next[next.length - 1].id);
       return next;
     });
     if (messages.some((m) => !m.mine)) {
-      if (!first) soundManager.buttonClick();
+      if (!first) soundManager.ping();
+      setTypingUntil(0);
       void markRead();
     }
     if (stick && messages.length) toBottom();
   }, [markRead]);
 
-  // Poll every 3 s while the conversation is open and the page is visible
+  const merge = useCallback((r: ThreadResp, first: boolean) => {
+    const { messages, ...rest } = r;
+    setInfo(rest);
+    addMessages(messages, r.readUpTo, first);
+  }, [addMessages]);
+
+  // Live over the socket; polling catches up (every 3 s while the socket is down, rarely while it's up)
   useEffect(() => {
     let stop = false;
     let timer: number | undefined;
@@ -151,17 +179,33 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
       if (stop) return;
       if (document.visibilityState === "visible") {
         try {
-          const first = lastId.current === 0;
+          // The first load is the latest page, even if live messages already arrived over the socket
+          const first = !loaded.current;
           const res = await fetch(`${path}${first ? "" : `?after=${lastId.current}`}`, { credentials: "include" });
           if (res.status === 404) { setMissing(true); return; }
-          if (res.ok && !stop) merge(await res.json(), first);
+          if (res.ok && !stop) { loaded.current = true; merge(await res.json(), first); }
         } catch { /* offline: try again */ }
       }
-      timer = window.setTimeout(poll, 3000);
+      timer = window.setTimeout(poll, connected ? 20_000 : 3000);
     };
     poll();
     return () => { stop = true; clearTimeout(timer); };
-  }, [merge, path]);
+  }, [merge, path, connected]);
+
+  useSocialEvent((m) => {
+    if (m.t === "dm" && same(m.with, peerName)) addMessages([m.m], 0, false);
+    else if (m.t === "typing" && same(m.from, peerName)) { setTypingUntil(Date.now() + TYPING_SHOW_MS); if (nearBottom()) toBottom(); }
+    else if (m.t === "seen" && same(m.by, peerName)) setMsgs((cur) => cur.map((x) => (x.mine && x.id <= m.upTo ? { ...x, read: true } : x)));
+    else if (m.t === "react" && m.scope === "dm" && same(m.with, peerName) && m.by !== user?.username) {
+      setMsgs((cur) => cur.map((x) => (x.id === m.id ? { ...x, reactions: applyReaction(x.reactions ?? [], m.e, m.on, false) } : x)));
+    }
+  });
+  // Hide "typing…" when it runs out
+  useEffect(() => {
+    if (!typingUntil) return;
+    const t = window.setTimeout(() => rerender((n) => n + 1), Math.max(0, typingUntil - Date.now()) + 50);
+    return () => clearTimeout(t);
+  }, [typingUntil]);
 
   const loadOlder = async () => {
     if (!msgs.length) return;
@@ -179,17 +223,32 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
   const send = async (body: { text?: string; sticker?: string }) => {
     setSending(true);
     try {
-      const m: DmMessage = await (await apiRequest("POST", "/api/dm/send", { to: username, ...body })).json();
+      const m: DmMessage = await (await apiRequest("POST", "/api/dm/send", { to: username, ...body, ...(replyTo ? { replyTo: replyTo.id } : {}) })).json();
       setMsgs((cur) => (cur.some((x) => x.id === m.id) ? cur : [...cur, m]));
       lastId.current = Math.max(lastId.current, m.id);
-      setText(""); setTray(false); toBottom();
+      setText(""); setTray(false); setReplyTo(null); toBottom();
       soundManager.coinDrop();
       queryClient.invalidateQueries({ queryKey: CONV_KEY });
     } catch (e) {
       const code = e instanceof ApiError ? e.message : "";
       toast({ title: errs[code] ?? srv(code), variant: "destructive" });
-      if (code === "Can't message this player") setInfo((i) => (i ? { ...i, cantMessage: true } : i));
+      if (code === "Can't message this player" || code === "This player only accepts messages from friends") setInfo((i) => (i ? { ...i, cantMessage: true, cantReason: code } : i));
     } finally { setSending(false); }
+  };
+
+  const react = async (id: number, emoji: string) => {
+    setActive(null);
+    try {
+      const r = await (await apiRequest("POST", `/api/dm/${id}/react`, { emoji })).json() as { on: boolean; reactions: DmMessage["reactions"] };
+      if (r.on) soundManager.pop();
+      setMsgs((cur) => cur.map((x) => (x.id === id ? { ...x, reactions: r.reactions } : x)));
+    } catch (e) { const code = e instanceof ApiError ? e.message : ""; toast({ title: errs[code] ?? srv(code), variant: "destructive" }); }
+  };
+
+  const onType = (v: string) => {
+    setText(v);
+    const now = Date.now();
+    if (v.trim() && now - lastTypingSent.current > TYPING_EVERY_MS) { lastTypingSent.current = now; wsSend({ t: "typing", to: peerName }); }
   };
 
   const unblock = async () => {
@@ -205,6 +264,10 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
   const peer = info?.peer ?? { username, avatarUrl: null, online: false };
   const muted = user?.mutedUntil && new Date(user.mutedUntil).getTime() > Date.now() ? user.mutedUntil : null;
   const needGames = user && !user.isAdmin && user.gamesPlayed < SOCIAL_MIN_GAMES ? SOCIAL_MIN_GAMES - user.gamesPlayed : 0;
+  const typing = typingUntil > Date.now();
+  // "Seen" goes under my last message they've read
+  const lastSeenId = [...msgs].reverse().find((m) => m.mine && m.read)?.id ?? 0;
+  const lastMineId = [...msgs].reverse().find((m) => m.mine)?.id ?? 0;
 
   if (missing) return (
     <div className="w-full rounded-2xl bg-black/40 border border-white/10 p-6 text-center flex flex-col items-center gap-3" data-testid="dm-missing">
@@ -221,12 +284,13 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
         <button type="button" onClick={() => setLocation("/community?tab=dm")} className="w-10 h-10 rounded-xl flex items-center justify-center text-white/80 active:bg-white/10" aria-label={tr("Quay lại", "Back", "返回")} data-testid="button-dm-back"><ArrowLeft className="w-5 h-5" /></button>
         <Avatar user={peer} size={38} online={peer.online} onClick={() => showPlayer(peer.username)} />
         <button type="button" onClick={() => showPlayer(peer.username)} className="flex-1 min-w-0 text-left">
-          <div className="font-black text-white truncate" data-testid="dm-peer">{peer.username}</div>
-          <div className={`text-[11px] ${peer.online ? "text-emerald-300" : "text-white/45"}`}>{peer.online ? tr("Đang online", "Online now", "在線上") : tr("Ngoại tuyến", "Offline", "離線")}</div>
+          <div className="font-black text-white truncate flex items-center gap-1.5"><span className="truncate" data-testid="dm-peer">{peer.username}</span><LevelBadge level={peer.level} /></div>
+          <div className={`text-[11px] ${typing ? "text-yellow-300" : peer.online ? "text-emerald-300" : "text-white/45"}`}>{typing ? tr("đang nhập…", "typing…", "正在輸入…") : peer.online ? tr("Đang online", "Online now", "在線上") : tr("Ngoại tuyến", "Offline", "離線")}</div>
         </button>
       </div>
 
-      <div ref={listRef} className={`${tray ? "h-[calc(100dvh-470px)] min-h-[170px]" : "h-[calc(100dvh-350px)] min-h-[280px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-1`} data-testid="dm-messages">
+      <div ref={listRef} onClick={(e) => { if (e.target === e.currentTarget) setActive(null); }}
+        className={`${tray ? "h-[calc(100dvh-470px)] min-h-[170px]" : replyTo ? "h-[calc(100dvh-410px)] min-h-[240px]" : "h-[calc(100dvh-350px)] min-h-[280px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-1`} data-testid="dm-messages">
         {info?.more && (
           <button type="button" disabled={loadingOld} onClick={loadOlder} className="self-center text-[11px] font-bold text-yellow-300/80 px-3 py-1 rounded-full bg-white/5 mb-1">
             {loadingOld ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : tr("Xem tin cũ hơn", "Load older messages", "載入更早的訊息")}
@@ -247,32 +311,51 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
           const lastOfGroup = !next || next.mine !== m.mine || new Date(next.createdAt).toDateString() !== day;
           const st = m.sticker ? STICKER_BY_ID.get(m.sticker) : null;
           return (
-            <div key={m.id} className="flex flex-col">
+            <div key={m.id} className="flex flex-col" data-dm-id={m.id}>
               {header && <div className="self-center my-1.5 text-[10px] font-bold text-white/40 bg-white/5 rounded-full px-2.5 py-0.5">{header}</div>}
               <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={`group flex items-end gap-1.5 max-w-[85%] ${m.mine ? "self-end flex-row-reverse" : "self-start"}`} data-testid={`dm-msg-${m.id}`}>
                 {!m.mine && (lastOfGroup ? <Avatar user={peer} size={26} onClick={() => showPlayer(peer.username)} /> : <span className="w-[26px] shrink-0" />)}
-                <div className={`flex flex-col ${m.mine ? "items-end" : "items-start"}`}>
-                  {st ? (
-                    <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div>
-                  ) : (
-                    <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap ${m.mine ? `bg-gradient-to-b from-yellow-400 to-orange-500 text-black ${lastOfGroup ? "rounded-br-md" : ""}` : `bg-white/10 text-white ${lastOfGroup ? "rounded-bl-md" : ""}`}`}>{m.text}</div>
-                  )}
+                <div className={`flex flex-col min-w-0 ${m.mine ? "items-end" : "items-start"}`}>
+                  {m.reply && <QuoteBlock reply={{ ...m.reply, username: m.reply.mine ? null : peer.username }} onJump={(id) => { if (!jumpToDm(id)) toast({ title: tr("Tin nhắn này ở xa hơn, bấm “Xem tin cũ hơn”", "That message is further up: tap “Load older messages”", "那則訊息在更上面，請點「載入更早的訊息」") }); }} />}
+                  <button type="button" onClick={() => setActive((a) => (a === m.id ? null : m.id))} className="text-left" data-testid={`dm-bubble-${m.id}`}>
+                    {st ? (
+                      <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div>
+                    ) : (
+                      <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap ${m.mine ? `bg-gradient-to-b from-yellow-400 to-orange-500 text-black ${lastOfGroup ? "rounded-br-md" : ""}` : `bg-white/10 text-white ${lastOfGroup ? "rounded-bl-md" : ""}`}`}>{m.text}</div>
+                    )}
+                  </button>
+                  <ReactionChips reactions={m.reactions ?? []} onToggle={(e) => react(m.id, e)} mine={m.mine} />
                   {lastOfGroup && (
                     <span className="text-[9px] text-white/40 px-1 mt-0.5 flex items-center gap-0.5">
                       {new Date(m.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
                       {m.mine && (m.read ? <CheckCheck className="w-3 h-3 text-sky-300" aria-label={tr("Đã xem", "Seen", "已讀")} /> : <Check className="w-3 h-3" aria-label={tr("Đã gửi", "Sent", "已送出")} />)}
                     </span>
                   )}
+                  {m.mine && m.id === lastSeenId && (
+                    <span className="text-[10px] font-bold text-sky-300 px-1" data-testid="dm-seen">{tr("Đã xem", "Seen", "已讀")}</span>
+                  )}
+                  {m.mine && m.id === lastMineId && m.id !== lastSeenId && !m.read && (
+                    <span className="text-[10px] text-white/40 px-1" data-testid="dm-sent">{tr("Đã gửi", "Sent", "已送出")}</span>
+                  )}
+                  {active === m.id && !info?.cantMessage && (
+                    <MessageActions mine={m.mine} onReact={(e) => react(m.id, e)} onReply={() => { setReplyTo(m); setActive(null); inputRef.current?.focus(); }}
+                      extra={!m.mine ? <button type="button" onClick={() => { setReportFor(m); setActive(null); }} className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:bg-white/10" aria-label={tr("Báo cáo", "Report", "檢舉")} data-testid={`button-dm-report-${m.id}`}><Flag className="w-3.5 h-3.5" /></button> : undefined} />
+                  )}
                 </div>
-                {!m.mine && (
-                  <button type="button" onClick={() => setReportFor(m)} className="opacity-30 hover:opacity-100 p-1 self-center" aria-label={tr("Báo cáo", "Report", "檢舉")} data-testid={`button-dm-report-${m.id}`}>
-                    <Flag className="w-3 h-3 text-white" />
-                  </button>
-                )}
               </motion.div>
             </div>
           );
         })}
+        <AnimatePresence>
+          {typing && (
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="self-start flex items-end gap-1.5" data-testid="dm-typing">
+              <Avatar user={peer} size={26} />
+              <div className="px-3 py-2.5 rounded-2xl rounded-bl-md bg-white/10 flex gap-1">
+                {[0, 1, 2].map((d) => <motion.span key={d} className="w-1.5 h-1.5 rounded-full bg-white/70" animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 0.9, delay: d * 0.15 }} />)}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {tray && (
@@ -289,7 +372,7 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
 
       {info?.cantMessage ? (
         <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-3 text-center text-sm text-white/70 flex items-center justify-center gap-2 flex-wrap" data-testid="dm-blocked">
-          <Ban className="w-4 h-4" />{srv("Can't message this player")}
+          <Ban className="w-4 h-4" />{srv(info.cantReason ?? "Can't message this player")}
           {info.blockedByYou && <button type="button" onClick={unblock} className="px-3 py-1 rounded-lg bg-white/10 text-white text-xs font-black" data-testid="button-dm-unblock">{tr("Bỏ chặn", "Unblock", "解除封鎖")}</button>}
         </div>
       ) : muted ? (
@@ -299,16 +382,19 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
           <Lock className="w-4 h-4" />{tr(`Chơi thêm ${needGames} ván để nhắn tin`, `Play ${needGames} more game${needGames === 1 ? "" : "s"} to send messages`, `再玩 ${needGames} 局即可傳訊息`)}
         </div>
       ) : (
-        <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (text.trim()) send({ text }); }}>
-          <button type="button" onClick={() => setTray((v) => !v)} className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${tray ? "bg-yellow-400 text-black" : "bg-white/10 text-white"}`} aria-label={tr("Sticker", "Stickers", "貼圖")} data-testid="button-dm-stickers">
-            <Smile className="w-5 h-5" />
-          </button>
-          <input value={text} onChange={(e) => setText(e.target.value)} maxLength={DM_MAX_LEN} placeholder={tr("Nhắn tin…", "Message…", "輸入訊息…")} enterKeyHint="send"
-            className="flex-1 min-w-0 rounded-xl bg-[#140b26] border border-white/15 px-3 text-white placeholder:text-white/30" data-testid="input-dm" />
-          <button type="submit" disabled={sending || !text.trim()} className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black flex items-center justify-center disabled:opacity-40" aria-label={tr("Gửi", "Send", "發送")} data-testid="button-dm-send">
-            {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </button>
-        </form>
+        <div className="flex flex-col gap-1.5">
+          {replyTo && <ReplyingBar reply={{ id: replyTo.id, username: replyTo.mine ? null : peer.username, mine: replyTo.mine, text: replyTo.text, sticker: replyTo.sticker }} onCancel={() => setReplyTo(null)} />}
+          <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (text.trim()) send({ text }); }}>
+            <button type="button" onClick={() => setTray((v) => !v)} className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${tray ? "bg-yellow-400 text-black" : "bg-white/10 text-white"}`} aria-label={tr("Sticker", "Stickers", "貼圖")} data-testid="button-dm-stickers">
+              <Smile className="w-5 h-5" />
+            </button>
+            <input ref={inputRef} value={text} onChange={(e) => onType(e.target.value)} maxLength={DM_MAX_LEN} placeholder={tr("Nhắn tin…", "Message…", "輸入訊息…")} enterKeyHint="send"
+              className="flex-1 min-w-0 rounded-xl bg-[#140b26] border border-white/15 px-3 text-white placeholder:text-white/30" data-testid="input-dm" />
+            <button type="submit" disabled={sending || !text.trim()} className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black flex items-center justify-center disabled:opacity-40" aria-label={tr("Gửi", "Send", "發送")} data-testid="button-dm-send">
+              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            </button>
+          </form>
+        </div>
       )}
       <SafetyNote />
 

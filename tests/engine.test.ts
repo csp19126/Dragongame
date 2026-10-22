@@ -754,3 +754,78 @@ describe("Slot 777 Cổ Điển", () => {
     expect(Math.max(...s7.LINE_BETS_777) * 5).toBeLessThanOrEqual(s7.MAX_TOTAL_BET_777);
   });
 });
+
+describe("Social 2.0 (pure rules)", async () => {
+  const f = await import("../shared/friends");
+
+  it("levels: gentle square curve from coins staked, monotonic, capped", () => {
+    expect(f.xpOf(999)).toBe(0);
+    expect(f.xpOf(50_000)).toBe(50);
+    expect(f.levelOf(0)).toBe(1);
+    expect(f.levelOf(49)).toBe(1);
+    expect(f.levelOf(50)).toBe(2);
+    expect(f.levelOf(f.xpForLevel(10))).toBe(10);
+    expect(f.levelOf(f.xpForLevel(10) - 1)).toBe(9);
+    expect(f.xpForLevel(10)).toBe(4050); // 4.05M coins staked
+    let last = 1;
+    for (let xp = 0; xp < 600_000; xp += 37) {
+      const l = f.levelOf(xp);
+      expect(l).toBeGreaterThanOrEqual(last);
+      last = l;
+    }
+    expect(f.levelOf(1e12)).toBe(f.MAX_LEVEL);
+    const p = f.levelProgress(75);
+    expect(p).toMatchObject({ level: 2, from: 50, to: 200 });
+    expect(p.progress).toBeCloseTo(25 / 150);
+  });
+
+  it("mentions: @words and picked names that really appear, lower-cased, at most five", () => {
+    expect(f.findMentions("hi @Bob and @alice_99!")).toEqual(["bob", "alice_99"]);
+    expect(f.findMentions("email me@x.com")).toEqual([]); // not after a letter
+    expect(f.findMentions("@ab too short")).toEqual([]);
+    expect(f.findMentions("chào @Anh Ba nhé", ["Anh Ba"])).toEqual(["anh ba", "anh"]); // a name with a space, picked from the list
+    expect(f.findMentions("no tag here", ["Anh Ba"])).toEqual([]);
+    expect(f.findMentions("@Anh Bao", ["Anh Ba"])).not.toContain("anh ba"); // must end at a word boundary
+    expect(f.findMentions("@aaa @bbb @ccc @ddd @eee @fff @ggg").length).toBe(5);
+  });
+
+  it("feed: big wins are ×50 or a million profit; horses ×10 and 100,000", () => {
+    expect(f.feedKindOfPlay("slot", 1000, 50_000)).toBe("big_win");
+    expect(f.feedKindOfPlay("slot", 1000, 49_999)).toBeNull();
+    expect(f.feedKindOfPlay("roulette", 1_000_000, 2_000_000)).toBe("big_win");
+    expect(f.feedKindOfPlay("roulette", 1_000_000, 1_999_999)).toBeNull();
+    expect(f.feedKindOfPlay("slot", 0, 900_000)).toBeNull(); // a free spin: only a million counts
+    expect(f.feedKindOfPlay("slot", 0, 1_000_000)).toBe("big_win");
+    expect(f.feedKindOfPlay("horse", 10_000, 120_000)).toBe("horse");
+    expect(f.feedKindOfPlay("horse", 10_000, 90_000)).toBeNull();
+    expect(f.feedKindOfPlay("pool", 50_000, 100_000)).toBeNull();
+  });
+
+  it("friend Lì Xì rules", () => {
+    const now = Date.now();
+    const ok = { friends: true, friendsSince: now - 25 * 3600_000, myGames: 10, theirGames: 10, sentToday: false, now };
+    expect(f.giftBlock(ok)).toBeNull();
+    expect(f.giftBlock({ ...ok, friends: false })).toBe("not_friends");
+    expect(f.giftBlock({ ...ok, sentToday: true })).toBe("sent_today");
+    expect(f.giftBlock({ ...ok, myGames: 9 })).toBe("games_you");
+    expect(f.giftBlock({ ...ok, theirGames: 9 })).toBe("games_them");
+    expect(f.giftBlock({ ...ok, friendsSince: now - 23 * 3600_000 })).toBe("too_new");
+    expect(f.FRIEND_GIFT_AMOUNT).toBe(5000);
+    expect(f.FRIEND_GIFT_MAX_RECEIVED).toBe(10);
+  });
+
+  it("pages map to games; weeks start on Monday, Vietnam time", () => {
+    expect(f.gameOfRoute("/slot-777")).toBe("slot777");
+    expect(f.gameOfRoute("/slot")).toBe("slot");
+    expect(f.gameOfRoute("/ban-bai?table=ABCDE")).toBe("cards");
+    expect(f.gameOfRoute("/pool")).toBe("pool");
+    expect(f.gameOfRoute("/tournament")).toBe("pool");
+    expect(f.gameOfRoute("/community")).toBeNull();
+    expect(f.gameOfRoute("/")).toBeNull();
+    expect(f.gameOfRoute(42)).toBeNull();
+    // Sunday 23:00 in Vietnam is still the week that started on the Monday before
+    expect(f.vnWeekStart(new Date("2026-10-25T16:00:00Z")).toISOString()).toBe("2026-10-18T17:00:00.000Z");
+    // Monday 00:30 in Vietnam starts a new week
+    expect(f.vnWeekStart(new Date("2026-10-25T17:30:00Z")).toISOString()).toBe("2026-10-25T17:00:00.000Z");
+  });
+});

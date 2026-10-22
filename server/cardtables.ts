@@ -393,6 +393,14 @@ function leave(t: Table, userId: string) {
   }
 }
 
+/** The live table a player sits at, and whether it has a free seat (for "join your friend") */
+export function cardSeatOf(userId: string): { code: string; free: boolean } | null {
+  const code = seatedAt.get(userId);
+  const t = code ? tables.get(code) : undefined;
+  if (!t || !t.seats.some((s) => s?.userId === userId)) return null;
+  return { code: t.code, free: t.seats.some((s) => !s) };
+}
+
 export function dropAllTablesForTest() { tables.clear(); seatedAt.clear(); }
 export const tableForTest = (code: string) => tables.get(code);
 export { tick as cardTablesTick };

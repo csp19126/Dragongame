@@ -11,6 +11,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import Home, { SlotPage } from "@/pages/Home";
 import { BottomNav } from "@/components/BottomNav";
 import { PlayerSheetProvider } from "@/components/PlayerSheet";
+import { SocialProvider } from "@/hooks/use-social";
 
 const RELOAD_FLAG = "chunk-reload-at";
 
@@ -139,10 +140,12 @@ export default function App() {
           <TooltipProvider>
             <Toaster />
             <ErrorBoundary>
-              <PlayerSheetProvider>
-                <Router />
-                <BottomNav />
-              </PlayerSheetProvider>
+              <SocialProvider>
+                <PlayerSheetProvider>
+                  <Router />
+                  <BottomNav />
+                </PlayerSheetProvider>
+              </SocialProvider>
             </ErrorBoundary>
             <InstallBanner />
           </TooltipProvider>

@@ -5,6 +5,7 @@ import { ChevronRight, Loader2 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { AnnouncementBar } from "@/components/CommunityStrip";
 import { TournamentPromo } from "@/components/TournamentBits";
+import { LobbyTicker } from "@/components/ActivityFeed";
 import { RecentWinsTicker, AppFooter } from "@/pages/Home";
 import { useAuth } from "@/hooks/use-auth";
 import { useGameState, useJackpot, useSetBalance } from "@/hooks/use-game";
@@ -70,6 +71,7 @@ export default function Lobby() {
         </div>
 
         <AnnouncementBar />
+        <LobbyTicker />
 
         {/* Featured: the slot and its jackpot */}
         <Link href="/slot" data-testid="lobby-slot">

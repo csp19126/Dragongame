@@ -127,6 +127,8 @@ export default function Pool() {
   const params = new URLSearchParams(search);
   const tableCode = params.get("table")?.toUpperCase() ?? null;
   const practice = params.get("practice") === "1";
+  // Bumped after joining from an invite or a friend's link, so the table reconnects in the seat
+  const [rev, setRev] = useState(0);
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-12 h-12 animate-spin text-primary" /></div>;
   if (!user) return <Redirect to={`/auth${tableCode ? `?next=${encodeURIComponent(`/pool?table=${tableCode}`)}` : ""}`} />;
@@ -145,7 +147,7 @@ export default function Pool() {
         {practice ? (
           <PracticeTable L={L} name={user.username} onExit={() => setLocation("/pool")} />
         ) : tableCode ? (
-          <OnlineTable L={L} code={tableCode} userId={user.id} onExit={() => setLocation("/pool")} toast={toast} />
+          <OnlineTable key={`${tableCode}-${rev}`} L={L} code={tableCode} userId={user.id} onExit={() => setLocation("/pool")} onJoined={() => setRev((r) => r + 1)} toast={toast} />
         ) : (
           <Lobby L={L} onOpen={(code) => setLocation(`/pool?table=${code}`)} onPractice={() => setLocation("/pool?practice=1")} toast={toast} insufficient={t.insufficientBalanceDesc} />
         )}
@@ -348,8 +350,13 @@ function EndBanner({ title, sub, actions, extra }: { title: string; sub: string;
 
 type StateMsg = Extract<PoolServerMsg, { t: "state" }>;
 
-function OnlineTable({ L, code, userId, onExit, toast }: { L: Strings; code: string; userId: string; onExit: () => void; toast: ReturnType<typeof useToast>["toast"] }) {
+function OnlineTable({ L, code, userId, onExit, onJoined, toast }: { L: Strings; code: string; userId: string; onExit: () => void; onJoined: () => void; toast: ReturnType<typeof useToast>["toast"] }) {
   const { lang, srv } = useLang();
+  const joinSeat = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/pool/tables/${code}/join`)).json(),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: STATE_KEY }); queryClient.invalidateQueries({ queryKey: ME_KEY }); onJoined(); },
+    onError: (e: Error) => toast({ title: srv(e.message), variant: "destructive" }),
+  });
   const [table, setTable] = useState<StateMsg | null>(null);
   const [, nav] = useLocation();
   const [game, setGame] = useState<GameState | null>(null);
@@ -450,6 +457,11 @@ function OnlineTable({ L, code, userId, onExit, toast }: { L: Strings; code: str
         <button type="button" onClick={share} className="w-full rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500 flex items-center justify-center gap-2" data-testid="button-pool-invite"><Share2 className="w-5 h-5" />{L.invite}</button>
         <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(inviteUrl); toast({ title: L.copied }); } catch { /* ignore */ } }} className="w-full rounded-2xl py-2.5 font-bold text-white/80 bg-white/5 border border-white/10 flex items-center justify-center gap-2"><Copy className="w-4 h-4" />{L.copy}</button>
         {seat === 0 && <button type="button" onClick={() => cancel.mutate()} className="text-sm text-red-300/80 underline flex items-center gap-1"><X className="w-4 h-4" />{L.cancel}</button>}
+        {seat === null && (
+          <button type="button" disabled={joinSeat.isPending} onClick={() => joinSeat.mutate()} className="w-full rounded-2xl py-3.5 font-black text-black bg-gradient-to-r from-emerald-300 to-emerald-500 flex items-center justify-center gap-2 text-lg" data-testid="button-pool-take-seat">
+            {joinSeat.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : `🎱 ${L.join}`}
+          </button>
+        )}
         {seat === null && <button type="button" onClick={onExit} className="text-sm text-white/60 underline">{L.lobby}</button>}
       </div>
     );

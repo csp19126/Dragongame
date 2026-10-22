@@ -7,11 +7,14 @@ import { Loader2, Medal } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { usePlayerSheet } from "@/components/PlayerSheet";
 import { useAuth } from "@/hooks/use-auth";
+import { useState } from "react";
+import { FriendsBoard } from "@/components/FriendsBoard";
 
 export default function Leaderboard() {
   const { data: leaderboard, isLoading } = useLeaderboard();
-  const { t } = useLang();
+  const { t, tr } = useLang();
   const { user } = useAuth();
+  const [tab, setTab] = useState<"rich" | "friends">(() => (new URLSearchParams(window.location.search).get("tab") === "friends" ? "friends" : "rich"));
   const showPlayer = usePlayerSheet();
 
   const getRankIcon = (index: number) => {
@@ -34,8 +37,14 @@ export default function Leaderboard() {
             <CardTitle className="text-5xl font-display gold-gradient-text tracking-tight uppercase">{t.leaderboard}</CardTitle>
             <p className="text-white/40 font-black text-xs tracking-[0.4em] mt-2 uppercase">{t.legendsTagline}</p>
           </CardHeader>
+          {user && (
+            <div className="grid grid-cols-2 gap-1 p-1 mx-4 mt-4 rounded-2xl bg-white/5 border border-white/10" data-testid="leaderboard-tabs">
+              <button type="button" onClick={() => setTab("rich")} className={`h-10 rounded-xl text-sm font-black ${tab === "rich" ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black" : "text-white/60"}`} data-testid="tab-rich">💰 {tr("Đại gia", "Rich list", "富豪榜")}</button>
+              <button type="button" onClick={() => setTab("friends")} className={`h-10 rounded-xl text-sm font-black ${tab === "friends" ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black" : "text-white/60"}`} data-testid="tab-friends">🤝 {tr("Bạn bè", "Friends", "好友")}</button>
+            </div>
+          )}
           <CardContent className="p-0">
-            {isLoading ? (
+            {tab === "friends" && user ? <FriendsBoard /> : isLoading ? (
               <div className="flex justify-center p-20">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
               </div>

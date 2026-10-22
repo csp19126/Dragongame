@@ -140,4 +140,21 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "request entity too large": { vi: "Dữ liệu gửi lên quá lớn", zh: "上傳的資料太大" },
   "Can't message this player": { vi: "Không thể nhắn tin cho người chơi này", zh: "無法傳訊息給這位玩家" },
   "You can't message yourself": { vi: "Bạn không thể tự nhắn cho mình", zh: "不能傳訊息給自己" },
+
+  // Friends, replies, Lì Xì
+  "That message can't be answered": { vi: "Không thể trả lời tin nhắn này", zh: "無法回覆這則訊息" },
+  "This player only accepts messages from friends": { vi: "Người chơi này chỉ nhận tin nhắn từ bạn bè", zh: "這位玩家只接受好友的訊息" },
+  "Can't add this player": { vi: "Không thể kết bạn với người chơi này", zh: "無法加這位玩家為好友" },
+  "This player isn't taking friend requests": { vi: "Người chơi này không nhận lời mời kết bạn", zh: "這位玩家不接受好友邀請" },
+  "Your friends list is full": { vi: "Danh sách bạn bè của bạn đã đầy", zh: "你的好友名單已滿" },
+  "Too many requests waiting for an answer": { vi: "Bạn có quá nhiều lời mời đang chờ trả lời", zh: "你有太多邀請還在等待回覆" },
+  "No friend request from this player": { vi: "Người này không gửi lời mời kết bạn", zh: "這位玩家沒有送出好友邀請" },
+  "You can only send Lì Xì to friends": { vi: "Chỉ gửi Lì Xì được cho bạn bè", zh: "只能送紅包給好友" },
+  "Play 10 games before sending Lì Xì": { vi: "Chơi đủ 10 ván để được gửi Lì Xì", zh: "玩滿 10 局才能送紅包" },
+  "Your friend needs to play 10 games first": { vi: "Bạn của bạn cần chơi đủ 10 ván trước", zh: "你的好友需要先玩滿 10 局" },
+  "You can send Lì Xì after being friends for a day": { vi: "Kết bạn được 1 ngày mới gửi Lì Xì được", zh: "成為好友滿一天後才能送紅包" },
+  "Your friend has received all the Lì Xì they can today": { vi: "Hôm nay bạn của bạn đã nhận đủ Lì Xì rồi. Mai gửi nhé!", zh: "你的好友今天收到的紅包已達上限，明天再送吧！" },
+  "You already sent Lì Xì to this friend today": { vi: "Hôm nay bạn đã lì xì người này rồi", zh: "今天已經送過紅包給這位好友了" },
+  "This Lì Xì can't be opened": { vi: "Không mở được Lì Xì này (đã mở hoặc đã hết hạn)", zh: "無法打開這個紅包（已領取或已過期）" },
+  "You haven't earned that badge": { vi: "Bạn chưa đạt thành tích này", zh: "你還沒獲得這個成就" },
 };
