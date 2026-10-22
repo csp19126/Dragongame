@@ -27,6 +27,7 @@ export const BONUS_NAMES: Record<string, string> = {
   referral_welcome: "Invite welcome bonus",
   sticker_set: "Sticker set rewards",
   sticker_album: "Sticker album reward",
+  friend_gift: "Friend Lì Xì (made by the game)",
 };
 
 export interface AdminAnalytics {
@@ -42,6 +43,9 @@ export interface AdminAnalytics {
     coinsHeld: number; givenAway: number; chatToday: number;
     /** Private messages sent today */
     dmToday: number;
+    /** Friendships in total, and friend Lì Xì sent today */
+    friendships: number;
+    friendGiftsToday: number;
   };
   daily: { day: string; signups: number; active: number; plays: number; players: number; wagered: number; paid: number }[];
   games: { game: string; plays: number; players: number; wagered: number; paid: number; biggest: number }[];

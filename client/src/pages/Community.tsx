@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Redirect, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Mail, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
+import { Activity, BookOpen, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Mail, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { ShareDialog, type ShareWhat } from "@/components/ShareCard";
 import { useAuth, ME_KEY } from "@/hooks/use-auth";
@@ -22,13 +22,18 @@ import { nameHue } from "@shared/social";
 import { usePlayerSheet } from "@/components/PlayerSheet";
 import { DmTab } from "@/components/DirectMessages";
 import { useDmUnread } from "@/hooks/use-dm";
+import { useSocial, useSocialEvent, FRIENDS_KEY } from "@/hooks/use-social";
+import { LevelBadge, QuoteBlock, ReplyingBar, ReactionChips, MessageActions, applyReaction } from "@/components/SocialBits";
+import { FriendsTab } from "@/components/Friends";
+import { ActivityFeed } from "@/components/ActivityFeed";
+import type { ReactionCount, ReplyRef, FriendsView } from "@shared/friends";
 
 const fmt = fmtCoins;
 
 const TXT = {
   vi: {
     title: "Cộng Đồng", subtitle: "Trò chuyện · Nhắn riêng · Sưu tầm",
-    tabChat: "Trò chuyện", tabDm: "Tin nhắn", tabAlbum: "Album", tabInvite: "Mời bạn",
+    tabChat: "Trò chuyện", tabDm: "Tin nhắn", tabFriends: "Bạn bè", tabActivity: "Hoạt động", tabAlbum: "Album", tabInvite: "Mời bạn",
     rules: "Lịch sự nhé. Không mua bán xu, không gửi link hay số điện thoại.",
     placeholder: "Nhắn gì đó…", send: "Gửi", stickers: "Sticker của bạn", noStickers: "Bạn chưa có sticker nào. Mở gói trong Album!",
     playFirst: (n: number) => `Chơi thêm ${n} ván để mở khóa trò chuyện`, mutedUntil: "Bạn bị tạm khóa chat đến",
@@ -47,7 +52,7 @@ const TXT = {
   },
   en: {
     title: "Community", subtitle: "Chat · Message · Collect",
-    tabChat: "Chat", tabDm: "Messages", tabAlbum: "Album", tabInvite: "Invite",
+    tabChat: "Chat", tabDm: "Messages", tabFriends: "Friends", tabActivity: "Activity", tabAlbum: "Album", tabInvite: "Invite",
     rules: "Be kind. No selling coins, no links, no phone numbers.",
     placeholder: "Say something…", send: "Send", stickers: "Your stickers", noStickers: "No stickers yet. Open a pack in the Album!",
     playFirst: (n: number) => `Play ${n} more game${n === 1 ? "" : "s"} to unlock chat`, mutedUntil: "You're muted until",
@@ -66,7 +71,7 @@ const TXT = {
   },
   zh: {
     title: "社群", subtitle: "聊天 · 私訊 · 收集",
-    tabChat: "聊天", tabDm: "私訊", tabAlbum: "圖鑑", tabInvite: "邀請好友",
+    tabChat: "聊天", tabDm: "私訊", tabFriends: "好友", tabActivity: "動態", tabAlbum: "圖鑑", tabInvite: "邀請好友",
     rules: "請保持禮貌。禁止買賣金幣，禁止發送連結或電話號碼。",
     placeholder: "說點什麼…", send: "發送", stickers: "你的貼圖", noStickers: "你還沒有貼圖。到圖鑑開卡包吧！",
     playFirst: (n: number) => `再玩 ${n} 局即可解鎖聊天`, mutedUntil: "你已被暫時禁言，直到",
@@ -101,8 +106,11 @@ export default function Community() {
   const [, setLocation] = useLocation();
   const params = new URLSearchParams(search);
   const dm = params.get("dm")?.trim() || null;
-  const tab = (params.get("tab") as "chat" | "dm" | "album" | "invite" | null) ?? (dm ? "dm" : "chat");
+  const tab = (params.get("tab") as "chat" | "dm" | "friends" | "activity" | "album" | "invite" | null) ?? (dm ? "dm" : "chat");
+  const focus = Number(params.get("msg")) || null;
   const unread = useDmUnread();
+  const friends = useQuery<FriendsView>({ queryKey: FRIENDS_KEY, enabled: !!user, refetchInterval: 60_000 });
+  const incoming = friends.data?.incoming.length ?? 0;
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-12 h-12 animate-spin text-primary" /></div>;
   if (!user) return <Redirect to={`/auth?next=${encodeURIComponent(`/community?${search || `tab=${tab}`}`)}`} />;
@@ -110,6 +118,8 @@ export default function Community() {
   const tabs = [
     { id: "chat", icon: <MessageCircle className="w-4 h-4" />, label: L.tabChat, badge: 0 },
     { id: "dm", icon: <Mail className="w-4 h-4" />, label: L.tabDm, badge: unread },
+    { id: "friends", icon: <Users className="w-4 h-4" />, label: L.tabFriends, badge: incoming },
+    { id: "activity", icon: <Activity className="w-4 h-4" />, label: L.tabActivity, badge: 0 },
     { id: "album", icon: <BookOpen className="w-4 h-4" />, label: L.tabAlbum, badge: 0 },
     { id: "invite", icon: <Gift className="w-4 h-4" />, label: L.tabInvite, badge: 0 },
   ] as const;
@@ -122,18 +132,20 @@ export default function Community() {
           <h1 className="font-display text-3xl sm:text-4xl leading-none bg-gradient-to-b from-yellow-200 via-yellow-400 to-orange-500 bg-clip-text text-transparent" data-testid="text-community-title">{L.title}</h1>
           <p className="text-[11px] font-black tracking-[0.25em] text-yellow-500/80 uppercase mt-1">{L.subtitle}</p>
         </div>
-        <div className="w-full grid grid-cols-4 gap-1 p-1 rounded-2xl bg-black/40 border border-white/10">
+        <div className="w-full grid grid-cols-6 gap-0.5 p-1 rounded-2xl bg-black/40 border border-white/10">
           {tabs.map((t) => (
             <button key={t.id} type="button" onClick={() => setLocation(`/community?tab=${t.id}`)}
-              className={`relative py-1.5 rounded-xl text-[11px] leading-tight font-black flex flex-col items-center justify-center gap-0.5 transition ${tab === t.id ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black shadow" : "text-white/70"}`}
+              className={`relative py-1.5 rounded-xl text-[10px] leading-tight font-black flex flex-col items-center justify-center gap-0.5 transition ${tab === t.id ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black shadow" : "text-white/70"}`}
               data-testid={`tab-community-${t.id}`}>
-              {t.icon}<span className="truncate max-w-full px-0.5">{t.label}</span>
+              {t.icon}<span className="truncate max-w-full">{t.label}</span>
               {t.badge > 0 && <span className="absolute top-0.5 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center" data-testid="tab-dm-badge">{t.badge > 99 ? "99+" : t.badge}</span>}
             </button>
           ))}
         </div>
-        {tab === "chat" && <ChatTab L={L} me={user.username} />}
+        {tab === "chat" && <ChatTab L={L} me={user.username} focus={focus} />}
         {tab === "dm" && <DmTab dm={dm} errs={L.err} />}
+        {tab === "friends" && <FriendsTab />}
+        {tab === "activity" && <ActivityFeed />}
         {tab === "album" && <AlbumTab L={L} lang={lang} />}
         {tab === "invite" && <InviteTab L={L} />}
       </main>
@@ -352,42 +364,65 @@ function GiftDialog({ s, count, left, L, lang, onClose }: { s: Sticker; count: n
 
 // ---------------- Chat ----------------
 
-interface Msg { id: number; username: string; text: string | null; sticker: string | null; createdAt: string; admin: boolean | null; avatar?: string | null }
+interface Msg {
+  id: number; username: string; text: string | null; sticker: string | null; createdAt: string; admin: boolean | null; avatar?: string | null;
+  level?: number; reply?: ReplyRef | null; reactions?: ReactionCount[];
+}
 interface ChatResp { messages: Msg[]; removed: number[]; me: { mutedUntil: string | null; gamesToUnlock: number } }
 
 const hue = nameHue;
 
-function ChatTab({ L, me }: { L: L; me: string }) {
+/** Scrolls to a message and makes it flash; false if it isn't loaded */
+function jumpTo(id: number) {
+  const el = document.querySelector(`[data-msg-id="${id}"]`) as HTMLElement | null;
+  if (!el) return false;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("msg-flash");
+  window.setTimeout(() => el.classList.remove("msg-flash"), 1600);
+  return true;
+}
+
+function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
   const { toast } = useToast();
-  const { loc, srv } = useLang();
+  const { loc, srv, tr } = useLang();
   const showPlayer = usePlayerSheet();
+  const { connected } = useSocial();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [meInfo, setMeInfo] = useState<ChatResp["me"] | null>(null);
   const [text, setText] = useState("");
   const [tray, setTray] = useState(false);
   const [sending, setSending] = useState(false);
+  const [active, setActive] = useState<number | null>(null);
+  const [replyTo, setReplyTo] = useState<Msg | null>(null);
+  const [mentions, setMentions] = useState<string[]>([]);
+  const [suggest, setSuggest] = useState<{ q: string; start: number } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const lastId = useRef(0);
+  const jumped = useRef(false);
   const announcement = useQuery<{ text: string | null }>({ queryKey: ["/api/announcement"], refetchInterval: 60_000 });
   const album = useQuery<AlbumView>({ queryKey: ALBUM_KEY });
+  const sugg = useQuery<{ players: { username: string; avatarUrl: string | null }[] }>({
+    queryKey: [`/api/players/suggest?q=${encodeURIComponent(suggest?.q ?? "")}`], enabled: !!suggest && suggest.q.length >= 1, staleTime: 15_000,
+  });
 
   const nearBottom = () => { const el = listRef.current; return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 120; };
   const toBottom = () => requestAnimationFrame(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; });
 
-  const merge = useCallback((r: ChatResp, forceScroll = false) => {
+  const addMessages = useCallback((incoming: Msg[], gone: number[] = [], forceScroll = false) => {
     const stick = forceScroll || nearBottom();
-    setMeInfo(r.me);
     setMsgs((cur) => {
-      const gone = new Set(r.removed);
-      const seen = new Set(cur.map((m) => m.id));
-      const next = [...cur.filter((m) => !gone.has(m.id)), ...r.messages.filter((m) => !seen.has(m.id) && !gone.has(m.id))].slice(-200);
+      const g = new Set(gone);
+      const seen = new Map(cur.map((m) => [m.id, m]));
+      for (const m of incoming) if (!g.has(m.id)) seen.set(m.id, { ...seen.get(m.id), ...m });
+      const next = [...seen.values()].filter((m) => !g.has(m.id)).sort((a, b) => a.id - b.id).slice(-200);
       if (next.length) lastId.current = Math.max(lastId.current, next[next.length - 1].id);
       return next;
     });
-    if (stick && r.messages.length) toBottom();
+    if (stick && incoming.length) toBottom();
   }, []);
 
-  // Poll every 2.5 s while the page is visible
+  // Live over the socket; polling catches up (often while the socket is down, rarely while it's up)
   useEffect(() => {
     let stop = false;
     let timer: number | undefined;
@@ -395,36 +430,83 @@ function ChatTab({ L, me }: { L: L; me: string }) {
       if (stop) return;
       if (document.visibilityState === "visible") {
         try {
-          const res = await fetch(`/api/chat${lastId.current ? `?after=${lastId.current}` : ""}`, { credentials: "include" });
-          if (res.ok) merge(await res.json(), lastId.current === 0);
+          const first = lastId.current === 0;
+          const res = await fetch(`/api/chat${first ? "" : `?after=${lastId.current}`}`, { credentials: "include" });
+          if (res.ok) { const r: ChatResp = await res.json(); setMeInfo(r.me); addMessages(r.messages, r.removed, first); }
         } catch { /* offline: try again next time */ }
       }
-      timer = window.setTimeout(poll, 2500);
+      timer = window.setTimeout(poll, connected ? 15_000 : 2500);
     };
     poll();
     return () => { stop = true; clearTimeout(timer); };
-  }, [merge]);
+  }, [addMessages, connected]);
+
+  useSocialEvent((m) => {
+    if (m.t === "chat") addMessages([m.m]);
+    else if (m.t === "chat_removed") setMsgs((cur) => cur.filter((x) => !m.ids.includes(x.id)));
+    else if (m.t === "react" && m.scope === "chat" && m.by !== me) {
+      setMsgs((cur) => cur.map((x) => (x.id === m.id ? { ...x, reactions: applyReaction(x.reactions ?? [], m.e, m.on, false) } : x)));
+    }
+  });
+
+  // Opened from a notification: jump to that message once it's loaded
+  useEffect(() => {
+    if (!focus || jumped.current || !msgs.length) return;
+    jumped.current = true;
+    window.setTimeout(() => { if (!jumpTo(focus)) toast({ title: tr("Tin nhắn này đã cũ, không còn hiện ở đây", "That message is too old to show here", "這則訊息太舊，已不在這裡顯示") }); }, 150);
+  }, [focus, msgs.length, toast, tr]);
 
   const post = async (body: { text?: string; sticker?: string }) => {
     setSending(true);
     try {
-      const res = await apiRequest("POST", "/api/chat", body);
+      const res = await apiRequest("POST", "/api/chat", { ...body, ...(replyTo ? { replyTo: replyTo.id } : {}), ...(body.text && mentions.length ? { mentions } : {}) });
       const m: Msg = await res.json();
-      setMsgs((cur) => (cur.some((x) => x.id === m.id) ? cur : [...cur, m]));
-      lastId.current = Math.max(lastId.current, m.id);
-      setText(""); setTray(false); toBottom();
+      addMessages([m], [], true);
+      setText(""); setTray(false); setReplyTo(null); setMentions([]); setSuggest(null);
     } catch (e) {
       const code = e instanceof ApiError ? e.message : "";
       toast({ title: L.err[code] ?? srv(code), variant: "destructive" });
     } finally { setSending(false); }
   };
 
+  const react = async (id: number, emoji: string) => {
+    setActive(null);
+    try {
+      const r = await (await apiRequest("POST", `/api/chat/${id}/react`, { emoji })).json() as { on: boolean; reactions: ReactionCount[] };
+      if (r.on) soundManager.pop();
+      setMsgs((cur) => cur.map((x) => (x.id === id ? { ...x, reactions: r.reactions } : x)));
+    } catch (e) {
+      const code = e instanceof ApiError ? e.message : "";
+      toast({ title: L.err[code] ?? srv(code), variant: "destructive" });
+    }
+  };
+
   const report = async (id: number) => {
+    setActive(null);
     try { await apiRequest("POST", `/api/chat/${id}/report`); toast({ title: L.reported }); } catch { /* already reported */ }
+  };
+
+  // @mention autocomplete: the word being typed right before the cursor
+  const onType = (v: string) => {
+    setText(v);
+    const caret = inputRef.current?.selectionStart ?? v.length;
+    const m = v.slice(0, caret).match(/(?:^|\s)@([\p{L}\p{N}_.-]{0,24})$/u);
+    setSuggest(m ? { q: m[1], start: caret - m[1].length - 1 } : null);
+  };
+  const pick = (name: string) => {
+    if (!suggest) return;
+    const caret = suggest.start + 1 + suggest.q.length;
+    const next = `${text.slice(0, suggest.start)}@${name} ${text.slice(caret)}`;
+    setText(next.slice(0, CHAT_MAX_LEN));
+    setMentions((cur) => (cur.includes(name) ? cur : [...cur, name]));
+    setSuggest(null);
+    requestAnimationFrame(() => { const el = inputRef.current; if (el) { el.focus(); const p = suggest.start + name.length + 2; el.setSelectionRange(p, p); } });
   };
 
   const ownedStickers = useMemo(() => STICKERS.filter((s) => (album.data?.owned[s.id] ?? 0) > 0), [album.data]);
   const locked = meInfo && (meInfo.gamesToUnlock > 0 || meInfo.mutedUntil);
+  const mentionsMe = (t: string | null) => !!t && t.toLowerCase().includes(`@${me.toLowerCase()}`);
+  const suggestions = suggest && suggest.q.length >= 1 ? sugg.data?.players ?? [] : [];
 
   return (
     <div className="w-full flex flex-col gap-2" data-testid="community-chat">
@@ -434,31 +516,41 @@ function ChatTab({ L, me }: { L: L; me: string }) {
           <p className="text-xs text-yellow-100 font-semibold">{announcement.data.text}</p>
         </div>
       )}
-      <div ref={listRef} className={`${tray ? "h-[calc(100vh-460px)] min-h-[180px]" : "h-[calc(100vh-330px)] min-h-[300px]"} overflow-y-auto rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`} data-testid="chat-list">
+      <div ref={listRef} onClick={(e) => { if (e.target === e.currentTarget) setActive(null); }}
+        className={`${tray ? "h-[calc(100dvh-470px)] min-h-[180px]" : replyTo ? "h-[calc(100dvh-400px)] min-h-[260px]" : "h-[calc(100dvh-345px)] min-h-[300px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`} data-testid="chat-list">
         {msgs.length === 0 && <p className="m-auto text-sm text-white/50">{L.empty}</p>}
         {msgs.map((m) => {
           const mine = m.username === me;
           const st = m.sticker ? STICKER_BY_ID.get(m.sticker) : null;
+          const tagged = !mine && mentionsMe(m.text);
           return (
-            <div key={m.id} className={`group flex items-start gap-1.5 max-w-[88%] ${mine ? "self-end flex-row-reverse" : "self-start"}`} data-testid={`chat-msg-${m.id}`}>
+            <div key={m.id} data-msg-id={m.id} className={`group flex items-start gap-1.5 max-w-[88%] rounded-2xl transition-colors ${mine ? "self-end flex-row-reverse" : "self-start"}`} data-testid={`chat-msg-${m.id}`}>
               <Avatar user={{ username: m.username, avatarUrl: m.avatar }} size={30} onClick={m.admin === null ? undefined : () => showPlayer(m.username)} testid={`chat-avatar-${m.id}`} />
               <div className={`flex flex-col min-w-0 ${mine ? "items-end" : "items-start"}`}>
-              <button type="button" disabled={m.admin === null} onClick={() => showPlayer(m.username)} className="text-[10px] font-black px-1 text-left" style={{ color: `hsl(${hue(m.username)} 80% 70%)` }}>
-                {m.admin && "🛡️ "}{m.username}
-                <span className="text-white/30 font-normal ml-1.5">{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-              </button>
-              <div className="flex items-end gap-1">
-                {st ? (
-                  <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div>
-                ) : (
-                  <div className={`px-3 py-1.5 rounded-2xl text-sm break-words ${mine ? "bg-gradient-to-b from-yellow-400 to-orange-500 text-black rounded-br-md" : m.admin ? "bg-red-800/80 text-white rounded-bl-md border border-yellow-400/40" : "bg-white/10 text-white rounded-bl-md"}`}>{m.text}</div>
-                )}
-                {!mine && (
-                  <button type="button" onClick={() => report(m.id)} className="opacity-30 hover:opacity-100 p-1" aria-label={L.report} data-testid={`button-report-${m.id}`}>
-                    <Flag className="w-3 h-3 text-white" />
+                <button type="button" disabled={m.admin === null} onClick={() => showPlayer(m.username)} className="text-[10px] font-black px-1 text-left flex items-center gap-1 flex-wrap" style={{ color: `hsl(${hue(m.username)} 80% 70%)` }}>
+                  <span>{m.admin && "🛡️ "}{m.username}</span>
+                  <LevelBadge level={m.level} />
+                  <span className="text-white/30 font-normal">{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                </button>
+                <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+                  {m.reply && <QuoteBlock reply={m.reply} onJump={(id) => { if (!jumpTo(id)) toast({ title: tr("Tin nhắn này đã cũ, không còn hiện ở đây", "That message is too old to show here", "這則訊息太舊，已不在這裡顯示") }); }} />}
+                  <button type="button" onClick={() => setActive((a) => (a === m.id ? null : m.id))} className="text-left" data-testid={`chat-bubble-${m.id}`}>
+                    {st ? (
+                      <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div>
+                    ) : (
+                      <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] ${mine ? "bg-gradient-to-b from-yellow-400 to-orange-500 text-black rounded-br-md" : m.admin ? "bg-red-800/80 text-white rounded-bl-md border border-yellow-400/40" : tagged ? "bg-yellow-400/15 text-white rounded-bl-md border border-yellow-300/60" : "bg-white/10 text-white rounded-bl-md"}`}>
+                        <MentionText text={m.text ?? ""} mine={mine} />
+                      </div>
+                    )}
                   </button>
-                )}
-              </div>
+                  <ReactionChips reactions={m.reactions ?? []} onToggle={(e) => react(m.id, e)} mine={mine} />
+                  {active === m.id && !locked && (
+                    <MessageActions mine={mine} onReact={(e) => react(m.id, e)} onReply={() => { setReplyTo(m); setActive(null); inputRef.current?.focus(); }}
+                      extra={!mine ? (
+                        <button type="button" onClick={() => report(m.id)} className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:bg-white/10" aria-label={L.report} data-testid={`button-report-${m.id}`}><Flag className="w-3.5 h-3.5" /></button>
+                      ) : undefined} />
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -483,20 +575,42 @@ function ChatTab({ L, me }: { L: L; me: string }) {
           {meInfo!.mutedUntil ? <><Clock className="w-4 h-4" />{L.mutedUntil} {new Date(meInfo!.mutedUntil).toLocaleString()}</> : <><Lock className="w-4 h-4" />{L.playFirst(meInfo!.gamesToUnlock)}</>}
         </div>
       ) : (
-        <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (text.trim()) post({ text }); }}>
-          <button type="button" onClick={() => setTray((v) => !v)} className={`w-11 h-11 rounded-xl flex items-center justify-center ${tray ? "bg-yellow-400 text-black" : "bg-white/10 text-white"}`} aria-label={L.stickers} data-testid="button-sticker-tray">
-            <Smile className="w-5 h-5" />
-          </button>
-          <input value={text} onChange={(e) => setText(e.target.value)} maxLength={CHAT_MAX_LEN} placeholder={L.placeholder}
-            className="flex-1 min-w-0 rounded-xl bg-black/50 border border-white/15 px-3 text-white placeholder:text-white/30" data-testid="input-chat" />
-          <button type="submit" disabled={sending || !text.trim()} className="w-11 h-11 rounded-xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black flex items-center justify-center disabled:opacity-40" aria-label={L.send} data-testid="button-chat-send">
-            {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </button>
-        </form>
+        <div className="relative flex flex-col gap-1.5">
+          {replyTo && <ReplyingBar reply={{ id: replyTo.id, username: replyTo.username, text: replyTo.text, sticker: replyTo.sticker }} onCancel={() => setReplyTo(null)} />}
+          <AnimatePresence>
+            {suggestions.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="absolute bottom-full mb-1.5 left-12 right-12 rounded-2xl bg-[#1f0f38] border border-yellow-400/40 shadow-2xl overflow-hidden z-20" data-testid="mention-suggest">
+                {suggestions.map((p) => (
+                  <button key={p.username} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(p.username)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/10 active:bg-white/10 border-b border-white/5 last:border-0" data-testid={`suggest-${p.username}`}>
+                    <Avatar user={p} size={26} /><span className="font-bold text-white text-sm truncate">@{p.username}</span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (text.trim()) post({ text }); }}>
+            <button type="button" onClick={() => setTray((v) => !v)} className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${tray ? "bg-yellow-400 text-black" : "bg-white/10 text-white"}`} aria-label={L.stickers} data-testid="button-sticker-tray">
+              <Smile className="w-5 h-5" />
+            </button>
+            <input ref={inputRef} value={text} onChange={(e) => onType(e.target.value)} onBlur={() => window.setTimeout(() => setSuggest(null), 150)} maxLength={CHAT_MAX_LEN} placeholder={L.placeholder}
+              enterKeyHint="send" className="flex-1 min-w-0 rounded-xl bg-[#140b26] border border-white/15 px-3 text-white placeholder:text-white/30" data-testid="input-chat" />
+            <button type="submit" disabled={sending || !text.trim()} className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black flex items-center justify-center disabled:opacity-40" aria-label={L.send} data-testid="button-chat-send">
+              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            </button>
+          </form>
+        </div>
       )}
-      <p className="text-[10px] text-white/40 text-center">{L.rules}</p>
+      <p className="text-[10px] text-white/40 text-center">{L.rules} {tr("Chạm vào tin nhắn để thả cảm xúc hoặc trả lời · gõ @ để gọi tên.", "Tap a message to react or reply · type @ to mention someone.", "點訊息可按表情或回覆 · 輸入 @ 可提及玩家。")}</p>
     </div>
   );
+}
+
+/** Message text with @names picked out */
+function MentionText({ text, mine }: { text: string; mine: boolean }) {
+  const parts = text.split(/(@[\p{L}\p{N}_.-]{3,24})/u);
+  return <>{parts.map((p, i) => (i % 2 ? <span key={i} className={`font-black ${mine ? "text-red-900" : "text-yellow-300"}`}>{p}</span> : p))}</>;
 }
 
 // ---------------- Invite ----------------

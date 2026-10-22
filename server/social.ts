@@ -9,7 +9,7 @@ import { randomBytes } from "crypto";
 import { and, desc, eq, gt, inArray, isNull, lt, or, sql, count } from "drizzle-orm";
 import { db } from "./db";
 import {
-  users, userAvatars, directMessages, userBlocks, dmReports, profileReports, userStickers, poolMatches, type User,
+  users, userAvatars, directMessages, userBlocks, dmReports, profileReports, userStickers, poolMatches, messageReactions, userSocial, type User,
 } from "@shared/schema";
 import {
   AVATAR_MAX_BYTES, AVATAR_CHANGES_PER_DAY, DM_MAX_LEN, DM_COOLDOWN_MS, DM_PAGE, ONLINE_MS, sniffImage,
@@ -17,6 +17,9 @@ import {
 } from "@shared/social";
 import { LEAGUE_WIN, LEAGUE_LOSS, seasonOf, tierOf } from "@shared/league";
 import { speakerRefusal, paceLimiter, readMessage } from "./speech";
+import { isReaction, REACTIONS_PER_MINUTE, quote, type ReactionCount, type ReplyRef } from "@shared/friends";
+import { socialProfile, visibleOnline, unfriend, dmRefusal, pushUnread, notifyReaction } from "./friends";
+import { push } from "./hub";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -103,7 +106,7 @@ async function profileOf(u: User, viewer: User): Promise<PlayerProfile> {
   return {
     username: u.username,
     avatarUrl: u.profileImageUrl,
-    online: isOnline(u.id, u.lastSeenAt),
+    online: u.id === viewer.id || visibleOnline(u.id, u.lastSeenAt),
     memberSince: u.createdAt ? u.createdAt.toISOString() : null,
     gamesPlayed: u.gamesPlayed,
     biggestWin: u.maxWin,
@@ -112,6 +115,7 @@ async function profileOf(u: User, viewer: User): Promise<PlayerProfile> {
     admin: u.isAdmin,
     you: u.id === viewer.id,
     blockedByYou: blocks.byMe,
+    ...(await socialProfile(u, viewer)),
   };
 }
 
@@ -120,8 +124,54 @@ async function profileOf(u: User, viewer: User): Promise<PlayerProfile> {
 const dmPace = paceLimiter(DM_COOLDOWN_MS);
 const CANT_MESSAGE = "Can't message this player";
 
-function toDm(m: typeof directMessages.$inferSelect, me: string): DmMessage {
-  return { id: m.id, mine: m.fromId === me, text: m.text, sticker: m.sticker, createdAt: m.createdAt.toISOString(), read: !!m.readAt };
+type DmRow = typeof directMessages.$inferSelect;
+function toDm(m: DmRow, me: string, extra?: { replies: Map<number, DmRow>; reactions: Map<number, ReactionCount[]> }): DmMessage {
+  const r = m.replyTo ? extra?.replies.get(m.replyTo) : undefined;
+  const reply: ReplyRef | null = m.replyTo ? (r && !r.deleted
+    ? { id: r.id, username: null, mine: r.fromId === me, text: quote(r.text), sticker: r.sticker }
+    : { id: m.replyTo, username: null, mine: false, text: null, sticker: null }) : null;
+  return {
+    id: m.id, mine: m.fromId === me, text: m.text, sticker: m.sticker, createdAt: m.createdAt.toISOString(), read: !!m.readAt,
+    reply, reactions: extra?.reactions.get(m.id) ?? [],
+  };
+}
+
+/** Reactions on some messages, counted per emoji, marking the viewer's own */
+export async function reactionsFor(scope: "chat" | "dm", ids: number[], viewer: string): Promise<Map<number, ReactionCount[]>> {
+  const out = new Map<number, ReactionCount[]>();
+  if (!ids.length) return out;
+  const rows = await db.select({ id: messageReactions.messageId, e: messageReactions.emoji, n: count(), mine: sql<boolean>`bool_or(${messageReactions.userId} = ${viewer})` })
+    .from(messageReactions).where(and(eq(messageReactions.scope, scope), inArray(messageReactions.messageId, ids)))
+    .groupBy(messageReactions.messageId, messageReactions.emoji);
+  for (const r of rows) {
+    const list = out.get(r.id) ?? [];
+    list.push({ e: r.e, n: r.n, mine: !!r.mine });
+    out.set(r.id, list);
+  }
+  return out;
+}
+
+async function dmExtras(rows: DmRow[], viewer: string) {
+  const replyIds = [...new Set(rows.map((m) => m.replyTo).filter((x): x is number => !!x))];
+  const replies = new Map((replyIds.length ? await db.select().from(directMessages).where(inArray(directMessages.id, replyIds)) : []).map((r) => [r.id, r]));
+  return { replies, reactions: await reactionsFor("dm", rows.map((m) => m.id), viewer) };
+}
+
+/** Toggles a reaction; returns whether it's now on, or null when the limit is hit */
+const reactPace = new Map<string, { at: number; n: number }>();
+export function reactAllowed(userId: string) {
+  const now = Date.now();
+  const p = reactPace.get(userId);
+  if (!p || now - p.at > 60_000) { reactPace.set(userId, { at: now, n: 1 }); if (reactPace.size > 20000) reactPace.clear(); return true; }
+  if (p.n >= REACTIONS_PER_MINUTE) return false;
+  p.n++;
+  return true;
+}
+export async function toggleReaction(scope: "chat" | "dm", messageId: number, userId: string, emoji: string) {
+  const [added] = await db.insert(messageReactions).values({ scope, messageId, userId, emoji }).onConflictDoNothing().returning();
+  if (added) return true;
+  await db.delete(messageReactions).where(and(eq(messageReactions.scope, scope), eq(messageReactions.messageId, messageId), eq(messageReactions.userId, userId), eq(messageReactions.emoji, emoji)));
+  return false;
 }
 
 const between = (a: string, b: string) =>
@@ -143,13 +193,14 @@ async function conversations(me: string): Promise<DmConversation[]> {
     ),
     latest as (select distinct on (other) * from mine order by other, id desc)
     select l.id, l.from_id, l.text, l.sticker, l.created_at, l.other, u.username, u.profile_image_url, u.last_seen_at,
+      (select level from ${userSocial} s where s.user_id = l.other) as level,
       (select count(*)::int from ${directMessages} x where x.to_id = ${me} and x.from_id = l.other and x.read_at is null and not x.deleted) as unread
     from latest l join ${users} u on u.id = l.other
     where not u.banned
     order by l.id desc limit 100
   `)).rows as Record<string, any>[];
   return rows.map((r) => ({
-    username: r.username, avatarUrl: r.profile_image_url ?? null, online: isOnline(r.other, r.last_seen_at),
+    username: r.username, avatarUrl: r.profile_image_url ?? null, online: visibleOnline(r.other, r.last_seen_at), level: r.level ?? 1,
     last: { text: r.text, sticker: r.sticker, mine: r.from_id === me, at: new Date(r.created_at).toISOString() },
     unread: r.unread,
   }));
@@ -159,7 +210,7 @@ async function conversations(me: string): Promise<DmConversation[]> {
 
 async function reportedProfiles() {
   const rows = (await db.execute(sql`
-    select r.user_id, u.username, u.profile_image_url, u.muted_until, u.banned,
+    select r.user_id, u.username, u.profile_image_url, u.muted_until, u.banned, (select bio from ${userSocial} s where s.user_id = r.user_id) as bio,
       count(*)::int as reporters, max(r.created_at) as last_at,
       (array_agg(r.reason order by r.created_at desc) filter (where r.reason is not null and r.reason <> ''))[1:3] as reasons
     from ${profileReports} r join ${users} u on u.id = r.user_id
@@ -167,7 +218,7 @@ async function reportedProfiles() {
     order by max(r.created_at) desc limit 100
   `)).rows as Record<string, any>[];
   return rows.map((r) => ({
-    userId: r.user_id, username: r.username, avatarUrl: r.profile_image_url ?? null, reporters: r.reporters,
+    userId: r.user_id, username: r.username, avatarUrl: r.profile_image_url ?? null, bio: r.bio ?? null, reporters: r.reporters,
     reasons: r.reasons ?? [], lastAt: new Date(r.last_at).toISOString(),
     mutedUntil: r.muted_until ? new Date(r.muted_until).toISOString() : null, banned: !!r.banned,
   }));
@@ -273,8 +324,11 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     const u = await findPlayer(req.params.username);
     if (!u) return res.status(404).json({ message: "Player not found" });
     if (u.id === me.id) return res.status(400).json({ message: "Not on yourself" });
-    if (block) await db.insert(userBlocks).values({ blockerId: me.id, blockedId: u.id }).onConflictDoNothing();
-    else await db.delete(userBlocks).where(and(eq(userBlocks.blockerId, me.id), eq(userBlocks.blockedId, u.id)));
+    if (block) {
+      await db.insert(userBlocks).values({ blockerId: me.id, blockedId: u.id }).onConflictDoNothing();
+      // Blocking ends a friendship and any friend requests between the two
+      await unfriend(me.id, u.id);
+    } else await db.delete(userBlocks).where(and(eq(userBlocks.blockerId, me.id), eq(userBlocks.blockedId, u.id)));
     res.json({ blocked: block });
   });
 
@@ -308,11 +362,15 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     const [seen] = await db.select({ id: sql<number>`max(${directMessages.id})` }).from(directMessages)
       .where(and(eq(directMessages.fromId, me.id), eq(directMessages.toId, u.id), sql`${directMessages.readAt} is not null`));
     const blocks = await blockState(me.id, u.id);
+    const refusal = blocks.either ? "Can't message this player" : await dmRefusal(me, u);
+    const [lvl] = await db.select({ level: userSocial.level }).from(userSocial).where(eq(userSocial.userId, u.id));
+    const extras = await dmExtras(rows, me.id);
     const thread: DmThread & { readUpTo: number } = {
-      peer: { username: u.username, avatarUrl: u.profileImageUrl, online: isOnline(u.id, u.lastSeenAt) },
-      messages: rows.map((m) => toDm(m, me.id)),
+      peer: { username: u.username, avatarUrl: u.profileImageUrl, online: visibleOnline(u.id, u.lastSeenAt), level: lvl?.level ?? 1 },
+      messages: rows.map((m) => toDm(m, me.id, extras)),
       more,
-      cantMessage: blocks.either,
+      cantMessage: !!refusal,
+      cantReason: refusal,
       blockedByYou: blocks.byMe,
       readUpTo: seen?.id ?? 0,
     };
@@ -326,24 +384,59 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     const to = await findPlayer(req.body?.to);
     if (!to) return res.status(404).json({ message: "Player not found" });
     if (to.id === me.id) return res.status(400).json({ message: "You can't message yourself" });
-    if ((await blockState(me.id, to.id)).either) return res.status(403).json({ message: CANT_MESSAGE });
+    const refusal = await dmRefusal(me, to);
+    if (refusal) return res.status(403).json({ message: refusal });
     const early = dmPace.check(me, null);
     if (early) return res.status(early.status).json({ message: early.message });
     const msg = await readMessage(me, req.body, DM_MAX_LEN);
     if ("status" in msg) return res.status(msg.status).json({ message: msg.message });
+    // A reply must answer a message in this same conversation that's still there
+    let replyTo: number | null = null;
+    if (req.body?.replyTo !== undefined && req.body?.replyTo !== null) {
+      const id = Number(req.body.replyTo);
+      const [orig] = Number.isInteger(id) ? await db.select().from(directMessages).where(and(eq(directMessages.id, id), between(me.id, to.id), eq(directMessages.deleted, false))) : [];
+      if (!orig) return res.status(400).json({ message: "That message can't be answered" });
+      replyTo = id;
+    }
     const again = msg.text ? dmPace.check(me, msg.text) : null;
     if (again) return res.status(again.status).json({ message: again.message });
     dmPace.record(me, msg.text);
-    const [m] = await db.insert(directMessages).values({ fromId: me.id, toId: to.id, text: msg.text, sticker: msg.sticker }).returning();
-    res.json(toDm(m, me.id));
+    const [m] = await db.insert(directMessages).values({ fromId: me.id, toId: to.id, text: msg.text, sticker: msg.sticker, replyTo }).returning();
+    const extras = await dmExtras([m], me.id);
+    // Straight to the other player's open tabs (and my other tabs); the id lets screens skip repeats
+    push(to.id, { t: "dm", with: me.username, m: toDm(m, to.id, extras) });
+    push(me.id, { t: "dm", with: to.username, m: toDm(m, me.id, extras) });
+    void pushUnread(to.id).catch(() => {});
+    res.json(toDm(m, me.id, extras));
+  });
+
+  app.post("/api/dm/:id/react", requireUser, async (req, res) => {
+    const me: User = res.locals.user;
+    const id = Number(req.params.id);
+    const emoji = req.body?.emoji;
+    if (!Number.isInteger(id) || !isReaction(emoji)) return res.status(400).json({ message: "Bad request" });
+    const [m] = await db.select().from(directMessages).where(and(eq(directMessages.id, id), eq(directMessages.deleted, false)));
+    if (!m || (m.fromId !== me.id && m.toId !== me.id)) return res.status(404).json({ message: "Not found" });
+    const other = m.fromId === me.id ? m.toId : m.fromId;
+    if ((await blockState(me.id, other)).either) return res.status(403).json({ message: CANT_MESSAGE });
+    if (!reactAllowed(me.id)) return res.status(429).json({ message: "slow_down" });
+    const on = await toggleReaction("dm", id, me.id, emoji);
+    const [o] = await db.select({ username: users.username }).from(users).where(eq(users.id, other));
+    push(other, { t: "react", scope: "dm", id, e: emoji, by: me.username, on, with: me.username });
+    push(me.id, { t: "react", scope: "dm", id, e: emoji, by: me.username, on, with: o?.username });
+    if (on && m.fromId !== me.id) await notifyReaction(m.fromId, me.id, "dm", id, quote(m.text), emoji);
+    res.json({ on, reactions: (await reactionsFor("dm", [id], me.id)).get(id) ?? [] });
   });
 
   app.post("/api/dm/read", requireUser, async (req, res) => {
     const me: User = res.locals.user;
     const u = await findPlayer(req.body?.with);
     if (!u) return res.status(404).json({ message: "Player not found" });
-    await db.update(directMessages).set({ readAt: new Date() })
-      .where(and(eq(directMessages.fromId, u.id), eq(directMessages.toId, me.id), isNull(directMessages.readAt)));
+    const read = await db.update(directMessages).set({ readAt: new Date() })
+      .where(and(eq(directMessages.fromId, u.id), eq(directMessages.toId, me.id), isNull(directMessages.readAt))).returning({ id: directMessages.id });
+    // "Seen" for the sender, straight away
+    if (read.length) push(u.id, { t: "seen", by: me.username, upTo: Math.max(...read.map((r) => r.id)) });
+    void pushUnread(me.id).catch(() => {});
     res.json({ total: await unreadTotal(me.id) });
   });
 

@@ -250,6 +250,8 @@ export const chatMessages = pgTable("chat_messages", {
   username: text("username").notNull(),
   text: text("text"),
   sticker: text("sticker"),
+  /** The message this one answers */
+  replyTo: integer("reply_to"),
   deleted: boolean("deleted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [index("chat_messages_created").on(t.createdAt)]);
@@ -283,6 +285,8 @@ export const directMessages = pgTable("direct_messages", {
   toId: varchar("to_id").notNull(),
   text: text("text"),
   sticker: text("sticker"),
+  /** The message this one answers (in the same conversation) */
+  replyTo: integer("reply_to"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   readAt: timestamp("read_at"),
   deleted: boolean("deleted").default(false).notNull(),
@@ -315,6 +319,84 @@ export const profileReports = pgTable("profile_reports", {
   reason: text("reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [uniqueIndex("profile_reports_once").on(t.userId, t.reporterId)]);
+
+// ---- Social 2.0: friends, notifications, reactions, the activity feed, friend Lì Xì ----
+
+// One row per pair of friends, the smaller user id first
+export const friendships = pgTable("friendships", {
+  userA: varchar("user_a").notNull(),
+  userB: varchar("user_b").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.userA, t.userB] }), index("friendships_b").on(t.userB)]);
+
+export const friendRequests = pgTable("friend_requests", {
+  fromId: varchar("from_id").notNull(),
+  toId: varchar("to_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.fromId, t.toId] }), index("friend_requests_to").on(t.toId)]);
+
+// The bell: friend requests, mentions, replies, reactions (grouped by `ref`), gifts, friends' big wins
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  kind: text("kind").notNull(),
+  actorId: varchar("actor_id"),
+  /** Groups notifications that update in place (reactions to one message, one gift) */
+  ref: text("ref"),
+  data: jsonb("data").$type<Record<string, unknown>>().default({}).notNull(),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("notifications_user").on(t.userId, t.id), index("notifications_ref").on(t.userId, t.ref), index("notifications_created").on(t.createdAt), index("notifications_actor").on(t.actorId)]);
+
+// Emoji reactions on public chat ("chat") and private ("dm") messages: one of each emoji per player
+export const messageReactions = pgTable("message_reactions", {
+  scope: varchar("scope", { length: 4 }).notNull(),
+  messageId: integer("message_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.scope, t.messageId, t.userId, t.emoji] }), index("message_reactions_user").on(t.userId)]);
+
+// Activity feed: big wins, jackpots, horse winners, new players, level-ups, new friendships.
+// `ref` makes each event appear once however many times it's noticed.
+export const feedItems = pgTable("feed_items", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(),
+  userId: varchar("user_id").notNull(),
+  otherId: varchar("other_id"),
+  game: text("game"),
+  amount: bigint("amount", { mode: "number" }),
+  bet: bigint("bet", { mode: "number" }),
+  level: integer("level"),
+  ref: text("ref").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("feed_items_ref").on(t.ref), index("feed_items_user").on(t.userId), index("feed_items_other").on(t.otherId), index("feed_items_created").on(t.createdAt)]);
+
+// Daily friend Lì Xì: made by the game (never taken from the sender), one per pair per Vietnam day
+export const friendGifts = pgTable("friend_gifts", {
+  id: serial("id").primaryKey(),
+  fromId: varchar("from_id").notNull(),
+  toId: varchar("to_id").notNull(),
+  day: text("day").notNull(),
+  amount: integer("amount").notNull(),
+  claimedAt: timestamp("claimed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("friend_gifts_once").on(t.fromId, t.toId, t.day), index("friend_gifts_to").on(t.toId, t.day)]);
+
+// A player's social profile and privacy settings, plus their level (XP comes from game_plays)
+export const userSocial = pgTable("user_social", {
+  userId: varchar("user_id").primaryKey(),
+  bio: text("bio"),
+  favGame: text("fav_game"),
+  showcase: jsonb("showcase").$type<string[]>().default([]).notNull(),
+  dmFrom: text("dm_from").default("everyone").notNull(),
+  requestsFrom: text("requests_from").default("everyone").notNull(),
+  showPresence: boolean("show_presence").default(true).notNull(),
+  showInFeed: boolean("show_in_feed").default(true).notNull(),
+  xp: bigint("xp", { mode: "number" }).default(0).notNull(),
+  level: integer("level").default(1).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
 // The sticker album: how many of each sticker a player holds
 export const userStickers = pgTable("user_stickers", {

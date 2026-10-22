@@ -1,7 +1,7 @@
 import { db } from "./db";
 import {
   users, gameStates, achievements, deposits, giftCards, jackpot, appSettings, blackjackHands,
-  chatMessages, chatReports, userStickers, stickerRewards, tournamentPlayers, gamePlays, userDays,
+  chatMessages, chatReports, userStickers, stickerRewards, tournamentPlayers, gamePlays, userDays, feedItems,
   type User, type GameState, type Achievement, type Deposit, type GiftCard,
   STARTING_BALANCE, DAILY_BONUS_AMOUNT, DAILY_BONUS_COOLDOWN_MS, ORACLE_COOLDOWN_MS, WILD_ID,
   JACKPOT_CONTRIBUTION, JACKPOT_SEED, jackpotShare, FREE_SPIN_OPTIONS, HOLD_CHANCE, HOLD_MAX_REELS, REELS, type FreeSpinChoice,
@@ -14,6 +14,7 @@ import { randomInt } from "crypto";
 import { spin as runSpin, type SpinOutcome } from "./game";
 import * as bj from "./blackjack";
 import { deleteSocialData } from "./social";
+import { deleteFriendData } from "./friends";
 
 /** Unambiguous characters (no 0/O, 1/I/L) so codes are easy to read out and type */
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -90,8 +91,9 @@ export interface TableStats {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Records one game played, inside the same transaction that paid for it */
-export async function logPlay(tx: Tx, userId: string, game: string, bet: number, payout: number) {
-  await tx.insert(gamePlays).values({ userId, game, bet, payout });
+export async function logPlay(tx: Tx, userId: string, game: string, bet: number, payout: number): Promise<number> {
+  const [row] = await tx.insert(gamePlays).values({ userId, game, bet, payout }).returning({ id: gamePlays.id });
+  return row.id;
 }
 
 export class DatabaseStorage {
@@ -242,7 +244,11 @@ export class DatabaseStorage {
         maxWin: sql`greatest(${users.maxWin}, ${totalWin})`,
       }).where(eq(users.id, userId)).returning();
       if (!user) throw new Error("User vanished mid-spin");
-      await logPlay(tx, userId, "slot", isFreeSpin ? 0 : bet, totalWin);
+      const playId = await logPlay(tx, userId, "slot", isFreeSpin ? 0 : bet, totalWin);
+      // Hũ Rồng: announced in the activity feed (under the play's ref, so it isn't also a plain big win)
+      if (jackpotWin > 0) {
+        await tx.insert(feedItems).values({ kind: "jackpot", userId, game: "slot", amount: jackpotWin, bet: isFreeSpin ? 0 : bet, ref: `play:${playId}` }).onConflictDoNothing();
+      }
 
       // 6. Achievements
       const earned: BadgeId[] = [];
@@ -555,6 +561,8 @@ export class DatabaseStorage {
 
   async adminDeleteUser(userId: string): Promise<void> {
     await db.transaction(async (tx) => {
+      // Friends, notifications, reactions, feed, gifts and settings (first: it needs their messages to find reactions)
+      await deleteFriendData(tx, userId);
       await tx.delete(achievements).where(eq(achievements.userId, userId));
       await tx.delete(blackjackHands).where(eq(blackjackHands.userId, userId));
       await tx.delete(gameStates).where(eq(gameStates.userId, userId));

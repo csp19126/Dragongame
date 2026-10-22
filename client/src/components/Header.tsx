@@ -7,6 +7,7 @@ import { TournamentAlert } from "@/components/TournamentBits";
 import { Avatar } from "@/components/Avatar";
 import { useDmUnread } from "@/hooks/use-dm";
 import { usePlayerSheet } from "@/components/PlayerSheet";
+import { NotificationBell } from "@/components/Notifications";
 import { motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -60,12 +61,12 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/[0.07] bg-[#0b0716]/80 backdrop-blur-xl">
       <div className="max-w-5xl mx-auto px-3 h-14 flex items-center justify-between gap-2">
-        <Link href="/" className="flex items-center gap-2 min-w-0" data-testid="link-home">
+        <Link href="/" className="flex items-center gap-2 min-w-0 shrink" data-testid="link-home">
           <img src="/icons/icon-192.png" alt="" className="w-9 h-9 rounded-xl shadow-[0_0_18px_rgba(251,191,36,0.35)]" />
           <span className="font-display text-xl gold-gradient-text tracking-tight truncate" data-testid="text-brand">VnSlot 888</span>
         </Link>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           {user ? (
             <>
               <Link href="/coins" className="flex items-center gap-1.5 h-9 pl-1.5 pr-1 rounded-full bg-black/40 border border-yellow-400/30 shadow-inner" data-testid="display-balance">
@@ -74,6 +75,7 @@ export function Header() {
                 <span className="w-7 h-7 rounded-full bg-gradient-to-b from-yellow-300 to-orange-500 text-black flex items-center justify-center" data-testid="button-top-up"><Plus className="w-4 h-4" /></span>
               </Link>
 
+              <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button type="button" className="relative w-9 h-9 rounded-full" aria-label={user.username} data-testid="button-user-menu">

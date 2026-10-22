@@ -110,6 +110,8 @@ export function OverviewTab() {
         <Tile label="Paid back today" value={pct(k.paidToday, k.wageredToday)} note={`${short(k.paidToday)} of ${short(k.wageredToday)}`} />
         <Tile label="Came back next day" value={pct(a.retention.d1.returned, a.retention.d1.joined)} note={`${a.retention.d1.returned} of ${a.retention.d1.joined} new players`} />
         <Tile label="Came back after a week" value={pct(a.retention.d7.returned, a.retention.d7.joined)} note={`${a.retention.d7.returned} of ${a.retention.d7.joined} new players`} />
+        <Tile label="Friendships" value={fmt(k.friendships)} note="pairs of friends" />
+        <Tile label="Friend Lì Xì today" value={fmt(k.friendGiftsToday)} note="5,000 coins each, made by the game" />
       </div>
 
       <Card title="Players each day" sub={`Players who opened the game, and new sign-ups · ${range}`}>

@@ -571,3 +571,7 @@ body.has-bottom-nav { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); 
 /* A row that scrolls sideways without showing a scrollbar */
 .scrollbar-hide { scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Social: a message flashes gold when you jump to it (from a reply or a notification) */
+@keyframes msg-flash { 0%, 100% { background: transparent; } 20%, 60% { background: rgba(250, 204, 21, 0.22); } }
+.msg-flash { animation: msg-flash 1.5s ease-in-out; }

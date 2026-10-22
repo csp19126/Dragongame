@@ -333,6 +333,24 @@ class SoundManager {
     });
   }
 
+  /** Social: a soft two-note chime for a notification or a new message */
+  ping() {
+    this.playTone(988, 0.12, 'sine', 0.07);
+    this.playTone(1319, 0.18, 'sine', 0.06, 0.09);
+  }
+
+  /** Social: a little pop when a reaction is added */
+  pop() {
+    this.playSweep(500, 1100, 0.07, 'sine', 0.08);
+  }
+
+  /** Social: level up, a rising arpeggio with a sparkle on top */
+  levelUp() {
+    [523, 659, 784, 1047].forEach((f, i) => this.playTone(f, 0.22, 'triangle', 0.08, i * 0.09));
+    this.playChord([1047, 1319, 1568], 0.5, 'sine', 0.04, 0.4);
+    this.playSweep(2000, 3200, 0.2, 'sine', 0.02, 0.45);
+  }
+
   /** The crowd roars as the winner crosses the line */
   cheer() {
     const ctx = this.audioContext;

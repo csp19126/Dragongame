@@ -16,6 +16,7 @@ import { registerTienLenRoutes } from "./tienlen";
 import { registerBancaRoutes } from "./banca";
 import { registerCardTableRoutes } from "./cardtables";
 import { registerSocialRoutes, markActive } from "./social";
+import { registerFriendRoutes, onJoined, forgetUser } from "./friends";
 import { play777, spin777Schema } from "./slot777";
 import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
@@ -110,6 +111,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     let user = await storage.createUser({ username, password: await bcrypt.hash(password, 10) });
     // Joined through a friend's invite link: link them up and add the welcome bonus
     if (req.body?.ref && (await applyReferral(user.id, req.body.ref))) user = (await storage.getUser(user.id)) ?? user;
+    await onJoined(user.id).catch((e) => console.error("[joined]", e));
     startSession(req, res, user);
   });
 
@@ -270,6 +272,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerBancaRoutes(app, requireUser);
   registerCardTableRoutes(app, requireUser);
   registerSocialRoutes(app, requireUser, requireAdmin);
+  registerFriendRoutes(app, requireUser, requireAdmin);
 
   // Blackjack: the hand lives on the server; the browser only ever sees publicView()
   const BJ_MAX_BET = 1_000_000;
@@ -394,6 +397,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "Password is wrong" });
     }
     await storage.adminDeleteUser(user.id);
+    forgetUser(user.id);
     req.session.destroy(() => {
       res.clearCookie("dragon_session");
       res.json({ ok: true });
@@ -465,6 +469,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/admin/dashboard/users/:id", requireAdmin, async (req, res) => {
     if (req.params.id === res.locals.user.id) return res.status(400).json({ message: "You can't delete yourself" });
     await storage.adminDeleteUser(String(req.params.id));
+    forgetUser(String(req.params.id));
     res.json({ ok: true });
   });
 

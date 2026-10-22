@@ -274,6 +274,14 @@ export function dropAllRoomsForTest() {
   activeByUser.clear();
 }
 
+/** The pool table a player has open, and whether its second seat is free (for "join your friend") */
+export function poolRoomOf(userId: string): { code: string; open: boolean } | null {
+  const code = activeByUser.get(userId);
+  const room = code ? rooms.get(code) : undefined;
+  if (!room) return null;
+  return { code: room.code, open: room.status === "waiting" && !room.players[1] && !room.tournament && room.players[0] === userId };
+}
+
 /** Whether this server holds the table (false after a restart wiped it) */
 export function roomExists(code: string | null | undefined) {
   return !!code && rooms.has(code);

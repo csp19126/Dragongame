@@ -7,7 +7,7 @@ import { randomInt } from "crypto";
 import { z } from "zod";
 import { db } from "./db";
 import {
-  users, deposits, chatMessages, chatReports, userStickers, stickerRewards, appSettings, poolMatches, type User,
+  users, deposits, chatMessages, chatReports, userStickers, stickerRewards, appSettings, poolMatches, userSocial, type User,
 } from "@shared/schema";
 import {
   STICKERS, STICKER_BY_ID, STICKER_SETS, RARITY_WEIGHT, PACK_SIZE, FREE_PACK_COOLDOWN_MS, PLAY_PACK_EVERY,
@@ -16,6 +16,10 @@ import {
 } from "@shared/stickers";
 import { CHAT_COOLDOWN_MS, CHAT_MIN_GAMES, CHAT_AUTO_HIDE_REPORTS } from "@shared/chat";
 import { speakerRefusal, paceLimiter, readMessage } from "./speech";
+import { findMentions, isReaction, quote, type ReactionCount, type ReplyRef } from "@shared/friends";
+import { notifyChat, notifyReaction, blockedEither, forgetUser } from "./friends";
+import { reactionsFor, reactAllowed, toggleReaction } from "./social";
+import { pushAll } from "./hub";
 import { and, desc, eq, gt, gte, lt, isNull, or, sql, count, inArray } from "drizzle-orm";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
@@ -222,12 +226,30 @@ export async function claimReferrals(userId: string) {
 
 // ---------------- Chat ----------------
 
-async function chatRows(where: ReturnType<typeof and> | undefined, limit: number, newestFirst: boolean) {
-  return db.select({
-    id: chatMessages.id, username: chatMessages.username, text: chatMessages.text, sticker: chatMessages.sticker,
-    createdAt: chatMessages.createdAt, admin: users.isAdmin, avatar: users.profileImageUrl,
-  }).from(chatMessages).leftJoin(users, eq(users.id, chatMessages.userId))
+type ChatOut = {
+  id: number; username: string; text: string | null; sticker: string | null; createdAt: Date; admin: boolean | null; avatar: string | null;
+  level: number; reply: ReplyRef | null; reactions: ReactionCount[];
+};
+
+async function chatRows(where: ReturnType<typeof and> | undefined, limit: number, newestFirst: boolean, viewer: string): Promise<ChatOut[]> {
+  const rows = await db.select({
+    id: chatMessages.id, username: chatMessages.username, text: chatMessages.text, sticker: chatMessages.sticker, replyTo: chatMessages.replyTo,
+    createdAt: chatMessages.createdAt, admin: users.isAdmin, avatar: users.profileImageUrl, level: userSocial.level,
+  }).from(chatMessages).leftJoin(users, eq(users.id, chatMessages.userId)).leftJoin(userSocial, eq(userSocial.userId, chatMessages.userId))
     .where(where).orderBy(newestFirst ? desc(chatMessages.id) : chatMessages.id).limit(limit);
+  return withExtras(rows, viewer);
+}
+
+/** Adds the quoted message (if it's still visible) and the reactions to chat rows */
+async function withExtras(rows: { id: number; username: string; text: string | null; sticker: string | null; replyTo: number | null; createdAt: Date; admin: boolean | null; avatar: string | null; level: number | null }[], viewer: string): Promise<ChatOut[]> {
+  const replyIds = [...new Set(rows.map((r) => r.replyTo).filter((x): x is number => !!x))];
+  const quoted = new Map((replyIds.length ? await db.select().from(chatMessages).where(inArray(chatMessages.id, replyIds)) : []).map((r) => [r.id, r]));
+  const reactions = await reactionsFor("chat", rows.map((r) => r.id), viewer);
+  return rows.map(({ replyTo, level, ...r }) => {
+    const q = replyTo ? quoted.get(replyTo) : undefined;
+    const reply: ReplyRef | null = replyTo ? (q && !q.deleted ? { id: q.id, username: q.username, text: quote(q.text), sticker: q.sticker } : { id: replyTo, username: null, text: null, sticker: null }) : null;
+    return { ...r, level: level ?? 1, reply, reactions: reactions.get(r.id) ?? [] };
+  });
 }
 
 export async function getAnnouncement(): Promise<string | null> {
@@ -299,9 +321,10 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
 
   app.get("/api/chat", requireUser, async (req, res) => {
     const after = Number(req.query.after);
+    const u0: User = res.locals.user;
     const messages = Number.isInteger(after) && after > 0
-      ? await chatRows(and(gt(chatMessages.id, after), eq(chatMessages.deleted, false)), 100, false)
-      : (await chatRows(eq(chatMessages.deleted, false), 60, true)).reverse();
+      ? await chatRows(and(gt(chatMessages.id, after), eq(chatMessages.deleted, false)), 100, false, u0.id)
+      : (await chatRows(eq(chatMessages.deleted, false), 60, true, u0.id)).reverse();
     // Messages removed lately, so screens that already show them can drop them
     const removed = await db.select({ id: chatMessages.id }).from(chatMessages)
       .where(and(eq(chatMessages.deleted, true), gt(chatMessages.createdAt, new Date(Date.now() - 6 * 3600_000))))
@@ -325,11 +348,43 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
     if (early) return res.status(early.status).json({ message: early.message });
     const msg = await readMessage(u, req.body);
     if ("status" in msg) return res.status(msg.status).json({ message: msg.message });
+    // A reply must answer a message that's still in the room
+    let replyAuthor: string | null = null;
+    let replyTo: number | null = null;
+    if (req.body?.replyTo !== undefined && req.body?.replyTo !== null) {
+      const id = Number(req.body.replyTo);
+      const [orig] = Number.isInteger(id) ? await db.select().from(chatMessages).where(and(eq(chatMessages.id, id), eq(chatMessages.deleted, false))) : [];
+      if (!orig) return res.status(400).json({ message: "That message can't be answered" });
+      replyTo = id;
+      replyAuthor = orig.userId;
+    }
     const again = msg.text ? chatPace.check(u, msg.text) : null;
     if (again) return res.status(again.status).json({ message: again.message });
     chatPace.record(u, msg.text);
-    const [m] = await db.insert(chatMessages).values({ userId: u.id, username: u.username, text: msg.text, sticker: msg.sticker }).returning();
-    res.json({ id: m.id, username: m.username, text: m.text, sticker: m.sticker, createdAt: m.createdAt, admin: u.isAdmin, avatar: u.profileImageUrl });
+    const [m] = await db.insert(chatMessages).values({ userId: u.id, username: u.username, text: msg.text, sticker: msg.sticker, replyTo }).returning();
+    const [lvl] = await db.select({ level: userSocial.level }).from(userSocial).where(eq(userSocial.userId, u.id));
+    const [out] = await withExtras([{ id: m.id, username: m.username, text: m.text, sticker: m.sticker, replyTo, createdAt: m.createdAt, admin: u.isAdmin, avatar: u.profileImageUrl, level: lvl?.level ?? 1 }], u.id);
+    // Everyone with the app open sees it at once (screens skip ids they already have)
+    pushAll({ t: "chat", m: out });
+    res.json(out);
+    // Bells for the replied-to player and anyone @mentioned (real players only, not across a block)
+    void notifyChat(u, m.id, m.text, m.text ? findMentions(m.text, req.body?.mentions) : [], replyAuthor).catch((e) => console.error("[chat notify]", e));
+  });
+
+  app.post("/api/chat/:id/react", requireUser, async (req, res) => {
+    const u: User = res.locals.user;
+    const id = Number(req.params.id);
+    const emoji = req.body?.emoji;
+    if (!Number.isInteger(id) || !isReaction(emoji)) return res.status(400).json({ message: "Bad request" });
+    const no = speakerRefusal(u);
+    if (no) return res.status(no.status).json({ message: no.message, until: no.until });
+    const [m] = await db.select().from(chatMessages).where(and(eq(chatMessages.id, id), eq(chatMessages.deleted, false)));
+    if (!m) return res.status(404).json({ message: "Not found" });
+    if (!reactAllowed(u.id)) return res.status(429).json({ message: "slow_down" });
+    const on = await toggleReaction("chat", id, u.id, emoji);
+    pushAll({ t: "react", scope: "chat", id, e: emoji, by: u.username, on });
+    if (on && m.userId !== u.id && !(await blockedEither(u.id, m.userId))) await notifyReaction(m.userId, u.id, "chat", id, quote(m.text), emoji);
+    res.json({ on, reactions: (await reactionsFor("chat", [id], u.id)).get(id) ?? [] });
   });
 
   app.post("/api/chat/:id/report", requireUser, async (req, res) => {
@@ -340,7 +395,10 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
     if (m.userId === res.locals.user.id) return res.status(400).json({ message: "That's your own message" });
     await db.insert(chatReports).values({ messageId: id, reporterId: res.locals.user.id }).onConflictDoNothing();
     const [{ n }] = await db.select({ n: count() }).from(chatReports).where(eq(chatReports.messageId, id));
-    if (n >= CHAT_AUTO_HIDE_REPORTS) await db.update(chatMessages).set({ deleted: true }).where(eq(chatMessages.id, id));
+    if (n >= CHAT_AUTO_HIDE_REPORTS) {
+      await db.update(chatMessages).set({ deleted: true }).where(eq(chatMessages.id, id));
+      pushAll({ t: "chat_removed", ids: [id] });
+    }
     res.json({ ok: true });
   });
 
@@ -363,6 +421,7 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
     if (!Number.isInteger(id) || typeof deleted !== "boolean") return res.status(400).json({ message: "Bad request" });
     await db.update(chatMessages).set({ deleted }).where(eq(chatMessages.id, id));
     if (!deleted) await db.delete(chatReports).where(eq(chatReports.messageId, id));
+    else pushAll({ t: "chat_removed", ids: [id] });
     res.json({ ok: true });
   });
 
@@ -379,8 +438,10 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
     if (!u) return res.status(404).json({ message: "No such player" });
     // A ban also hides everything they said today
     if (parsed.data.banned) {
-      await db.update(chatMessages).set({ deleted: true })
-        .where(and(eq(chatMessages.userId, target), gt(chatMessages.createdAt, new Date(Date.now() - 86_400_000))));
+      const hidden = await db.update(chatMessages).set({ deleted: true })
+        .where(and(eq(chatMessages.userId, target), gt(chatMessages.createdAt, new Date(Date.now() - 86_400_000)))).returning({ id: chatMessages.id });
+      if (hidden.length) pushAll({ t: "chat_removed", ids: hidden.map((h) => h.id) });
+      forgetUser(target);
     }
     res.json(u);
   });

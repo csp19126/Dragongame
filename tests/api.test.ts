@@ -879,7 +879,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       await a.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
       const prof = await b.req("GET", `/api/players/${a.username.toUpperCase()}/profile`);
       expect(prof.status).toBe(200);
-      expect(Object.keys(prof.body).sort()).toEqual(["admin", "avatarUrl", "biggestWin", "blockedByYou", "gamesPlayed", "league", "memberSince", "online", "stickers", "username", "you"]);
+      expect(Object.keys(prof.body).sort()).toEqual(["acceptsRequests", "admin", "avatarUrl", "biggestWin", "bio", "blockedByYou", "favGame", "friendsCount", "friendsOnlyDm", "gamesPlayed", "league", "level", "memberSince", "online", "playing", "relation", "showcase", "stickers", "username", "you"]);
       expect(prof.body).toMatchObject({ username: a.username, gamesPlayed: 5, online: true, you: false, blockedByYou: false, league: null });
       expect(prof.body.avatarUrl).toMatch(/^\/api\/avatar\//);
       for (const k of ["balance", "email", "password", "firstName", "id", "mutedUntil"]) expect(prof.body).not.toHaveProperty(k);
@@ -1024,6 +1024,382 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(Number(left.rows[0].n)).toBe(0);
       expect((await friend.req("GET", "/api/dm/conversations")).body.conversations).toEqual([]);
       expect((await friend.req("GET", "/api/dm/unread")).body.total).toBe(0);
+    });
+  });
+
+  describe("Social 2.0: friends, notifications, reactions, feed, Lì Xì", () => {
+    const games = (username: string, n: number) => pool.query("update users set games_played = $1 where username = $2", [n, username]);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const idOf = async (p: Player) => (await p.req("GET", "/api/me")).body.id as string;
+    async function players(n: number, played = 12) {
+      const ps = Array.from({ length: n }, () => new Player());
+      for (const p of ps) { await p.register(); await games(p.username, played); }
+      return ps;
+    }
+    async function befriend(a: Player, b: Player) {
+      expect((await a.req("POST", "/api/friends/request", { username: b.username })).body.relation).toBe("sent");
+      expect((await b.req("POST", "/api/friends/accept", { username: a.username })).body.relation).toBe("friends");
+    }
+    const notifs = async (p: Player) => (await p.req("GET", "/api/notifications")).body;
+    const tick = async () => (await import("../server/friends")).socialTick();
+
+    it("friend requests: send, decline, cancel, accept (also by asking back), remove; notifications both ways", async () => {
+      const [a, b, c] = await players(3);
+      const [newbie] = await players(1, 0);
+      expect((await newbie.req("POST", "/api/friends/request", { username: a.username })).body.message).toBe("play_first");
+      expect((await a.req("POST", "/api/friends/request", { username: a.username })).status).toBe(400);
+      expect((await a.req("POST", "/api/friends/request", { username: "no_such_player_x" })).status).toBe(404);
+
+      expect((await a.req("POST", "/api/friends/request", { username: b.username.toUpperCase() })).body.relation).toBe("sent");
+      expect((await a.req("POST", "/api/friends/request", { username: b.username })).body.relation).toBe("sent"); // idempotent
+      expect((await b.req("GET", `/api/players/${a.username}/profile`)).body.relation).toBe("received");
+      expect((await a.req("GET", `/api/players/${b.username}/profile`)).body.relation).toBe("sent");
+      const fb = (await b.req("GET", "/api/friends")).body;
+      expect(fb.incoming.map((x: any) => x.username)).toEqual([a.username]);
+      expect((await a.req("GET", "/api/friends")).body.outgoing.map((x: any) => x.username)).toEqual([b.username]);
+      const nb = await notifs(b);
+      expect(nb.unread).toBe(1);
+      expect(nb.items[0]).toMatchObject({ kind: "friend_request", actor: { username: a.username }, read: false });
+
+      // Decline, then a cancelled request disappears from the other bell
+      await b.req("POST", "/api/friends/decline", { username: a.username });
+      expect((await b.req("GET", "/api/friends")).body.incoming).toEqual([]);
+      expect((await notifs(b)).unread).toBe(0);
+      await sleep(900);
+      expect((await a.req("POST", "/api/friends/request", { username: b.username })).status).toBe(200);
+      await a.req("POST", "/api/friends/cancel", { username: b.username });
+      expect((await b.req("GET", "/api/friends")).body.incoming).toEqual([]);
+      expect((await notifs(b)).items.filter((n: any) => n.kind === "friend_request" && !n.read)).toEqual([]);
+      expect((await b.req("POST", "/api/friends/accept", { username: a.username })).status).toBe(404);
+
+      // Asking back accepts
+      await sleep(900); // requests are paced
+      expect((await a.req("POST", "/api/friends/request", { username: b.username })).body.relation).toBe("sent");
+      expect((await b.req("POST", "/api/friends/request", { username: a.username })).body.relation).toBe("friends");
+      const fa = (await a.req("GET", "/api/friends")).body;
+      expect(fa.friends.map((x: any) => x.username)).toEqual([b.username]);
+      expect(fa.friends[0]).toMatchObject({ online: true, gift: "too_new" });
+      expect(fa.outgoing).toEqual([]);
+      expect((await notifs(a)).items[0]).toMatchObject({ kind: "friend_accepted", actor: { username: b.username } });
+      expect((await b.req("GET", `/api/players/${a.username}/profile`)).body).toMatchObject({ relation: "friends", friendsCount: 1 });
+
+      // Accept the normal way too
+      await c.req("POST", "/api/friends/request", { username: a.username });
+      await a.req("POST", "/api/friends/accept", { username: c.username });
+      expect((await a.req("GET", `/api/players/${a.username}/profile`)).body.friendsCount).toBe(2);
+      await a.req("POST", "/api/friends/remove", { username: c.username });
+      expect((await c.req("GET", "/api/friends")).body.friends).toEqual([]);
+
+      // Search by name shows the relation, never blocked players
+      const found = (await c.req("GET", `/api/friends/search?q=${a.username.slice(0, 6)}`)).body.players;
+      expect(found.find((x: any) => x.username === a.username)).toMatchObject({ relation: "none" });
+      expect((await c.req("GET", "/api/friends/search?q=%25")).body.players).toEqual([]); // no wildcard tricks
+    });
+
+    it("blocking ends the friendship and pending requests, and stops new ones; 'nobody' refuses requests", async () => {
+      const [a, b, c] = await players(3);
+      await befriend(a, b);
+      await c.req("POST", "/api/friends/request", { username: a.username });
+      await a.req("POST", `/api/players/${b.username}/block`, { block: true });
+      await a.req("POST", `/api/players/${c.username}/block`, { block: true });
+      expect((await a.req("GET", "/api/friends")).body).toMatchObject({ friends: [], incoming: [] });
+      expect((await b.req("GET", "/api/friends")).body.friends).toEqual([]);
+      expect((await notifs(a)).items.some((n: any) => n.kind === "friend_request")).toBe(false);
+      expect((await b.req("POST", "/api/friends/request", { username: a.username })).status).toBe(403);
+      expect((await a.req("POST", "/api/friends/request", { username: b.username })).status).toBe(403);
+      expect((await b.req("GET", `/api/friends/search?q=${a.username}`)).body.players).toEqual([]);
+      await a.req("POST", `/api/players/${b.username}/block`, { block: false });
+      expect((await b.req("POST", "/api/friends/request", { username: a.username })).body.relation).toBe("sent");
+
+      expect((await c.req("PUT", "/api/social/privacy", { requestsFrom: "nobody" })).body.requestsFrom).toBe("nobody");
+      const r = await b.req("POST", "/api/friends/request", { username: c.username });
+      expect(r.status).toBe(403);
+      expect(r.body.message).toBe("This player isn't taking friend requests");
+      expect((await b.req("GET", `/api/players/${c.username}/profile`)).body.acceptsRequests).toBe(false);
+    });
+
+    it("privacy is enforced by the server: friends-only messages, hidden presence, feed opt-out", async () => {
+      const [a, b, c] = await players(3);
+      await befriend(a, b);
+      expect((await c.req("PUT", "/api/social/privacy", { dmFrom: "nobody" })).status).toBe(400);
+      await a.req("PUT", "/api/social/privacy", { dmFrom: "friends" });
+      const no = await c.req("POST", "/api/dm/send", { to: a.username, text: "hello stranger" });
+      expect(no.status).toBe(403);
+      expect(no.body.message).toBe("This player only accepts messages from friends");
+      expect((await c.req("GET", `/api/dm/thread/${a.username}`)).body).toMatchObject({ cantMessage: true, cantReason: "This player only accepts messages from friends" });
+      expect((await b.req("POST", "/api/dm/send", { to: a.username, text: "hi friend" })).status).toBe(200);
+      expect((await a.req("POST", "/api/dm/send", { to: c.username, text: "I can still write first" })).status).toBe(200);
+
+      // Hidden presence: offline to everyone, no game, even to friends
+      expect((await c.req("GET", `/api/players/${a.username}/profile`)).body.online).toBe(true);
+      await a.req("PUT", "/api/social/privacy", { showPresence: false });
+      expect((await c.req("GET", `/api/players/${a.username}/profile`)).body).toMatchObject({ online: false, playing: null });
+      expect((await b.req("GET", "/api/friends")).body.friends[0]).toMatchObject({ username: a.username, online: false, playing: null, join: null });
+      expect((await b.req("GET", "/api/dm/conversations")).body.conversations[0]).toMatchObject({ username: a.username, online: false });
+      expect((await a.req("GET", `/api/players/${a.username}/profile`)).body.online).toBe(true); // you always see yourself
+
+      // Feed opt-out hides their wins, past and future
+      const aid = await idOf(a);
+      await pool.query("insert into game_plays (user_id, game, bet, payout) values ($1, 'slot', 1000, 80000)", [aid]);
+      await tick();
+      const mine = async (p: Player) => (await p.req("GET", "/api/feed")).body.items.filter((i: any) => i.user.username === a.username);
+      expect((await mine(c)).map((i: any) => i.kind)).toContain("big_win");
+      expect((await mine(c)).find((i: any) => i.kind === "big_win")).toMatchObject({ game: "slot", amount: 80000, bet: 1000 });
+      await a.req("PUT", "/api/social/privacy", { showInFeed: false });
+      expect(await mine(c)).toEqual([]);
+      expect((await c.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "everyone", requestsFrom: "everyone", showPresence: true, showInFeed: true });
+      expect((await a.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "friends", requestsFrom: "everyone", showPresence: false, showInFeed: false });
+    });
+
+    it("reactions: one of each emoji per player, toggled, counted, grouped in one notification, rate limited", async () => {
+      const [a, b, c] = await players(3);
+      const m = (await a.req("POST", "/api/chat", { text: "phản ứng đi nào" })).body;
+      expect((await b.req("POST", `/api/chat/${m.id}/react`, { emoji: "💩" })).status).toBe(400);
+      expect((await b.req("POST", "/api/chat/999999999/react", { emoji: "❤️" })).status).toBe(404);
+      expect((await b.req("POST", `/api/chat/${m.id}/react`, { emoji: "❤️" })).body.on).toBe(true);
+      expect((await b.req("POST", `/api/chat/${m.id}/react`, { emoji: "🔥" })).body.on).toBe(true);
+      expect((await c.req("POST", `/api/chat/${m.id}/react`, { emoji: "❤️" })).body.on).toBe(true);
+      const rb = (await b.req("GET", "/api/chat")).body.messages.find((x: any) => x.id === m.id).reactions;
+      expect(rb).toEqual(expect.arrayContaining([{ e: "❤️", n: 2, mine: true }, { e: "🔥", n: 1, mine: true }]));
+      const off = await b.req("POST", `/api/chat/${m.id}/react`, { emoji: "❤️" });
+      expect(off.body.on).toBe(false);
+      expect(off.body.reactions).toEqual(expect.arrayContaining([{ e: "❤️", n: 1, mine: false }]));
+      const na = (await notifs(a)).items.filter((n: any) => n.kind === "reaction");
+      expect(na.length).toBe(1);
+      expect(na[0].data).toMatchObject({ scope: "chat", messageId: m.id, total: 3 });
+      expect(na[0].data.actors).toEqual(expect.arrayContaining([b.username, c.username]));
+
+      // Private messages: only the two players can react
+      const d = (await a.req("POST", "/api/dm/send", { to: b.username, text: "riêng tư" })).body;
+      expect((await c.req("POST", `/api/dm/${d.id}/react`, { emoji: "😂" })).status).toBe(404);
+      expect((await b.req("POST", `/api/dm/${d.id}/react`, { emoji: "😂" })).body.on).toBe(true);
+      expect((await a.req("GET", `/api/dm/thread/${b.username}`)).body.messages.find((x: any) => x.id === d.id).reactions).toEqual([{ e: "😂", n: 1, mine: false }]);
+
+      let last = 0;
+      for (let i = 0; i < 45; i++) last = (await c.req("POST", `/api/chat/${m.id}/react`, { emoji: "👍" })).status;
+      expect(last).toBe(429);
+    });
+
+    it("mentions notify real players only, never across a block; replies quote visible messages only", async () => {
+      const [a, b, c, admin] = await players(4);
+      await pool.query("update users set is_admin = true where username = $1", [admin.username]);
+      await c.req("POST", `/api/players/${a.username}/block`, { block: true });
+      const m = await a.req("POST", "/api/chat", { text: `chào @${b.username} và @${c.username} và @khong_co_ai_ten_nay và @${a.username}`, mentions: [b.username] });
+      expect(m.status).toBe(200);
+      await sleep(200);
+      const nb = (await notifs(b)).items.filter((n: any) => n.kind === "mention");
+      expect(nb.length).toBe(1);
+      expect(nb[0]).toMatchObject({ actor: { username: a.username }, data: { scope: "chat", messageId: m.body.id } });
+      expect((await notifs(c)).items.some((n: any) => n.kind === "mention")).toBe(false);
+      expect((await notifs(a)).items.some((n: any) => n.kind === "mention")).toBe(false);
+
+      // Replies
+      const r = await b.req("POST", "/api/chat", { text: "trả lời nè", replyTo: m.body.id });
+      expect(r.status).toBe(200);
+      expect(r.body.reply).toMatchObject({ id: m.body.id, username: a.username });
+      await sleep(200);
+      expect((await notifs(a)).items.find((n: any) => n.kind === "reply")).toMatchObject({ actor: { username: b.username }, data: { messageId: r.body.id } });
+      expect((await b.req("GET", "/api/chat")).body.messages.find((x: any) => x.id === r.body.id).reply.id).toBe(m.body.id);
+      expect((await c.req("POST", "/api/chat", { text: "không có", replyTo: 999999999 })).body.message).toBe("That message can't be answered");
+      await admin.req("POST", `/api/admin/community/chat/${m.body.id}`, { deleted: true });
+      expect((await c.req("POST", "/api/chat", { text: "đã xoá rồi", replyTo: m.body.id })).status).toBe(400);
+      // A reply to a removed message no longer shows what it said
+      expect((await c.req("GET", "/api/chat")).body.messages.find((x: any) => x.id === r.body.id).reply).toMatchObject({ id: m.body.id, text: null });
+
+      // Private replies: only to a message in the same conversation
+      const d1 = (await a.req("POST", "/api/dm/send", { to: b.username, text: "câu hỏi" })).body;
+      const d2 = await b.req("POST", "/api/dm/send", { to: a.username, text: "câu trả lời", replyTo: d1.id });
+      expect(d2.body.reply).toMatchObject({ id: d1.id, mine: false, text: "câu hỏi" });
+      expect((await admin.req("POST", "/api/dm/send", { to: b.username, text: "lấy trộm", replyTo: d1.id })).status).toBe(400);
+    });
+
+    it("daily friend Lì Xì: made by the game, limits enforced, sender's balance untouched", async () => {
+      const [a, b] = await players(2);
+      await befriend(a, b);
+      const send = (from: Player, to: Player) => from.req("POST", "/api/friends/gift", { username: to.username });
+      expect((await send(a, b)).body.message).toBe("You can send Lì Xì after being friends for a day");
+      await pool.query("update friendships set created_at = now() - interval '25 hours'");
+      await games(a.username, 9);
+      expect((await send(a, b)).body.message).toBe("Play 10 games before sending Lì Xì");
+      await games(a.username, 10);
+      await games(b.username, 3);
+      expect((await send(a, b)).body.message).toBe("Your friend needs to play 10 games first");
+      await games(b.username, 10);
+      const [stranger] = await players(1);
+      expect((await send(stranger, b)).status).toBe(403);
+
+      const before = (await a.req("GET", "/api/me")).body.balance;
+      expect((await send(a, b)).status).toBe(200);
+      expect((await a.req("GET", "/api/me")).body.balance).toBe(before); // the sender pays nothing
+      expect((await send(a, b)).body.message).toBe("You already sent Lì Xì to this friend today");
+      expect((await a.req("GET", "/api/friends")).body.friends[0].gift).toBe("sent_today");
+
+      const gift = (await notifs(b)).items.find((n: any) => n.kind === "gift");
+      expect(gift).toMatchObject({ actor: { username: a.username }, data: { amount: 5000, claimed: false } });
+      const bBefore = (await b.req("GET", "/api/me")).body.balance;
+      expect((await a.req("POST", `/api/friends/gift/${gift.data.giftId}/claim`)).status).toBe(409); // not yours
+      const claim = await b.req("POST", `/api/friends/gift/${gift.data.giftId}/claim`);
+      expect(claim.body).toMatchObject({ amount: 5000, balance: bBefore + 5000 });
+      expect((await b.req("POST", `/api/friends/gift/${gift.data.giftId}/claim`)).status).toBe(409);
+      expect((await notifs(b)).items.find((n: any) => n.kind === "gift").data.claimed).toBe(true);
+      const bid = await idOf(b);
+      const dep = await pool.query("select amount, method from deposits where user_id = $1 and method = 'friend_gift'", [bid]);
+      expect(dep.rows).toEqual([{ amount: 5000, method: "friend_gift" }]);
+      expect((await a.req("GET", "/api/me")).body.balance).toBe(before);
+      const { BONUS_NAMES } = await import("../shared/analytics");
+      expect(BONUS_NAMES.friend_gift).toBeTruthy();
+
+      // At most 10 received a day: the 11th friend is politely refused
+      const senders = await players(10);
+      const ids = await Promise.all(senders.map(idOf));
+      for (const id of ids) {
+        const [x, y] = id < bid ? [id, bid] : [bid, id];
+        await pool.query("insert into friendships (user_a, user_b, created_at) values ($1, $2, now() - interval '2 days')", [x, y]);
+      }
+      const results = await Promise.all(senders.map((s) => send(s, b)));
+      expect(results.filter((r) => r.status === 200).length).toBe(9); // a's gift already counts
+      const refused = results.find((r) => r.status !== 200)!;
+      expect(refused.status).toBe(409);
+      expect(refused.body.message).toBe("Your friend has received all the Lì Xì they can today");
+      const n = await pool.query("select count(*)::int as n from friend_gifts where to_id = $1", [bid]);
+      expect(n.rows[0].n).toBe(10);
+      const stats = (await (async () => { const adm = (await players(1))[0]; await pool.query("update users set is_admin = true where username = $1", [adm.username]); return (await adm.req("GET", "/api/admin/analytics?days=7&admins=1")).body; })());
+      expect(stats.kpis.friendGiftsToday).toBeGreaterThanOrEqual(10);
+      expect(stats.kpis.friendships).toBeGreaterThanOrEqual(11);
+    });
+
+    it("levels come from coins staked; level-ups reach the feed; profiles show bio, level and showcase", async () => {
+      const [a, b] = await players(2);
+      await befriend(a, b);
+      const aid = await idOf(a);
+      expect((await b.req("GET", `/api/players/${a.username}/profile`)).body.level).toMatchObject({ level: 1, xp: 0 });
+      await pool.query("insert into game_plays (user_id, game, bet, payout) values ($1, 'roulette', 3000000, 0)", [aid]);
+      await tick();
+      const lv = (await b.req("GET", `/api/players/${a.username}/profile`)).body.level;
+      expect(lv).toMatchObject({ level: 8, xp: 3000 });
+      const feed = (await b.req("GET", "/api/feed?scope=friends")).body.items;
+      expect(feed.find((i: any) => i.kind === "level_up" && i.user.username === a.username)).toMatchObject({ level: 8 });
+      expect(feed.find((i: any) => i.kind === "friends")).toBeTruthy();
+      expect(feed.some((i: any) => i.kind === "joined" && i.user.username === a.username)).toBe(true);
+      expect((await b.req("GET", "/api/chat")).body.messages).toBeDefined();
+
+      // Bio is filtered like chat, 80 characters at most
+      expect((await a.req("PUT", "/api/social/profile", { bio: "zalo 0912345678" })).body.message).toBe("phone");
+      expect((await a.req("PUT", "/api/social/profile", { bio: "x".repeat(81) })).body.message).toBe("long");
+      expect((await a.req("PUT", "/api/social/profile", { favGame: "poker" })).status).toBe(400);
+      expect((await a.req("PUT", "/api/social/profile", { showcase: ["no_hu"] })).body.message).toBe("You haven't earned that badge");
+      await pool.query("insert into achievements (user_id, badge_id, badge_name, description, icon) values ($1, 'first_win', 'First Win', 'x', 'star')", [aid]);
+      const ok = await a.req("PUT", "/api/social/profile", { bio: "  Thích   quay hũ 🐉 ", favGame: "slot", showcase: ["first_win"] });
+      expect(ok.body).toEqual({ bio: "Thích quay hũ 🐉", favGame: "slot", showcase: ["first_win"] });
+      const prof = (await b.req("GET", `/api/players/${a.username}/profile`)).body;
+      expect(prof).toMatchObject({ bio: "Thích quay hũ 🐉", favGame: "slot", showcase: ["first_win"], friendsCount: 1 });
+      for (const k of ["balance", "email", "firstName", "lastName", "password", "id"]) expect(prof).not.toHaveProperty(k);
+
+      // Reported bios reach the admin, who can clear them
+      const [admin] = await players(1);
+      await pool.query("update users set is_admin = true where username = $1", [admin.username]);
+      await b.req("POST", `/api/players/${a.username}/report`, { reason: "bio" });
+      const rep = (await admin.req("GET", "/api/admin/social/reports")).body.profiles.find((p: any) => p.userId === aid);
+      expect(rep.bio).toBe("Thích quay hũ 🐉");
+      expect((await b.req("POST", `/api/admin/social/bio/${aid}/clear`)).status).toBe(403);
+      await admin.req("POST", `/api/admin/social/bio/${aid}/clear`);
+      expect((await b.req("GET", `/api/players/${a.username}/profile`)).body.bio).toBeNull();
+      expect((await admin.req("GET", "/api/admin/social/reports")).body.profiles.some((p: any) => p.userId === aid)).toBe(false);
+    });
+
+    it("friends leaderboard ranks me and my friends by this week's biggest win", async () => {
+      const [a, b, c] = await players(3);
+      await befriend(a, b);
+      const [aid, bid, cid] = await Promise.all([a, b, c].map(idOf));
+      await pool.query("insert into game_plays (user_id, game, bet, payout) values ($1, 'slot', 1000, 5000), ($1, 'slot', 1000, 3000), ($2, 'slot', 1000, 9000), ($3, 'slot', 1000, 900000)", [aid, bid, cid]);
+      const rows = (await a.req("GET", "/api/leaderboard/friends")).body.rows;
+      expect(rows.map((r: any) => r.username)).toEqual([b.username, a.username]);
+      expect(rows[1]).toMatchObject({ you: true, biggestWin: 5000, coinsWon: 6000 });
+      expect(rows[0]).not.toHaveProperty("balance");
+    });
+
+    it("the social socket: anonymous refused; pushes messages, typing, seen and notifications", async () => {
+      const { WebSocket } = await import("ws");
+      const url = base.replace("http", "ws") + "/ws/social";
+      const anon = await new Promise<number>((resolve) => {
+        const ws = new WebSocket(url);
+        ws.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0));
+        ws.on("open", () => resolve(200));
+        ws.on("error", () => {});
+      });
+      expect(anon).toBe(401);
+
+      const [a, b] = await players(2);
+      const open = async (p: Player) => {
+        const ws = new WebSocket(url, { headers: { Cookie: p.cookie } });
+        const msgs: any[] = [];
+        ws.on("message", (m) => msgs.push(JSON.parse(String(m))));
+        await new Promise<void>((resolve, reject) => { ws.on("open", () => resolve()); ws.on("error", reject); });
+        const wait = async (pred: (m: any) => boolean) => {
+          for (let i = 0; i < 100; i++) { const f = msgs.find(pred); if (f) return f; await sleep(30); }
+          throw new Error("no message: " + JSON.stringify(msgs));
+        };
+        return { ws, msgs, wait };
+      };
+      const sa = await open(a), sb = await open(b);
+      expect((await sb.wait((m) => m.t === "unread"))).toMatchObject({ dm: 0, notif: 0 });
+
+      const sent = (await a.req("POST", "/api/dm/send", { to: b.username, text: "qua socket" })).body;
+      const got = await sb.wait((m) => m.t === "dm");
+      expect(got).toMatchObject({ with: a.username, m: { id: sent.id, text: "qua socket", mine: false } });
+      await sb.wait((m) => m.t === "unread" && m.dm === 1);
+
+      sb.ws.send(JSON.stringify({ t: "typing", to: a.username }));
+      expect(await sa.wait((m) => m.t === "typing")).toEqual({ t: "typing", from: b.username });
+
+      await b.req("POST", "/api/dm/read", { with: a.username });
+      expect(await sa.wait((m) => m.t === "seen")).toEqual({ t: "seen", by: b.username, upTo: sent.id });
+
+      await a.req("POST", "/api/friends/request", { username: b.username });
+      expect((await sb.wait((m) => m.t === "notif")).n).toMatchObject({ kind: "friend_request", actor: { username: a.username } });
+      await b.req("POST", "/api/friends/accept", { username: a.username });
+      sb.ws.send(JSON.stringify({ t: "presence", route: "/slot-777" }));
+      expect(await sa.wait((m) => m.t === "presence" && m.playing === "slot777")).toMatchObject({ username: b.username, online: true });
+      expect((await a.req("GET", "/api/friends")).body.friends[0]).toMatchObject({ username: b.username, online: true, playing: "slot777" });
+
+      const chat = (await a.req("POST", "/api/chat", { text: "xin chào cả nhà" })).body;
+      expect((await sb.wait((m) => m.t === "chat")).m).toMatchObject({ id: chat.id, username: a.username });
+
+      // A friend at a card table with a free seat can be joined
+      const t = await a.req("POST", "/api/cards/tables", { mode: "house", stake: 1000 });
+      const fb = (await b.req("GET", "/api/friends")).body.friends[0];
+      expect(fb.join).toEqual({ kind: "cards", href: `/ban-bai?table=${t.body.code}` });
+      sa.ws.close(); sb.ws.close();
+    });
+
+    it("deleting an account removes friendships, requests, notifications, reactions, feed, gifts and settings", async () => {
+      const [gone, f1, f2] = await players(3);
+      await befriend(gone, f1);
+      await gone.req("POST", "/api/friends/request", { username: f2.username });
+      await f2.req("PUT", "/api/social/privacy", { showInFeed: true });
+      await gone.req("PUT", "/api/social/profile", { bio: "tạm biệt" });
+      await pool.query("update friendships set created_at = now() - interval '2 days'");
+      expect((await f1.req("POST", "/api/friends/gift", { username: gone.username })).status).toBe(200);
+      const m = (await f1.req("POST", "/api/chat", { text: "của f1" })).body;
+      await gone.req("POST", `/api/chat/${m.id}/react`, { emoji: "🔥" });
+      const g2 = (await gone.req("POST", "/api/chat", { text: "của gone" })).body;
+      await f2.req("POST", `/api/chat/${g2.id}/react`, { emoji: "❤️" });
+      const gid = await idOf(gone);
+      await pool.query("insert into game_plays (user_id, game, bet, payout) values ($1, 'slot', 1000, 99000)", [gid]);
+      await tick();
+      const count = async () => Number((await pool.query(`select
+        (select count(*) from friendships where user_a = $1 or user_b = $1) +
+        (select count(*) from friend_requests where from_id = $1 or to_id = $1) +
+        (select count(*) from notifications where user_id = $1 or actor_id = $1) +
+        (select count(*) from message_reactions where user_id = $1 or (scope = 'chat' and message_id = $2)) +
+        (select count(*) from feed_items where user_id = $1 or other_id = $1) +
+        (select count(*) from friend_gifts where from_id = $1 or to_id = $1) +
+        (select count(*) from user_social where user_id = $1) as n`, [gid, g2.id])).rows[0].n);
+      expect(await count()).toBeGreaterThan(8);
+      expect((await gone.req("POST", "/api/user/delete", { password: gone.password })).status).toBe(200);
+      expect(await count()).toBe(0);
+      expect((await f1.req("GET", "/api/friends")).body.friends).toEqual([]);
+      expect((await f1.req("GET", "/api/notifications")).body.items.some((n: any) => n.actor === null && n.kind !== "reaction")).toBe(false);
     });
   });
 

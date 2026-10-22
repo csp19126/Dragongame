@@ -14,6 +14,7 @@ import { Loader2, Trophy, Gamepad2, TrendingUp, Flame, Crown, Save, ArrowLeft } 
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { DeleteAccountCard } from "@/components/DeleteAccount";
+import { SocialProfileCard, PrivacyCard } from "@/components/SocialSettings";
 
 interface ProfileData {
   id: string;
@@ -181,6 +182,9 @@ export default function Profile() {
               </Button>
             </form>
           </Card>
+
+          <SocialProfileCard />
+          <PrivacyCard />
 
           <Card className="bg-purple-950/60 border-yellow-500/20 p-6" data-testid="card-profile-stats">
             <h3 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-4">

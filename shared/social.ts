@@ -3,6 +3,7 @@
  * and private messages. Pure code only (no database), so the tests can import it.
  */
 import { CHAT_MIN_GAMES } from "./chat";
+import type { Relation, ReactionCount, ReplyRef } from "./friends";
 
 /** Same gate as the public chat: new accounts must play a few games first (keeps spam bots out) */
 export const SOCIAL_MIN_GAMES = CHAT_MIN_GAMES;
@@ -67,9 +68,22 @@ export interface PlayerProfile {
   you: boolean;
   /** The viewer has blocked this player */
   blockedByYou: boolean;
+  /** Social 2.0 */
+  bio: string | null;
+  favGame: string | null;
+  /** Up to three badges they chose to show off */
+  showcase: string[];
+  level: { level: number; xp: number; from: number; to: number; progress: number };
+  friendsCount: number;
+  /** Between the viewer and this player */
+  relation: Relation;
+  acceptsRequests: boolean;
+  friendsOnlyDm: boolean;
+  /** The game they're on now (friends only, and only if they share it) */
+  playing: string | null;
 }
 
-export interface DmPeer { username: string; avatarUrl: string | null; online: boolean }
+export interface DmPeer { username: string; avatarUrl: string | null; online: boolean; level?: number }
 
 export interface DmConversation extends DmPeer {
   last: { text: string | null; sticker: string | null; mine: boolean; at: string };
@@ -83,6 +97,9 @@ export interface DmMessage {
   sticker: string | null;
   createdAt: string;
   read: boolean;
+  /** The message this one answers */
+  reply: ReplyRef | null;
+  reactions: ReactionCount[];
 }
 
 export interface DmThread {
@@ -90,7 +107,9 @@ export interface DmThread {
   messages: DmMessage[];
   /** Older messages exist (load with ?before=<first id>) */
   more: boolean;
-  /** Either player has blocked the other: nothing can be sent */
+  /** Either player has blocked the other, or they only take messages from friends: nothing can be sent */
   cantMessage: boolean;
+  /** Why (a server message) */
+  cantReason: string | null;
   blockedByYou: boolean;
 }
