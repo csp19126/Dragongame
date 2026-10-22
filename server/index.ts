@@ -1,4 +1,5 @@
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { createApp } from "./app";
 import { runMigrations } from "./migrate";
 import { getSessionSecret } from "./settings";
@@ -17,6 +18,21 @@ async function main() {
   // 3. Admins listed in ADMIN_USERNAMES (comma separated)
   const adminNames = (process.env.ADMIN_USERNAMES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   await storage.syncAdmins(adminNames);
+
+  // Owner locked out? Set ADMIN_RESET_USERNAME and ADMIN_RESET_PASSWORD in the host's variables,
+  // let it restart, log in, then DELETE both variables. Only works for ADMIN_USERNAMES accounts.
+  const resetName = process.env.ADMIN_RESET_USERNAME?.trim();
+  const resetPassword = process.env.ADMIN_RESET_PASSWORD;
+  if (resetName && resetPassword) {
+    if (resetPassword.length < 8 || resetPassword.length > 128) {
+      console.warn("[startup] ADMIN_RESET_PASSWORD must be 8 to 128 characters; password not changed");
+    } else {
+      const result = await storage.resetAdminPassword(resetName, await bcrypt.hash(resetPassword, 10), adminNames);
+      if (result === "done") console.log(`[startup] password reset for admin "${resetName}". Now delete ADMIN_RESET_USERNAME and ADMIN_RESET_PASSWORD.`);
+      else if (result === "not_admin") console.warn(`[startup] "${resetName}" is not in ADMIN_USERNAMES; password not changed`);
+      else console.warn(`[startup] no user "${resetName}"; password not changed`);
+    }
+  }
   const vouchers = await storage.ensureStarterPack();
   if (vouchers) console.log(`[startup] created the starter pack: ${vouchers} voucher codes (see Admin > Promo codes)`);
 

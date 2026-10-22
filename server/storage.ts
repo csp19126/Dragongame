@@ -649,6 +649,19 @@ export class DatabaseStorage {
     };
   }
 
+  /**
+   * Owner's way back in: sets a new password for an ADMIN_USERNAMES account from env vars at startup,
+   * and signs that account out everywhere. Only admin accounts can be reset this way.
+   */
+  async resetAdminPassword(username: string, passwordHash: string, adminNames: string[]): Promise<"done" | "not_admin" | "no_user"> {
+    if (!adminNames.some((n) => n.toLowerCase() === username.toLowerCase())) return "not_admin";
+    const u = (await this.getUserByUsername(username)) ?? (await this.getUserByUsername(adminNames.find((n) => n.toLowerCase() === username.toLowerCase())!));
+    if (!u) return "no_user";
+    await db.update(users).set({ password: passwordHash }).where(eq(users.id, u.id));
+    await db.execute(sql`DELETE FROM "session" WHERE sess->>'userId' = ${u.id}`);
+    return "done";
+  }
+
   /** Grants admin to the usernames listed in the ADMIN_USERNAMES env var (comma separated). */
   async syncAdmins(usernames: string[]): Promise<void> {
     for (const name of usernames) {
