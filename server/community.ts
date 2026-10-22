@@ -17,9 +17,9 @@ import {
 import { CHAT_COOLDOWN_MS, CHAT_MIN_GAMES, CHAT_AUTO_HIDE_REPORTS } from "@shared/chat";
 import { speakerRefusal, paceLimiter, readMessage } from "./speech";
 import { findMentions, isReaction, quote, type ReactionCount, type ReplyRef } from "@shared/friends";
-import { notifyChat, notifyReaction, blockedEither, forgetUser } from "./friends";
+import { notifyChat, notifyReaction, blockedEither } from "./friends";
 import { reactionsFor, reactAllowed, toggleReaction } from "./social";
-import { pushAll } from "./hub";
+import { pushAll, disconnect } from "./hub";
 import { and, desc, eq, gt, gte, lt, isNull, or, sql, count, inArray } from "drizzle-orm";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
@@ -441,7 +441,7 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
       const hidden = await db.update(chatMessages).set({ deleted: true })
         .where(and(eq(chatMessages.userId, target), gt(chatMessages.createdAt, new Date(Date.now() - 86_400_000)))).returning({ id: chatMessages.id });
       if (hidden.length) pushAll({ t: "chat_removed", ids: hidden.map((h) => h.id) });
-      forgetUser(target);
+      disconnect(target);
     }
     res.json(u);
   });

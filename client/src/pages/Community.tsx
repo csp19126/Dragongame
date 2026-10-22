@@ -32,7 +32,7 @@ const fmt = fmtCoins;
 
 const TXT = {
   vi: {
-    title: "Cộng Đồng", subtitle: "Trò chuyện · Nhắn riêng · Sưu tầm",
+    title: "Cộng Đồng", subtitle: "Bạn bè · Trò chuyện · Sưu tầm",
     tabChat: "Trò chuyện", tabDm: "Tin nhắn", tabFriends: "Bạn bè", tabActivity: "Hoạt động", tabAlbum: "Album", tabInvite: "Mời bạn",
     rules: "Lịch sự nhé. Không mua bán xu, không gửi link hay số điện thoại.",
     placeholder: "Nhắn gì đó…", send: "Gửi", stickers: "Sticker của bạn", noStickers: "Bạn chưa có sticker nào. Mở gói trong Album!",
@@ -51,7 +51,7 @@ const TXT = {
     announce: "Thông báo", maxInvites: (n: number) => `Tối đa ${n} lượt thưởng mời bạn.`,
   },
   en: {
-    title: "Community", subtitle: "Chat · Message · Collect",
+    title: "Community", subtitle: "Friends · Chat · Collect",
     tabChat: "Chat", tabDm: "Messages", tabFriends: "Friends", tabActivity: "Activity", tabAlbum: "Album", tabInvite: "Invite",
     rules: "Be kind. No selling coins, no links, no phone numbers.",
     placeholder: "Say something…", send: "Send", stickers: "Your stickers", noStickers: "No stickers yet. Open a pack in the Album!",
@@ -70,7 +70,7 @@ const TXT = {
     announce: "Announcement", maxInvites: (n: number) => `Up to ${n} invite rewards.`,
   },
   zh: {
-    title: "社群", subtitle: "聊天 · 私訊 · 收集",
+    title: "社群", subtitle: "好友 · 聊天 · 收集",
     tabChat: "聊天", tabDm: "私訊", tabFriends: "好友", tabActivity: "動態", tabAlbum: "圖鑑", tabInvite: "邀請好友",
     rules: "請保持禮貌。禁止買賣金幣，禁止發送連結或電話號碼。",
     placeholder: "說點什麼…", send: "發送", stickers: "你的貼圖", noStickers: "你還沒有貼圖。到圖鑑開卡包吧！",
@@ -399,6 +399,7 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastId = useRef(0);
+  const loaded = useRef(false);
   const jumped = useRef(false);
   const announcement = useQuery<{ text: string | null }>({ queryKey: ["/api/announcement"], refetchInterval: 60_000 });
   const album = useQuery<AlbumView>({ queryKey: ALBUM_KEY });
@@ -430,9 +431,10 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
       if (stop) return;
       if (document.visibilityState === "visible") {
         try {
-          const first = lastId.current === 0;
+          // The first load is the latest page, even if live messages already arrived over the socket
+          const first = !loaded.current;
           const res = await fetch(`/api/chat${first ? "" : `?after=${lastId.current}`}`, { credentials: "include" });
-          if (res.ok) { const r: ChatResp = await res.json(); setMeInfo(r.me); addMessages(r.messages, r.removed, first); }
+          if (res.ok) { const r: ChatResp = await res.json(); loaded.current = true; setMeInfo(r.me); addMessages(r.messages, r.removed, first); }
         } catch { /* offline: try again next time */ }
       }
       timer = window.setTimeout(poll, connected ? 15_000 : 2500);
@@ -517,7 +519,7 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
         </div>
       )}
       <div ref={listRef} onClick={(e) => { if (e.target === e.currentTarget) setActive(null); }}
-        className={`${tray ? "h-[calc(100dvh-470px)] min-h-[180px]" : replyTo ? "h-[calc(100dvh-400px)] min-h-[260px]" : "h-[calc(100dvh-345px)] min-h-[300px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`} data-testid="chat-list">
+        className={`${tray ? "h-[calc(100dvh-490px)] min-h-[180px]" : replyTo ? "h-[calc(100dvh-425px)] min-h-[240px]" : "h-[calc(100dvh-365px)] min-h-[280px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`} data-testid="chat-list">
         {msgs.length === 0 && <p className="m-auto text-sm text-white/50">{L.empty}</p>}
         {msgs.map((m) => {
           const mine = m.username === me;
@@ -602,7 +604,7 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
           </form>
         </div>
       )}
-      <p className="text-[10px] text-white/40 text-center">{L.rules} {tr("Chạm vào tin nhắn để thả cảm xúc hoặc trả lời · gõ @ để gọi tên.", "Tap a message to react or reply · type @ to mention someone.", "點訊息可按表情或回覆 · 輸入 @ 可提及玩家。")}</p>
+      <p className="text-[10px] text-white/40 text-center leading-tight">{L.rules}<br />{tr("Chạm tin nhắn để thả cảm xúc, trả lời · gõ @ để gọi tên", "Tap a message to react or reply · type @ to mention", "點訊息可按表情、回覆 · 輸入 @ 提及玩家")}</p>
     </div>
   );
 }

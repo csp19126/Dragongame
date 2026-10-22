@@ -130,7 +130,7 @@ function NotificationSheet({ onClose }: { onClose: () => void }) {
             </div>
           ) : items.map((n) => (
             <div key={n.id} className={`flex gap-3 px-4 py-3 border-b border-white/5 ${n.read ? "" : "bg-yellow-400/[0.07]"}`} data-testid={`notif-${n.id}`}>
-              <div className="relative shrink-0">
+              <div className="relative shrink-0 self-start h-[42px]">
                 {n.actor ? <Avatar user={n.actor} size={42} onClick={() => showPlayer(n.actor!.username)} /> : <span className="w-[42px] h-[42px] rounded-full bg-white/10 flex items-center justify-center text-xl">{icon(n)}</span>}
                 {n.actor && <span className="absolute -bottom-1 -right-1 text-sm leading-none">{icon(n)}</span>}
               </div>

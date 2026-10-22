@@ -21,7 +21,7 @@ export function FriendsBoard() {
   return (
     <div className="p-3 sm:p-6 space-y-3" data-testid="friends-board">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] text-white/50">{tr("Tuần này, từ", "This week, since", "本週，自")} {new Date(q.data.since).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" })}</p>
+        <p className="text-[11px] text-white/50">{tr("Tuần này, từ", "This week, since", "本週，自")} {new Date(q.data.since).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Ho_Chi_Minh" })}</p>
         <div className="flex rounded-xl bg-black/40 p-0.5">
           <button type="button" onClick={() => setBy("win")} className={`h-8 px-2.5 rounded-lg text-[11px] font-black ${by === "win" ? "bg-yellow-400 text-black" : "text-white/60"}`} data-testid="board-by-win">{tr("Thắng lớn nhất", "Biggest win", "最大贏額")}</button>
           <button type="button" onClick={() => setBy("won")} className={`h-8 px-2.5 rounded-lg text-[11px] font-black ${by === "won" ? "bg-yellow-400 text-black" : "text-white/60"}`} data-testid="board-by-won">{tr("Tổng xu thắng", "Coins won", "總贏金幣")}</button>

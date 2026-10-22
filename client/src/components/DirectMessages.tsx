@@ -129,6 +129,7 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastId = useRef(0);
+  const loaded = useRef(false);
   const lastTypingSent = useRef(0);
   const album = useQuery<AlbumView>({ queryKey: ["/api/stickers"] });
   const ownedStickers = useMemo(() => STICKERS.filter((s) => (album.data?.owned[s.id] ?? 0) > 0), [album.data]);
@@ -178,10 +179,11 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
       if (stop) return;
       if (document.visibilityState === "visible") {
         try {
-          const first = lastId.current === 0;
+          // The first load is the latest page, even if live messages already arrived over the socket
+          const first = !loaded.current;
           const res = await fetch(`${path}${first ? "" : `?after=${lastId.current}`}`, { credentials: "include" });
           if (res.status === 404) { setMissing(true); return; }
-          if (res.ok && !stop) merge(await res.json(), first);
+          if (res.ok && !stop) { loaded.current = true; merge(await res.json(), first); }
         } catch { /* offline: try again */ }
       }
       timer = window.setTimeout(poll, connected ? 20_000 : 3000);

@@ -92,12 +92,12 @@ export function MessageActions({ onReact, onReply, extra, mine }: { onReact: (e:
   const { tr } = useLang();
   return (
     <motion.div initial={{ opacity: 0, y: 4, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-      className={`flex items-center gap-0.5 rounded-full bg-[#2a1748] border border-yellow-400/40 shadow-xl px-1 py-0.5 mt-1 ${mine ? "self-end" : "self-start"}`} data-testid="message-actions">
+      className={`relative z-10 flex items-center w-max max-w-[calc(100vw-2.5rem)] rounded-full bg-[#2a1748] border border-yellow-400/40 shadow-xl px-1 py-0.5 mt-1 ${mine ? "self-end" : "self-start"}`} data-testid="message-actions">
       {REACTIONS.map((e) => (
-        <button key={e} type="button" onClick={() => onReact(e)} className="w-8 h-8 text-lg rounded-full active:scale-90 hover:bg-white/10" aria-label={e} data-testid={`react-${e}`}>{e}</button>
+        <button key={e} type="button" onClick={() => onReact(e)} className="w-8 h-8 shrink-0 text-lg rounded-full active:scale-90 hover:bg-white/10" aria-label={e} data-testid={`react-${e}`}>{e}</button>
       ))}
       {onReply && (
-        <button type="button" onClick={onReply} className="h-8 px-2 rounded-full text-[11px] font-black text-yellow-200 flex items-center gap-1 hover:bg-white/10" data-testid="button-reply">
+        <button type="button" onClick={onReply} className="h-8 px-2 shrink-0 whitespace-nowrap rounded-full text-[11px] font-black text-yellow-200 flex items-center gap-1 hover:bg-white/10" data-testid="button-reply">
           <CornerUpLeft className="w-3.5 h-3.5" />{tr("Trả lời", "Reply", "回覆")}
         </button>
       )}

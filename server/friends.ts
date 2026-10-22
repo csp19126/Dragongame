@@ -410,6 +410,8 @@ export async function startSocial(httpServer: { on: (e: "close", f: () => void) 
   setHubHandlers({ message: onHubMessage, presence: (id) => onPresenceChange(id) });
   hiddenPresence.clear();
   for (const r of await db.select({ id: userSocial.userId }).from(userSocial).where(eq(userSocial.showPresence, false))) hiddenPresence.add(r.id);
+  // Every player gets a social row now, so the first level-up of anyone is announced
+  await db.execute(sql`insert into ${userSocial} (user_id) select id from ${users} on conflict do nothing`);
   await syncLevels(null, false);
   const [m] = await db.select({ id: sql<number>`coalesce(max(${feedItems.id}), 0)` }).from(feedItems);
   pushedUpTo = Number(m?.id ?? 0);

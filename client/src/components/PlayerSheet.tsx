@@ -111,7 +111,7 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
                 <span className="text-[10px] text-white/45 font-bold">{fmtCoins(p.level.xp)} XP</span>
               </div>
               {p.bio && <p className="mt-2 text-sm text-white/85 italic break-words px-2" data-testid="sheet-bio">“{p.bio}”</p>}
-              {p.favGame && <p className="mt-1 text-[11px] text-white/55" data-testid="sheet-fav">{tr("Trò yêu thích", "Favourite game", "最愛遊戲")}: <b className="text-yellow-200">{gameName(p.favGame)}</b></p>}
+              {p.favGame && <p className="mt-1 text-[11px] text-white/55" data-testid="sheet-fav">{tr("Trò yêu thích: ", "Favourite game: ", "最愛遊戲：")}<b className="text-yellow-200">{gameName(p.favGame)}</b></p>}
             </div>
             {p.showcase.length > 0 && (
               <div className="flex justify-center gap-2 w-full" data-testid="sheet-showcase">
