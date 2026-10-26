@@ -31,6 +31,8 @@ export const users = pgTable("users", {
   lastFreePackAt: timestamp("last_free_pack_at"),
   /** Daily bonus for the first counted pool win of the day */
   lastPoolBonusAt: timestamp("last_pool_bonus_at"),
+  /** Daily bonus for the first practice penalty-shootout win of the day */
+  lastFootballBonusAt: timestamp("last_football_bonus_at"),
   playPacksOpened: integer("play_packs_opened").default(0).notNull(),
   bonusPacks: integer("bonus_packs").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -241,6 +243,44 @@ export const leagueSeasons = pgTable("league_seasons", {
   season: text("season").primaryKey(),
   paidAt: timestamp("paid_at").defaultNow().notNull(),
   summary: jsonb("summary").$type<{ username: string; points: number; prize: number }[]>().notNull(),
+});
+
+// Penalty shootout (Sút Phạt Đền): online matches with their stakes, like pool_matches.
+// kicks is the full record (both choices, the seed and the outcome) once the match is over.
+export const footballMatches = pgTable("football_matches", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  player1: varchar("player1").notNull(),
+  player2: varchar("player2"),
+  stake: integer("stake").notNull(),
+  status: text("status").notNull(), // waiting | playing | finished | cancelled
+  winner: varchar("winner"),
+  reason: text("reason"),
+  score: text("score"),
+  kicks: jsonb("kicks"),
+  /** Ladder: the week (Monday, Vietnam time), whether it counted, and the rating change */
+  week: text("week"),
+  counted: boolean("counted").default(false).notNull(),
+  eloDelta: integer("elo_delta"),
+  createdAt: timestamp("created_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+}, (t) => [index("football_matches_week").on(t.week, t.counted)]);
+
+// Penalty King weekly ladder: each player's Elo for a week (everyone starts the week at 1000)
+export const footballRatings = pgTable("football_ratings", {
+  userId: varchar("user_id").notNull(),
+  week: text("week").notNull(),
+  rating: integer("rating").notNull(),
+  played: integer("played").default(0).notNull(),
+  won: integer("won").default(0).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.userId, t.week] }), index("football_ratings_week").on(t.week, t.rating)]);
+
+// A paid ladder week: the row is written first, so a week can only ever be paid once
+export const footballWeeks = pgTable("football_weeks", {
+  week: text("week").primaryKey(),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  summary: jsonb("summary").$type<{ username: string; rating: number; prize: number }[]>().notNull(),
 });
 
 // Community chat. Text or a sticker; deleted messages stay for the moderation log.

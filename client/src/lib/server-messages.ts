@@ -85,6 +85,12 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "Bad shot": { vi: "Cú bắn không hợp lệ", zh: "射擊無效" },
   "No cue ball": { vi: "Không có bi cái", zh: "沒有母球" },
 
+  // Penalty shootout
+  "Wait for the next kick": { vi: "Chờ lượt sút tiếp theo", zh: "請等待下一球" },
+  "Already chosen": { vi: "Bạn đã chọn rồi, không đổi được nữa", zh: "你已經選好了，無法更改" },
+  "Start a new game": { vi: "Hãy bắt đầu trận mới", zh: "請開始新的一局" },
+  "This game is over": { vi: "Trận này đã kết thúc", zh: "這局已經結束" },
+
   // Tournament
   "Registration is closed": { vi: "Đã hết hạn đăng ký", zh: "報名已截止" },
   "The tournament is full": { vi: "Giải đấu đã đủ người", zh: "錦標賽已額滿" },

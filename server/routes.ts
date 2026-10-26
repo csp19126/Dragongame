@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { bauCuaBetsSchema, rouletteBetsSchema, playBauCua, playRoulette } from "./tablegames";
 import { publicView } from "./blackjack";
 import { registerPoolRoutes } from "./pool";
+import { registerFootballRoutes } from "./football";
 import { registerCommunityRoutes, applyReferral, communityStats } from "./community";
 import { registerTournamentRoutes } from "./tournament";
 import { registerLeagueRoutes } from "./league";
@@ -262,6 +263,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   registerPoolRoutes(app, requireUser);
+  registerFootballRoutes(app, requireUser);
   registerCommunityRoutes(app, requireUser, requireAdmin);
   registerTournamentRoutes(app, requireUser, requireAdmin);
   registerLeagueRoutes(app, requireUser);

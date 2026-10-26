@@ -381,6 +381,59 @@ class SoundManager {
     this.playSweep(1800, 2600, 0.25, 'sine', 0.03, 0.3);
     this.playSweep(2000, 1500, 0.3, 'sine', 0.025, 0.8);
   }
+
+  /** Football: boot meets ball, a deep thump with a slap on top */
+  kick() {
+    this.playSweep(180, 55, 0.14, 'sine', 0.22);
+    this.playNoise(0.05, 0.08);
+  }
+
+  /** Football: the referee's whistle (two short peeps when `double`) */
+  whistle(double = false) {
+    this.playTone(2900, 0.16, 'square', 0.025);
+    this.playTone(3050, 0.16, 'sine', 0.04);
+    if (double) { this.playTone(2900, 0.3, 'square', 0.025, 0.22); this.playTone(3050, 0.3, 'sine', 0.04, 0.22); }
+  }
+
+  /** Football: ball off the woodwork, a ringing metal clang */
+  clang() {
+    [880, 1320, 2170, 3020].forEach((f, i) => this.playTone(f, 0.9 - i * 0.15, 'sine', 0.06 / (i + 1)));
+    this.playNoise(0.04, 0.1);
+  }
+
+  /** Football: the keeper smothers it */
+  thud() {
+    this.playSweep(140, 70, 0.12, 'sine', 0.16);
+    this.playNoise(0.08, 0.05);
+  }
+
+  /** Football: the crowd groans at a miss */
+  groan() {
+    this.playSweep(320, 180, 0.9, 'sawtooth', 0.025);
+    this.playSweep(260, 150, 1.0, 'sawtooth', 0.02, 0.05);
+  }
+
+  /** Football: the stands clap a rhythm, clap-clap, clap-clap-clap */
+  chant() {
+    [0, 0.25, 0.75, 0.95, 1.15].forEach((d) => {
+      const ctx = this.audioContext;
+      if (!ctx || !this.masterGain) return;
+      this.ensureContext();
+      const len = Math.floor(ctx.sampleRate * 0.06);
+      const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3;
+      const src = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      src.buffer = buffer;
+      filter.type = 'bandpass';
+      filter.frequency.value = 1500;
+      gain.gain.value = 0.35;
+      src.connect(filter); filter.connect(gain); gain.connect(this.masterGain);
+      src.start(ctx.currentTime + d);
+    });
+  }
 }
 
 export const soundManager = new SoundManager();
