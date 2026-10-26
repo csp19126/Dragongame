@@ -981,6 +981,8 @@ describe("darts", async () => {
     const value = (c: string) => hit(/^\d+$/.test(c) && c !== "25" ? `S${c}` : c);
     expect(d.checkout(170)).toEqual(["T20", "T20", "BULL"]);
     expect(d.checkout(100)).toEqual(["T20", "D20"]);
+    expect(d.checkout(141)).toEqual(["T20", "T19", "D12"]);
+    expect(d.checkout(167)).toEqual(["T20", "T19", "BULL"]);
     expect(d.checkout(40)).toEqual(["D20"]);
     expect(d.checkout(50)).toEqual(["BULL"]);
     for (const bogey of [169, 168, 166, 165, 163, 162, 159]) expect(d.checkout(bogey)).toBeNull();

@@ -226,6 +226,22 @@ const bedsOf = (): Bed[] => {
   return out;
 };
 const SETUP = bedsOf();
+/** How hard each set-up bed is to hit (singles are big, trebles small; high numbers are where the dart already is) */
+const SETUP_RANK = SETUP.map((b) => {
+  const n = Number(b.code.slice(1));
+  if (b.code === "25") return 8;
+  if (b.code === "BULL") return 16;
+  if (b.code[0] === "T") return 10 + (20 - n) * 0.6;
+  if (b.code[0] === "S") return (20 - n) * 0.2;
+  return 18 + (20 - n) * 0.2; // a double used to set up
+});
+/** The easiest bed for each score 1–60 (index into SETUP), or -1 */
+const EASIEST = Array.from({ length: 61 }, (_, sc) => {
+  let best = -1;
+  SETUP.forEach((b, i) => { if (b.score === sc && (best < 0 || SETUP_RANK[i] < SETUP_RANK[best])) best = i; });
+  return best;
+});
+const easiest = (sc: number) => (sc >= 1 && sc <= 60 ? EASIEST[sc] : -1);
 /** Doubles in the order players like to finish on */
 const FINISH_ORDER = [20, 16, 8, 18, 12, 10, 4, 14, 6, 2, 19, 17, 15, 13, 11, 9, 7, 5, 3, 1].map((n) => ({ code: `D${n}`, score: n * 2 }));
 FINISH_ORDER.push({ code: "BULL", score: 50 });
@@ -243,14 +259,30 @@ export function checkout(rem: number, darts = 3): string[] | null {
       const left = rem - d.score;
       if (left < 0) continue;
       if (k === 1) { if (left === 0) { found = [d.code]; break outer; } continue; }
-      if (k === 2) {
-        const s = SETUP.find((b) => b.score === left);
-        if (s) { found = [s.code, d.code]; break outer; }
-        continue;
+    }
+    if (k === 2) {
+      // Two darts: a big bed then a favourite double (61 → T15 D8)
+      let best = Infinity;
+      for (const [di, d] of FINISH_ORDER.entries()) {
+        const si = easiest(rem - d.score);
+        if (si >= 0 && SETUP_RANK[si] + 1.5 * di < best) { best = SETUP_RANK[si] + 1.5 * di; found = [SETUP[si].code, d.code]; }
       }
-      for (const a of SETUP) {
-        const b = SETUP.find((x) => x.score === left - a.score);
-        if (b) { found = [a.code, b.code, d.code]; break outer; }
+      if (found) break outer;
+    }
+    if (k === 3) {
+      // Three darts: the route with the friendliest beds (big trebles first, a favourite double
+      // last), e.g. 141 → T20 T19 D12 rather than T17 BULL D20
+      let best = Infinity;
+      for (const [di, d] of FINISH_ORDER.entries()) {
+        for (const [ai, a] of SETUP.entries()) {
+          const left = rem - d.score - a.score;
+          if (left <= 0) continue;
+          const bi = easiest(left);
+          if (bi < 0) continue;
+          const cost = SETUP_RANK[ai] + SETUP_RANK[bi] + 1.5 * di;
+          const [x, y] = a.score >= SETUP[bi].score ? [a, SETUP[bi]] : [SETUP[bi], a];
+          if (cost < best) { best = cost; found = [x.code, y.code, d.code]; }
+        }
       }
     }
   }
