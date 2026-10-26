@@ -649,7 +649,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       const r = await new Player().req("GET", "/api/game/leaderboard");
       expect(r.status).toBe(200);
       expect(r.body.length).toBeGreaterThan(0);
-      for (const e of r.body) expect(Object.keys(e).sort()).toEqual(["avatarUrl", "balance", "maxStreak", "maxWin", "rank", "totalWins", "username"]);
+      for (const e of r.body) expect(Object.keys(e).sort()).toEqual(["avatarUrl", "balance", "club", "maxStreak", "maxWin", "rank", "totalWins", "username"]);
     });
 
     it("health check reports the database and unknown API routes return JSON 404", async () => {
@@ -879,7 +879,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       await a.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
       const prof = await b.req("GET", `/api/players/${a.username.toUpperCase()}/profile`);
       expect(prof.status).toBe(200);
-      expect(Object.keys(prof.body).sort()).toEqual(["acceptsRequests", "admin", "avatarUrl", "biggestWin", "bio", "blockedByYou", "favGame", "friendsCount", "friendsOnlyDm", "gamesPlayed", "league", "level", "memberSince", "online", "playing", "relation", "showcase", "stickers", "username", "you"]);
+      expect(Object.keys(prof.body).sort()).toEqual(["acceptsRequests", "admin", "avatarUrl", "biggestWin", "bio", "blockedByYou", "club", "favGame", "friendsCount", "friendsOnlyDm", "gamesPlayed", "league", "level", "memberSince", "online", "playing", "relation", "showcase", "stickers", "username", "you"]);
       expect(prof.body).toMatchObject({ username: a.username, gamesPlayed: 5, online: true, you: false, blockedByYou: false, league: null });
       expect(prof.body.avatarUrl).toMatch(/^\/api\/avatar\//);
       for (const k of ["balance", "email", "password", "firstName", "id", "mutedUntil"]) expect(prof.body).not.toHaveProperty(k);
