@@ -139,6 +139,49 @@ export const poolMatches = pgTable("pool_matches", {
   counted: boolean("counted").default(false).notNull(),
 }, (t) => [index("pool_matches_season").on(t.season, t.counted)]);
 
+// Darts. Online matches work like pool's: stakes are taken when a player sits down and the
+// winner gets both; the live game itself is kept in server memory (server/darts.ts).
+export const dartsMatches = pgTable("darts_matches", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  player1: varchar("player1").notNull(),
+  player2: varchar("player2"),
+  stake: integer("stake").notNull(),
+  legs: integer("legs").notNull().default(1),
+  status: text("status").notNull(), // waiting | playing | finished | cancelled
+  winner: varchar("winner"),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+});
+
+// Darts Daily Challenge: 9 darts, one ranked attempt per player per day (Vietnam time).
+// Practice attempts aren't stored.
+export const dartsDaily = pgTable("darts_daily", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  day: text("day").notNull(), // YYYY-MM-DD
+  darts: jsonb("darts").$type<{ x: number; y: number; ring: string; n: number; mult: number; score: number }[]>().notNull().default(sql`'[]'::jsonb`),
+  score: integer("score").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("darts_daily_user_day").on(t.userId, t.day), index("darts_daily_day").on(t.day, t.score)]);
+
+// A day's Daily Challenge prizes: inserted in the same transaction as the payments, so they're paid once
+export const dartsDailyResults = pgTable("darts_daily_results", {
+  day: text("day").primaryKey(),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  summary: jsonb("summary").$type<{ username: string; score: number; prize: number }[]>().notNull(),
+});
+
+// The once-a-day reward for beating the computer at darts
+export const dartsRewards = pgTable("darts_rewards", {
+  userId: varchar("user_id").notNull(),
+  day: text("day").notNull(),
+  amount: integer("amount").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.userId, t.day] })]);
+
 // One row per game played (a spin, a hand, a round, a pool match), for the admin's numbers.
 // bet is what the play cost (0 for a free spin), payout what it paid back (stake included).
 export const gamePlays = pgTable("game_plays", {

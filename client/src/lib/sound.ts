@@ -351,6 +351,71 @@ class SoundManager {
     this.playSweep(2000, 3200, 0.2, 'sine', 0.02, 0.45);
   }
 
+  /** Darts: the swish of a dart leaving the hand */
+  dartWhoosh() {
+    if (!this.audioContext || !this.masterGain) return;
+    this.ensureContext();
+    const ctx = this.audioContext;
+    const duration = 0.22;
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * duration), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const source = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    filter.type = 'bandpass';
+    filter.Q.value = 1.2;
+    const t = ctx.currentTime;
+    filter.frequency.setValueAtTime(700, t);
+    filter.frequency.exponentialRampToValueAtTime(2600, t + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    source.start(t);
+    source.stop(t + duration);
+  }
+
+  /** Darts: the thunk of a dart sinking into the board (a wire gives a little ting) */
+  dartThunk(wire = false) {
+    this.playTone(95, 0.12, 'sine', 0.22);
+    this.playTone(180, 0.05, 'triangle', 0.08);
+    this.playNoise(0.035, 0.08);
+    if (wire) this.playTone(2400, 0.08, 'sine', 0.025, 0.01);
+  }
+
+  /** Darts: the dull clack of a dart hitting the wall and dropping */
+  dartMiss() {
+    this.playTone(320, 0.05, 'square', 0.05);
+    this.playTone(140, 0.12, 'triangle', 0.06, 0.12);
+  }
+
+  /** Darts: a busted visit */
+  dartBust() {
+    this.playTone(196, 0.18, 'sawtooth', 0.06);
+    this.playTone(147, 0.3, 'sawtooth', 0.06, 0.16);
+  }
+
+  /** Darts: the pub caller, in the time-honoured English (skipped when muted or without a voice) */
+  caller(text: string) {
+    if (this.muted) return;
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-GB';
+      const voice = synth.getVoices().find((v) => v.lang === 'en-GB') ?? synth.getVoices().find((v) => v.lang.startsWith('en'));
+      if (voice) u.voice = voice;
+      u.rate = 0.82;
+      u.pitch = 0.9;
+      synth.speak(u);
+    } catch { /* no voice: the callout is on screen anyway */ }
+  }
+
   /** The crowd roars as the winner crosses the line */
   cheer() {
     const ctx = this.audioContext;

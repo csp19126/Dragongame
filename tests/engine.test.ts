@@ -829,3 +829,205 @@ describe("Social 2.0 (pure rules)", async () => {
     expect(f.vnWeekStart(new Date("2026-10-25T17:30:00Z")).toISOString()).toBe("2026-10-25T17:00:00.000Z");
   });
 });
+
+describe("darts", async () => {
+  const d = await import("../shared/darts");
+  type X01 = import("../shared/darts").X01State;
+  const polar = (r: number, deg: number) => ({ x: r * Math.sin((deg * Math.PI) / 180), y: -r * Math.cos((deg * Math.PI) / 180) });
+  const at = (r: number, deg: number) => { const p = polar(r, deg); return d.scoreAt(p.x, p.y); };
+  const hit = (code: string) => { const p = d.targetPoint(code); return d.hitAt(p.x, p.y); };
+  const lcg = (seed: number) => () => { seed = (seed * 1103515245 + 12345) % 2147483648; return (seed + 0.5) / 2147483648; };
+
+  it("scores every region of the board", () => {
+    expect(d.scoreAt(0, 0)).toMatchObject({ ring: "bull", score: 50, mult: 2 });
+    expect(at(10, 45)).toMatchObject({ ring: "outer", score: 25, mult: 1 });
+    d.SEGMENTS.forEach((n, i) => {
+      const a = i * 18;
+      expect(at(50, a)).toMatchObject({ ring: "single", n, score: n, mult: 1 });
+      expect(at(103, a)).toMatchObject({ ring: "treble", n, score: n * 3, mult: 3 });
+      expect(at(130, a)).toMatchObject({ ring: "single", n, score: n });
+      expect(at(166, a)).toMatchObject({ ring: "double", n, score: n * 2, mult: 2 });
+      expect(at(200, a)).toMatchObject({ ring: "out", score: 0 });
+      // targetPoint lands in the bed it names
+      expect(hit(`T${n}`)).toMatchObject({ ring: "treble", n });
+      expect(hit(`D${n}`)).toMatchObject({ ring: "double", n });
+      expect(hit(`S${n}`)).toMatchObject({ ring: "single", n });
+    });
+    expect(at(300, 0)).toMatchObject({ ring: "miss", score: 0 });
+    expect(d.scoreAt(NaN, 0)).toMatchObject({ ring: "miss", score: 0 });
+    expect(hit("25")).toMatchObject({ ring: "outer", score: 25 });
+    expect(hit("BULL")).toMatchObject({ ring: "bull", score: 50 });
+    expect(d.hitLabel(hit("T20"))).toBe("T20");
+    expect(d.hitLabel(hit("BULL"))).toBe("BULL");
+  });
+
+  it("puts darts on wires and edges in a fixed place", () => {
+    // Ring wires belong to the ring outside them
+    expect(d.scoreAt(0, -6.35)).toMatchObject({ ring: "outer" });
+    expect(d.scoreAt(0, -15.9)).toMatchObject({ ring: "single", n: 20 });
+    expect(d.scoreAt(0, -99)).toMatchObject({ ring: "treble", n: 20 });
+    expect(d.scoreAt(0, -107)).toMatchObject({ ring: "single", n: 20 });
+    expect(d.scoreAt(0, -162)).toMatchObject({ ring: "double", n: 20 });
+    expect(d.scoreAt(0, -170)).toMatchObject({ ring: "out", score: 0 });
+    expect(d.scoreAt(0, -225)).toMatchObject({ ring: "miss" });
+    expect(d.scoreAt(0, -169.999)).toMatchObject({ ring: "double", n: 20 });
+    // Segment wires belong to the segment clockwise of them: 20|1 at 9°, 5|20 at 351°
+    expect(at(50, 9).n).toBe(1);
+    expect(at(50, 8.999).n).toBe(20);
+    expect(at(50, 351).n).toBe(20);
+    expect(at(50, 350.999).n).toBe(5);
+    for (let k = 0; k < 20; k++) expect(at(120, 9 + 18 * k).n).toBe(d.SEGMENTS[(k + 1) % 20]);
+    for (let i = 0; i < 5; i++) expect(at(103, 9)).toEqual(at(103, 9));
+  });
+
+  it("never lands a dart on NaN, whatever the client sends", () => {
+    const g = d.gaussFrom(lcg(99));
+    const junk: unknown[] = [null, undefined, "x", 5, {}, { x: NaN, y: Infinity, power: "a", drift: {}, holdMs: -5 },
+      { x: 1e308, y: -1e308, power: 1e9, drift: -1e9, holdMs: 1e12 }, { x: "12", y: "-80", power: "1", drift: "0", holdMs: "900" }];
+    for (const raw of junk) {
+      for (let i = 0; i < 200; i++) {
+        const h = d.throwDart(raw, g);
+        expect(Number.isFinite(h.x) && Number.isFinite(h.y) && Number.isFinite(h.score)).toBe(true);
+        expect(Math.abs(h.x)).toBeLessThanOrEqual(400);
+        expect(h).toMatchObject(d.scoreAt(h.x, h.y));
+      }
+    }
+    // A broken random source still gives a finite dart
+    expect(Number.isFinite(d.landAt(0, 0, NaN, () => [NaN, NaN]).x)).toBe(true);
+    // Misses score nothing; a dart is only off the board when it really is
+    expect(d.landAt(0, -300, 0, () => [0, 0])).toMatchObject({ ring: "miss", score: 0 });
+    const t20 = d.targetPoint("T20");
+    expect(d.throwDart({ ...t20, power: 1, drift: 0, holdMs: 1000 }, () => [0, 0])).toMatchObject({ ring: "treble", n: 20 });
+  });
+
+  it("the flick and the hold move and spread the dart the way the player sees", () => {
+    const t20 = d.targetPoint("T20");
+    const plan = (o: object) => d.throwPlan(d.cleanThrow({ ...t20, power: 1, drift: 0, holdMs: 1000, ...o }));
+    expect(plan({}).cy).toBeCloseTo(t20.y);
+    expect(plan({ power: 0.6 }).cy).toBeGreaterThan(t20.y + 20); // too soft: low
+    expect(plan({ power: 1.5 }).cy).toBeLessThan(t20.y - 20); // too hard: high
+    expect(plan({ drift: 0.5 }).cx).toBeGreaterThan(t20.x + 15);
+    expect(plan({ holdMs: 0 }).sigma).toBeGreaterThan(plan({}).sigma * 1.4); // not steadied
+    expect(plan({ holdMs: 3500 }).sigma).toBeGreaterThan(plan({}).sigma * 1.5); // held too long
+    expect(d.wobbleRadius(1000)).toBe(5);
+  });
+
+  it("a careful player hits T20 about 30–40% of the time; a beginner still hits the board", () => {
+    const g = d.gaussFrom(lcg(12345));
+    const t20 = d.targetPoint("T20");
+    const N = 40000;
+    let careful = 0, beginnerOn = 0;
+    for (let i = 0; i < N; i++) {
+      const h = d.throwDart({ ...t20, power: 1.05, drift: 0.03, holdMs: 1000 }, g);
+      if (h.ring === "treble" && h.n === 20) careful++;
+      if (d.throwDart({ ...t20, power: 0.7, drift: 0.25, holdMs: 150 }, g).score > 0) beginnerOn++;
+    }
+    expect(careful / N).toBeGreaterThan(0.3);
+    expect(careful / N).toBeLessThan(0.4);
+    expect(beginnerOn / N).toBeGreaterThan(0.95);
+  });
+
+  it("501: scores, busts, double-out and legs", () => {
+    let s = d.newX01(2, 0);
+    for (const c of ["T20", "T20", "T20"]) s = d.applyDart(s, hit(c)).state;
+    expect(s.scores).toEqual([321, 501]);
+    expect(s.lastVisit).toMatchObject({ by: 0, total: 180 });
+    expect(s.max[0]).toBe(1);
+    expect(s.turn).toBe(1);
+    expect(s.board).toHaveLength(3); // darts stay in until the next visit starts
+    s = d.applyDart(s, hit("20")).state;
+    expect(s.board).toHaveLength(1);
+
+    // Bust: going below zero, leaving 1, or reaching 0 without a double
+    const play = (rem: number, codes: string[]) => {
+      let x: X01 = { ...d.newX01(1, 0), scores: [rem, 501], visitStart: rem };
+      let ev = "";
+      for (const c of codes) { const r = d.applyDart(x, hit(c)); x = r.state; ev = r.event; if (ev !== "scored") break; }
+      return { x, ev };
+    };
+    const r = play(40, ["20", "T20"]);
+    expect(r.ev).toBe("bust");
+    expect(r.x.scores[0]).toBe(40); // back to the start of the visit
+    expect(r.x.turn).toBe(1);
+    expect(r.x.lastVisit).toMatchObject({ bust: true, total: 0 });
+    expect(play(21, ["20"]).ev).toBe("bust"); // leaves 1
+    expect(play(20, ["20"]).ev).toBe("bust"); // 0 on a single
+    expect(play(25, ["25"]).ev).toBe("bust"); // the outer bull isn't a double
+    expect(play(75, ["25", "BULL"]).ev).toBe("match");
+    expect(play(40, ["D20"]).ev).toBe("match");
+    expect(play(50, ["BULL"]).ev).toBe("match");
+    expect(play(32, ["16", "D8"]).ev).toBe("match");
+
+    // Legs: best of 3, the starter alternates, scores reset
+    let m: X01 = { ...d.newX01(2, 0), scores: [40, 100], visitStart: 40 };
+    const leg = d.applyDart(m, hit("D20"));
+    expect(leg.event).toBe("leg");
+    m = leg.state;
+    expect(m.legs).toEqual([1, 0]);
+    expect(m.scores).toEqual([501, 501]);
+    expect(m.turn).toBe(1);
+    m = { ...m, scores: [100, 40], visitStart: 40 };
+    m = d.applyDart(m, hit("D20")).state;
+    expect(m.legs).toEqual([1, 1]);
+    expect(m.turn).toBe(0);
+    m = { ...m, scores: [40, 40], visitStart: 40 };
+    const end = d.applyDart(m, hit("D20"));
+    expect(end.event).toBe("match");
+    expect(end.state.winner).toBe(0);
+    expect(d.applyDart(end.state, hit("T20")).state).toBe(end.state); // nothing after the end
+  });
+
+  it("checkouts are real ways out that finish on a double", () => {
+    const value = (c: string) => hit(/^\d+$/.test(c) && c !== "25" ? `S${c}` : c);
+    expect(d.checkout(170)).toEqual(["T20", "T20", "BULL"]);
+    expect(d.checkout(100)).toEqual(["T20", "D20"]);
+    expect(d.checkout(141)).toEqual(["T20", "T19", "D12"]);
+    expect(d.checkout(167)).toEqual(["T20", "T19", "BULL"]);
+    expect(d.checkout(40)).toEqual(["D20"]);
+    expect(d.checkout(50)).toEqual(["BULL"]);
+    for (const bogey of [169, 168, 166, 165, 163, 162, 159]) expect(d.checkout(bogey)).toBeNull();
+    expect(d.checkout(1)).toBeNull();
+    expect(d.checkout(171)).toBeNull();
+    expect(d.checkout(100, 1)).toBeNull();
+    for (let rem = 2; rem <= 170; rem++) {
+      for (let darts = 1; darts <= 3; darts++) {
+        const co = d.checkout(rem, darts);
+        if (!co) continue;
+        expect(co.length).toBeLessThanOrEqual(darts);
+        const hits = co.map(value);
+        expect(hits.reduce((a, h) => a + h.score, 0)).toBe(rem);
+        expect(hits[hits.length - 1].mult).toBe(2);
+      }
+    }
+  });
+
+  it("the computer players play to their level", () => {
+    const g = d.gaussFrom(lcg(777));
+    const avgs: number[] = [];
+    for (const lvl of ["easy", "medium", "hard"] as const) {
+      let s = d.newX01(50, 0);
+      for (let i = 0; i < 6000; i++) s = d.applyDart(s, d.botDart(lvl, s.scores[s.turn], 3 - s.visit.length, g)).state;
+      const avg = ((s.points[0] + s.points[1]) / (s.darts[0] + s.darts[1])) * 3;
+      expect(Math.abs(avg - d.BOTS[lvl].avg)).toBeLessThan(7);
+      avgs.push(avg);
+    }
+    expect(avgs[0]).toBeLessThan(avgs[1]);
+    expect(avgs[1]).toBeLessThan(avgs[2]);
+    expect(d.botTarget(501, 3)).toBe("T20");
+    expect(d.botTarget(40, 3)).toBe("D20");
+    expect(d.botTarget(170, 3)).toBe("T20");
+    expect(d.botTarget(59, 1)).toBe("S19"); // sets up D20
+  });
+
+  it("the day's conditions are the same for everyone, and gentle", () => {
+    const a = d.dailyConditions("2026-10-26");
+    expect(d.dailyConditions("2026-10-26")).toEqual(a);
+    expect(d.dailyConditions("2026-10-27")).not.toEqual(a);
+    for (let i = 1; i <= 28; i++) {
+      const c = d.dailyConditions(`2026-02-${String(i).padStart(2, "0")}`);
+      expect(Math.hypot(c.driftX, c.driftY)).toBeLessThanOrEqual(8.1);
+      expect(c.spread).toBeGreaterThanOrEqual(0.95);
+      expect(c.spread).toBeLessThanOrEqual(1.15);
+    }
+  });
+});
