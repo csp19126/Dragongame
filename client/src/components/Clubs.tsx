@@ -519,7 +519,7 @@ function ClubChat({ id }: { id: number }) {
   };
   return (
     <div className="flex flex-col gap-2" data-testid="club-chat">
-      <div ref={listRef} className={`${tray ? "h-[calc(100dvh-560px)]" : "h-[calc(100dvh-440px)]"} min-h-[240px] overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`}>
+      <div ref={listRef} className={`${tray ? "h-[calc(100dvh-600px)]" : "h-[calc(100dvh-480px)]"} min-h-[220px] overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`}>
         {msgs.length === 0 && <p className="m-auto text-sm text-white/50 text-center px-4">{tr("Chào cả hội một câu đi! 👋", "Say hello to your club! 👋", "跟公會成員打聲招呼吧！👋")}</p>}
         {msgs.map((m) => {
           const mine = m.username === user?.username;

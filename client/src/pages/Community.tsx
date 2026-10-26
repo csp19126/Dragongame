@@ -136,11 +136,11 @@ export default function Community() {
     <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a2e] to-[#0a0515] flex flex-col">
       <Header />
       <main className="flex-1 flex flex-col items-center gap-3 px-3 py-3 relative z-10 w-full max-w-md mx-auto">
-        <div className={`text-center ${tab === "dm" && dm ? "hidden" : ""}`}>
+        <div className={`text-center ${(tab === "dm" && dm) || (tab === "clubs" && clubId) ? "hidden" : ""}`}>
           <h1 className="font-display text-3xl sm:text-4xl leading-none bg-gradient-to-b from-yellow-200 via-yellow-400 to-orange-500 bg-clip-text text-transparent" data-testid="text-community-title">{L.title}</h1>
           <p className="text-[11px] font-black tracking-[0.25em] text-yellow-500/80 uppercase mt-1">{L.subtitle}</p>
         </div>
-        <div className={`w-full grid grid-cols-4 gap-0.5 p-1 rounded-2xl bg-black/40 border border-white/10 ${tab === "dm" && dm ? "hidden" : ""}`}>
+        <div className={`w-full grid grid-cols-4 gap-0.5 p-1 rounded-2xl bg-black/40 border border-white/10 ${(tab === "dm" && dm) || (tab === "clubs" && clubId) ? "hidden" : ""}`}>
           {tabs.map((t) => (
             <button key={t.id} type="button" onClick={() => setLocation(`/community?tab=${t.id}`)}
               className={`relative py-1.5 rounded-xl text-[10px] leading-tight font-black flex flex-col items-center justify-center gap-0.5 transition ${tab === t.id ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black shadow" : "text-white/70"}`}
