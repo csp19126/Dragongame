@@ -16,6 +16,12 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "Player not found": { vi: "Không tìm thấy người chơi", zh: "找不到玩家" },
   "No such player": { vi: "Không có người chơi này", zh: "沒有這位玩家" },
 
+  // Darts
+  "Start a new game": { vi: "Hãy bắt đầu ván mới", zh: "請開始新的一局" },
+  "Start the challenge first": { vi: "Hãy bắt đầu thử thách trước", zh: "請先開始挑戰" },
+  "You've already played today's ranked challenge": { vi: "Bạn đã chơi lượt tính điểm hôm nay rồi", zh: "你今天已經完成排名挑戰了" },
+  "This table is saved for someone else": { vi: "Bàn này đang giữ chỗ cho người khác", zh: "這張牌桌已為其他玩家保留" },
+
   // Account
   "Too many attempts, try again in a few minutes": { vi: "Thử quá nhiều lần, vui lòng thử lại sau vài phút", zh: "嘗試次數過多，請幾分鐘後再試" },
   "Not logged in": { vi: "Bạn chưa đăng nhập", zh: "尚未登入" },
@@ -84,6 +90,11 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "Bad aim": { vi: "Hướng ngắm không hợp lệ", zh: "瞄準無效" },
   "Bad shot": { vi: "Cú bắn không hợp lệ", zh: "射擊無效" },
   "No cue ball": { vi: "Không có bi cái", zh: "沒有母球" },
+
+  // Penalty shootout
+  "Wait for the next kick": { vi: "Chờ lượt sút tiếp theo", zh: "請等待下一球" },
+  "Already chosen": { vi: "Bạn đã chọn rồi, không đổi được nữa", zh: "你已經選好了，無法更改" },
+  "This game is over": { vi: "Trận này đã kết thúc", zh: "這局已經結束" },
 
   // Tournament
   "Registration is closed": { vi: "Đã hết hạn đăng ký", zh: "報名已截止" },
