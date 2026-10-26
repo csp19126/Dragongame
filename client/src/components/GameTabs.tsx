@@ -9,6 +9,7 @@ const GAMES = [
   { href: "/blackjack", icon: "🃏", key: "gameBlackjack" },
   { href: "/ban-bai", icon: "🀄", key: "gameCardTables" },
   { href: "/pool", icon: "🎱", key: "gamePool" },
+  { href: "/da-bong", icon: "⚽", key: "gameFootball" },
   { href: "/loto", icon: "🎟️", key: "gameLoto" },
   { href: "/dua-ngua", icon: "🏇", key: "gameHorse" },
   { href: "/tien-len", icon: "🂡", key: "gameTienLen" },
