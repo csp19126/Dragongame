@@ -194,4 +194,12 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "You've posted enough Moments for today": { vi: "Hôm nay bạn đã đăng đủ Khoảnh khắc rồi", zh: "你今天發布的動態已達上限" },
   "You already shared this win": { vi: "Bạn đã chia sẻ ván thắng này rồi", zh: "你已經分享過這次贏局了" },
   "This Moment has too many comments": { vi: "Khoảnh khắc này có quá nhiều bình luận", zh: "這則動態的留言太多了" },
+  "Bad photo": { vi: "Ảnh không hợp lệ", zh: "照片無效" },
+  "Photo is too big": { vi: "Ảnh quá lớn", zh: "照片太大了" },
+  "Too many photos, try again later": { vi: "Bạn gửi nhiều ảnh quá, thử lại sau nhé", zh: "照片傳太多了，請稍後再試" },
+  "A thread needs a title": { vi: "Chủ đề cần có tiêu đề", zh: "話題需要標題" },
+  "Write something in your post": { vi: "Hãy viết gì đó trong bài", zh: "請在貼文中寫點內容" },
+  "You've started enough threads for today": { vi: "Hôm nay bạn đã mở đủ chủ đề rồi", zh: "你今天開的話題已達上限" },
+  "This post has expired": { vi: "Bài tìm trận này đã hết hạn", zh: "這則找對手貼文已過期" },
+  "That's your own post": { vi: "Đó là bài của chính bạn", zh: "這是你自己的貼文" },
 };

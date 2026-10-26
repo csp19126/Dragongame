@@ -29,13 +29,11 @@ const short = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M`
 /** Where to go to work on a quest */
 const QUEST_GO: Partial<Record<QuestKind, string>> = {
   spins: "/slot", plays: "/slot", games: "/", wins: "/slot", horse_win: "/dua-ngua", friend_match: "/community?tab=friends",
-  chat: "/community?tab=chat", react: "/community?tab=chat", gift: "/community?tab=friends", moment: "/community?tab=moments", like: "/community?tab=moments",
+  chat: "/community?tab=chat", react: "/community?tab=chat", gift: "/community?tab=friends", talk: "/community?tab=talk",
 };
 
 function useQuests(enabled = true) {
   const q = useQuery<QuestsView>({ queryKey: QUESTS_KEY, enabled, refetchInterval: 30_000, staleTime: 5_000 });
-  // A finished quest rings the bell: refresh the card at once
-  useSocialEvent((m) => { if (m.t === "notif" && m.n?.kind === "quest") queryClient.invalidateQueries({ queryKey: QUESTS_KEY }); });
   return q;
 }
 
@@ -49,14 +47,14 @@ export function LobbyQuestsCard() {
   const ready = (v?.quests.filter((x) => x.progress >= x.target && !x.claimed).length ?? 0) + (v?.chest.ready ? 1 : 0);
   return (
     <motion.button type="button" whileTap={{ scale: 0.98 }} onClick={openQuests}
-      className={`w-full rounded-3xl p-3 text-left border flex flex-col gap-2 ${ready ? "bg-gradient-to-br from-yellow-500/30 to-orange-700/25 border-yellow-300/70 shadow-[0_0_24px_rgba(250,204,21,0.25)]" : "bg-gradient-to-br from-purple-800/50 to-black/40 border-yellow-500/25"}`} data-testid="lobby-quests">
+      className="w-full rounded-3xl p-3 text-left border flex flex-col gap-2 bg-white/[0.04] border-white/10" data-testid="lobby-quests">
       <div className="flex items-center gap-2">
         <span className="text-2xl">📜</span>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase font-black tracking-widest text-yellow-300/80">{tr("Nhiệm vụ hôm nay", "Today's quests", "每日任務")}</div>
+          <div className="text-[10px] uppercase font-black tracking-widest text-white/50">{tr("Nhiệm vụ hôm nay (tuỳ chọn)", "Today's quests (optional)", "每日任務（可選）")}</div>
           <div className="text-sm font-black text-white leading-tight">{v ? tr(`${done}/3 hoàn thành`, `${done}/3 done`, `已完成 ${done}/3`) : "…"}{v && v.streak.days > 0 && <span className="text-orange-300"> · 🔥 {v.streak.days}</span>}</div>
         </div>
-        {ready > 0 && <span className="px-2.5 h-7 rounded-full bg-red-600 text-white text-xs font-black flex items-center animate-pulse" data-testid="lobby-quests-ready">{tr(`Nhận ${ready}`, `Claim ${ready}`, `領取 ${ready}`)}</span>}
+        {ready > 0 && <span className="px-2 h-6 rounded-full bg-yellow-400/15 text-yellow-200 text-[11px] font-black flex items-center" data-testid="lobby-quests-ready">{tr(`${ready} phần thưởng`, `${ready} to collect`, `${ready} 個獎勵`)}</span>}
         <ChevronRight className="w-5 h-5 text-white/40" />
       </div>
       {v && (

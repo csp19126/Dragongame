@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Redirect, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, BookOpen, Camera, Shield, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Mail, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
+import { Activity, BookOpen, MessagesSquare, Swords, Shield, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Mail, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { ShareDialog, type ShareWhat } from "@/components/ShareCard";
 import { useAuth, ME_KEY } from "@/hooks/use-auth";
@@ -27,9 +27,10 @@ import { LevelBadge, QuoteBlock, ReplyingBar, ReactionChips, MessageActions, app
 import { FriendsTab } from "@/components/Friends";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { ClubsTab } from "@/components/Clubs";
-import { MomentsTab } from "@/components/Moments";
-import { ClubTagChip } from "@/components/Social3Bits";
-import type { ClubTag } from "@shared/social3";
+import { TalkTab } from "@/components/Talk";
+import { MatchesTab } from "@/components/Matches";
+import { ClubTagChip, MessagePhoto, PhotoPickButton, usePhotoBlur } from "@/components/Social3Bits";
+import { LOUNGE_ROOMS, loungeRoom, type ClubTag, type LoungeRoom } from "@shared/social3";
 import type { ReactionCount, ReplyRef, FriendsView } from "@shared/friends";
 
 const fmt = fmtCoins;
@@ -37,8 +38,8 @@ const fmt = fmtCoins;
 const TXT = {
   vi: {
     title: "Cộng Đồng", subtitle: "Bạn bè · Trò chuyện · Sưu tầm",
-    tabChat: "Trò chuyện", tabDm: "Tin nhắn", tabFriends: "Bạn bè", tabMoments: "Khoảnh khắc", tabClubs: "Hội", tabActivity: "Hoạt động", tabAlbum: "Album", tabInvite: "Mời bạn",
-    rules: "Lịch sự nhé. Không mua bán xu, không gửi link hay số điện thoại.",
+    tabChat: "Phòng chat", tabDm: "Tin nhắn", tabFriends: "Bạn bè", tabTalk: "Trò chuyện", tabMatches: "Tìm trận", tabClubs: "Hội", tabActivity: "Hoạt động", tabAlbum: "Album", tabInvite: "Mời bạn",
+    rules: "Nói chuyện như người lớn. Không mua bán xu bằng tiền thật. Bị làm phiền: chặn hoặc báo cáo.",
     placeholder: "Nhắn gì đó…", send: "Gửi", stickers: "Sticker của bạn", noStickers: "Bạn chưa có sticker nào. Mở gói trong Album!",
     playFirst: (n: number) => `Chơi thêm ${n} ván để mở khóa trò chuyện`, mutedUntil: "Bạn bị tạm khóa chat đến",
     report: "Báo cáo", reported: "Đã báo cáo. Cảm ơn bạn!", empty: "Chưa có tin nhắn. Hãy chào mọi người! 👋",
@@ -56,8 +57,8 @@ const TXT = {
   },
   en: {
     title: "Community", subtitle: "Friends · Chat · Collect",
-    tabChat: "Chat", tabDm: "Messages", tabFriends: "Friends", tabMoments: "Moments", tabClubs: "Clubs", tabActivity: "Activity", tabAlbum: "Album", tabInvite: "Invite",
-    rules: "Be kind. No selling coins, no links, no phone numbers.",
+    tabChat: "Lounge", tabDm: "Messages", tabFriends: "Friends", tabTalk: "Talk", tabMatches: "Find a match", tabClubs: "Clubs", tabActivity: "Activity", tabAlbum: "Album", tabInvite: "Invite",
+    rules: "Talk like grown-ups. No buying or selling coins for real money. If someone bothers you: block or report.",
     placeholder: "Say something…", send: "Send", stickers: "Your stickers", noStickers: "No stickers yet. Open a pack in the Album!",
     playFirst: (n: number) => `Play ${n} more game${n === 1 ? "" : "s"} to unlock chat`, mutedUntil: "You're muted until",
     report: "Report", reported: "Reported. Thank you!", empty: "No messages yet. Say hello! 👋",
@@ -75,8 +76,8 @@ const TXT = {
   },
   zh: {
     title: "社群", subtitle: "好友 · 聊天 · 收集",
-    tabChat: "聊天", tabDm: "私訊", tabFriends: "好友", tabMoments: "動態牆", tabClubs: "公會", tabActivity: "動態", tabAlbum: "圖鑑", tabInvite: "邀請好友",
-    rules: "請保持禮貌。禁止買賣金幣，禁止發送連結或電話號碼。",
+    tabChat: "交誼廳", tabDm: "私訊", tabFriends: "好友", tabTalk: "聊天", tabMatches: "找對手", tabClubs: "公會", tabActivity: "動態", tabAlbum: "圖鑑", tabInvite: "邀請好友",
+    rules: "像大人一樣聊天。禁止以真錢買賣金幣。被騷擾時：封鎖或檢舉。",
     placeholder: "說點什麼…", send: "發送", stickers: "你的貼圖", noStickers: "你還沒有貼圖。到圖鑑開卡包吧！",
     playFirst: (n: number) => `再玩 ${n} 局即可解鎖聊天`, mutedUntil: "你已被暫時禁言，直到",
     report: "檢舉", reported: "已檢舉，謝謝你！", empty: "還沒有訊息。跟大家打聲招呼吧！👋",
@@ -110,9 +111,10 @@ export default function Community() {
   const [, setLocation] = useLocation();
   const params = new URLSearchParams(search);
   const dm = params.get("dm")?.trim() || null;
-  const tab = (params.get("tab") as "chat" | "dm" | "friends" | "moments" | "clubs" | "activity" | "album" | "invite" | null) ?? (dm ? "dm" : "chat");
+  const tab = (params.get("tab") as "chat" | "dm" | "friends" | "talk" | "matches" | "clubs" | "activity" | "album" | "invite" | null) ?? (dm ? "dm" : "chat");
+  const board = params.get("board");
+  const threadId = Number(params.get("thread")) || null;
   const clubId = Number(params.get("club")) || null;
-  const momentId = Number(params.get("moment")) || null;
   const focus = Number(params.get("msg")) || null;
   const unread = useDmUnread();
   const friends = useQuery<FriendsView>({ queryKey: FRIENDS_KEY, enabled: !!user, refetchInterval: 60_000 });
@@ -125,22 +127,22 @@ export default function Community() {
     { id: "chat", icon: <MessageCircle className="w-4 h-4" />, label: L.tabChat, badge: 0 },
     { id: "dm", icon: <Mail className="w-4 h-4" />, label: L.tabDm, badge: unread },
     { id: "friends", icon: <Users className="w-4 h-4" />, label: L.tabFriends, badge: incoming },
-    { id: "moments", icon: <Camera className="w-4 h-4" />, label: L.tabMoments, badge: 0 },
+    { id: "talk", icon: <MessagesSquare className="w-4 h-4" />, label: L.tabTalk, badge: 0 },
+    { id: "matches", icon: <Swords className="w-4 h-4" />, label: L.tabMatches, badge: 0 },
     { id: "clubs", icon: <Shield className="w-4 h-4" />, label: L.tabClubs, badge: 0 },
     { id: "activity", icon: <Activity className="w-4 h-4" />, label: L.tabActivity, badge: 0 },
     { id: "album", icon: <BookOpen className="w-4 h-4" />, label: L.tabAlbum, badge: 0 },
-    { id: "invite", icon: <Gift className="w-4 h-4" />, label: L.tabInvite, badge: 0 },
   ] as const;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1a0a2e] to-[#0a0515] flex flex-col">
       <Header />
       <main className="flex-1 flex flex-col items-center gap-3 px-3 py-3 relative z-10 w-full max-w-md mx-auto">
-        <div className={`text-center ${(tab === "dm" && dm) || (tab === "clubs" && clubId) ? "hidden" : ""}`}>
+        <div className={`text-center ${(tab === "dm" && dm) || (tab === "clubs" && clubId) || (tab === "talk" && threadId) ? "hidden" : ""}`}>
           <h1 className="font-display text-3xl sm:text-4xl leading-none bg-gradient-to-b from-yellow-200 via-yellow-400 to-orange-500 bg-clip-text text-transparent" data-testid="text-community-title">{L.title}</h1>
           <p className="text-[11px] font-black tracking-[0.25em] text-yellow-500/80 uppercase mt-1">{L.subtitle}</p>
         </div>
-        <div className={`w-full grid grid-cols-4 gap-0.5 p-1 rounded-2xl bg-black/40 border border-white/10 ${(tab === "dm" && dm) || (tab === "clubs" && clubId) ? "hidden" : ""}`}>
+        <div className={`w-full grid grid-cols-4 gap-0.5 p-1 rounded-2xl bg-black/40 border border-white/10 ${(tab === "dm" && dm) || (tab === "clubs" && clubId) || (tab === "talk" && threadId) ? "hidden" : ""}`}>
           {tabs.map((t) => (
             <button key={t.id} type="button" onClick={() => setLocation(`/community?tab=${t.id}`)}
               className={`relative py-1.5 rounded-xl text-[10px] leading-tight font-black flex flex-col items-center justify-center gap-0.5 transition ${tab === t.id ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black shadow" : "text-white/70"}`}
@@ -153,7 +155,8 @@ export default function Community() {
         {tab === "chat" && <ChatTab L={L} me={user.username} focus={focus} />}
         {tab === "dm" && <DmTab dm={dm} errs={L.err} />}
         {tab === "friends" && <FriendsTab />}
-        {tab === "moments" && <MomentsTab focus={momentId} />}
+        {tab === "talk" && <TalkTab board={board} thread={threadId} />}
+        {tab === "matches" && <MatchesTab />}
         {tab === "clubs" && <ClubsTab clubId={clubId} />}
         {tab === "activity" && <ActivityFeed />}
         {tab === "album" && <AlbumTab L={L} lang={lang} />}
@@ -376,7 +379,7 @@ function GiftDialog({ s, count, left, L, lang, onClose }: { s: Sticker; count: n
 
 interface Msg {
   id: number; username: string; text: string | null; sticker: string | null; createdAt: string; admin: boolean | null; avatar?: string | null;
-  level?: number; reply?: ReplyRef | null; reactions?: ReactionCount[]; club?: ClubTag | null;
+  level?: number; reply?: ReplyRef | null; reactions?: ReactionCount[]; club?: ClubTag | null; room?: string; photo?: number | null;
 }
 interface ChatResp { messages: Msg[]; removed: number[]; me: { mutedUntil: string | null; gamesToUnlock: number } }
 
@@ -394,7 +397,14 @@ function jumpTo(id: number) {
 
 function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
   const { toast } = useToast();
-  const { loc, srv, tr } = useLang();
+  const { loc, srv, tr, lang } = useLang();
+  const blurFor = usePhotoBlur();
+  // Lounge rooms: remembered per device; the first time, Chinese speakers start in 中文
+  const [room, setRoomState] = useState<LoungeRoom>(() => {
+    try { const r = localStorage.getItem("lounge-room"); if (r) return loungeRoom(r); } catch { /* private mode */ }
+    return lang === "zh" ? "zh" : "main";
+  });
+  const setRoom = (r: LoungeRoom) => { try { localStorage.setItem("lounge-room", r); } catch { /* ignore */ } setMsgs([]); lastId.current = 0; loaded.current = false; setReplyTo(null); setRoomState(r); };
   const showPlayer = usePlayerSheet();
   const { connected } = useSocial();
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -443,7 +453,7 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
         try {
           // The first load is the latest page, even if live messages already arrived over the socket
           const first = !loaded.current;
-          const res = await fetch(`/api/chat${first ? "" : `?after=${lastId.current}`}`, { credentials: "include" });
+          const res = await fetch(`/api/chat?room=${room}${first ? "" : `&after=${lastId.current}`}`, { credentials: "include" });
           if (res.ok) { const r: ChatResp = await res.json(); loaded.current = true; setMeInfo(r.me); addMessages(r.messages, r.removed, first); }
         } catch { /* offline: try again next time */ }
       }
@@ -451,10 +461,10 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
     };
     poll();
     return () => { stop = true; clearTimeout(timer); };
-  }, [addMessages, connected]);
+  }, [addMessages, connected, room]);
 
   useSocialEvent((m) => {
-    if (m.t === "chat") addMessages([m.m]);
+    if (m.t === "chat" && (m.m.room ?? "main") === room) addMessages([m.m]);
     else if (m.t === "chat_removed") setMsgs((cur) => cur.filter((x) => !m.ids.includes(x.id)));
     else if (m.t === "react" && m.scope === "chat" && m.by !== me) {
       setMsgs((cur) => cur.map((x) => (x.id === m.id ? { ...x, reactions: applyReaction(x.reactions ?? [], m.e, m.on, false) } : x)));
@@ -468,10 +478,10 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
     window.setTimeout(() => { if (!jumpTo(focus)) toast({ title: tr("Tin nhắn này đã cũ, không còn hiện ở đây", "That message is too old to show here", "這則訊息太舊，已不在這裡顯示") }); }, 150);
   }, [focus, msgs.length, toast, tr]);
 
-  const post = async (body: { text?: string; sticker?: string }) => {
+  const post = async (body: { text?: string; sticker?: string; photoId?: number }) => {
     setSending(true);
     try {
-      const res = await apiRequest("POST", "/api/chat", { ...body, ...(replyTo ? { replyTo: replyTo.id } : {}), ...(body.text && mentions.length ? { mentions } : {}) });
+      const res = await apiRequest("POST", "/api/chat", { ...body, room, ...(replyTo ? { replyTo: replyTo.id } : {}), ...(body.text && mentions.length ? { mentions } : {}) });
       const m: Msg = await res.json();
       addMessages([m], [], true);
       setText(""); setTray(false); setReplyTo(null); setMentions([]); setSuggest(null);
@@ -522,6 +532,13 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
 
   return (
     <div className="w-full flex flex-col gap-2" data-testid="community-chat">
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-0.5" data-testid="lounge-rooms">
+        {LOUNGE_ROOMS.map((r) => (
+          <button key={r.id} type="button" onClick={() => r.id !== room && setRoom(r.id)} className={`h-8 px-3 shrink-0 rounded-full text-xs font-black border whitespace-nowrap ${room === r.id ? "bg-yellow-400 text-black border-yellow-300" : "bg-white/5 text-white/70 border-white/10"}`} data-testid={`room-${r.id}`}>
+            {r.icon} {loc(r)}
+          </button>
+        ))}
+      </div>
       {announcement.data?.text && (
         <div className="rounded-xl border border-yellow-400/50 bg-yellow-500/10 px-3 py-2 flex gap-2 items-start" data-testid="chat-announcement">
           <Megaphone className="w-4 h-4 text-yellow-300 shrink-0 mt-0.5" />
@@ -529,7 +546,7 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
         </div>
       )}
       <div ref={listRef} onClick={(e) => { if (e.target === e.currentTarget) setActive(null); }}
-        className={`${tray ? "h-[calc(100dvh-538px)] min-h-[180px]" : replyTo ? "h-[calc(100dvh-473px)] min-h-[240px]" : "h-[calc(100dvh-413px)] min-h-[280px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`} data-testid="chat-list">
+        className={`${tray ? "h-[calc(100dvh-578px)] min-h-[180px]" : replyTo ? "h-[calc(100dvh-513px)] min-h-[220px]" : "h-[calc(100dvh-453px)] min-h-[260px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`} data-testid="chat-list">
         {msgs.length === 0 && <p className="m-auto text-sm text-white/50">{L.empty}</p>}
         {msgs.map((m) => {
           const mine = m.username === me;
@@ -548,7 +565,12 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
                 <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
                   {m.reply && <QuoteBlock reply={m.reply} onJump={(id) => { if (!jumpTo(id)) toast({ title: tr("Tin nhắn này đã cũ, không còn hiện ở đây", "That message is too old to show here", "這則訊息太舊，已不在這裡顯示") }); }} />}
                   <button type="button" onClick={() => setActive((a) => (a === m.id ? null : m.id))} className="text-left" data-testid={`chat-bubble-${m.id}`}>
-                    {st ? (
+                    {m.photo ? (
+                      <div className="flex flex-col gap-1">
+                        <MessagePhoto id={m.photo} blur={blurFor({ username: m.username, mine })} mine={mine} />
+                        {m.text && <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] ${mine ? "bg-gradient-to-b from-yellow-400 to-orange-500 text-black" : "bg-white/10 text-white"}`}><MentionText text={m.text} mine={mine} /></div>}
+                      </div>
+                    ) : st ? (
                       <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div>
                     ) : (
                       <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] ${mine ? "bg-gradient-to-b from-yellow-400 to-orange-500 text-black rounded-br-md" : m.admin ? "bg-red-800/80 text-white rounded-bl-md border border-yellow-400/40" : tagged ? "bg-yellow-400/15 text-white rounded-bl-md border border-yellow-300/60" : "bg-white/10 text-white rounded-bl-md"}`}>
@@ -607,6 +629,7 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
             <button type="button" onClick={() => setTray((v) => !v)} className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${tray ? "bg-yellow-400 text-black" : "bg-white/10 text-white"}`} aria-label={L.stickers} data-testid="button-sticker-tray">
               <Smile className="w-5 h-5" />
             </button>
+            <PhotoPickButton target={{ scope: "lounge" }} disabled={sending} onPhoto={(id) => post({ photoId: id, text: text.trim() || undefined })} />
             <input ref={inputRef} value={text} onChange={(e) => onType(e.target.value)} onBlur={() => window.setTimeout(() => setSuggest(null), 150)} maxLength={CHAT_MAX_LEN} placeholder={L.placeholder}
               enterKeyHint="send" className="flex-1 min-w-0 rounded-xl bg-[#140b26] border border-white/15 px-3 text-white placeholder:text-white/30" data-testid="input-chat" />
             <button type="submit" disabled={sending || !text.trim()} className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black flex items-center justify-center disabled:opacity-40" aria-label={L.send} data-testid="button-chat-send">

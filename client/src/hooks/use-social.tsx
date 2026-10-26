@@ -86,7 +86,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
             : n.kind === "mention" ? tr(`💬 ${who} nhắc đến bạn`, `💬 ${who} mentioned you`, `💬 ${who} 提到了你`)
             : n.kind === "gift" ? tr(`🧧 ${who} gửi bạn Lì Xì ${fmtCoins(n.data.amount)} xu!`, `🧧 ${who} sent you a Lì Xì of ${fmtCoins(n.data.amount)} coins!`, `🧧 ${who} 送你 ${fmtCoins(n.data.amount)} 金幣紅包！`)
             : n.kind === "invite" ? tr(`⚔️ ${who} thách bạn một ván!`, `⚔️ ${who} challenged you!`, `⚔️ ${who} 向你發起挑戰！`)
-            : n.kind === "quest" ? tr("📜 Xong một nhiệm vụ! Vào nhận thưởng nhé", "📜 Quest complete! Claim your reward", "📜 任務完成！快去領取獎勵")
+            : n.kind === "match" ? tr(`🎯 ${who} muốn chơi theo bài tìm trận của bạn`, `🎯 ${who} wants to play your match post`, `🎯 ${who} 想回應你的找對手貼文`)
             : n.kind === "club" && n.data.action === "reward" ? tr(`🏆 Thưởng hội tuần: +${fmtCoins(n.data.amount)} xu!`, `🏆 Weekly club reward: +${fmtCoins(n.data.amount)} coins!`, `🏆 公會週獎勵：+${fmtCoins(n.data.amount)} 金幣！`)
             : n.kind === "club" && n.data.action === "request" ? tr(`🏯 ${who} xin vào hội`, `🏯 ${who} wants to join your club`, `🏯 ${who} 申請加入公會`)
             : null;

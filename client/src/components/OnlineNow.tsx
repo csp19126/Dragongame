@@ -7,11 +7,11 @@ import { useSocial } from "@/hooks/use-social";
 import { Avatar } from "@/components/Avatar";
 import { usePlayerSheet } from "@/components/PlayerSheet";
 import { LevelBadge, useGameName } from "@/components/SocialBits";
-import { ClubTagChip, Sheet } from "@/components/Social3Bits";
+import { ClubTagChip, FactsLine, Sheet } from "@/components/Social3Bits";
 import { useSocial3 } from "@/components/Challenge";
-import type { ClubTag } from "@shared/social3";
+import type { ClubTag, PlayerFacts } from "@shared/social3";
 
-interface OnlineRow { username: string; avatarUrl: string | null; level: number; playing: string | null; join: { kind: string; href: string } | null; club: ClubTag | null; friend: boolean }
+interface OnlineRow { username: string; avatarUrl: string | null; level: number; playing: string | null; join: { kind: string; href: string } | null; club: ClubTag | null; friend: boolean; facts?: PlayerFacts }
 interface OnlineView { friends: OnlineRow[]; others: OnlineRow[]; total: number }
 export const ONLINE_KEY = ["/api/online"];
 
@@ -47,6 +47,7 @@ export function OnlineNowSheet({ onClose }: { onClose: () => void }) {
         <button type="button" onClick={() => showPlayer(p.username)} className="flex-1 min-w-0 text-left">
           <span className="flex items-center gap-1.5 min-w-0"><span className="font-black text-white truncate">{p.username}</span><ClubTagChip club={p.club} /><LevelBadge level={p.level} /></span>
           <span className={`block text-[11px] truncate ${playing ? "text-yellow-200" : "text-emerald-300"}`}>{playing ? <>🎮 {playing}</> : tr("Đang online", "Online", "在線上")}</span>
+          <FactsLine facts={p.facts} />
         </button>
         {p.join && <button type="button" onClick={() => go(p.join!.href)} className="h-9 px-2.5 rounded-xl bg-emerald-500 text-black text-xs font-black" data-testid={`online-join-${p.username}`}>{tr("Vào bàn", "Join", "加入")}</button>}
         <button type="button" onClick={() => challenge(p.username)} className="h-9 w-9 rounded-xl bg-gradient-to-b from-red-500 to-red-700 text-yellow-100 flex items-center justify-center" aria-label={tr("Thách đấu", "Challenge", "挑戰")} data-testid={`online-challenge-${p.username}`}><Swords className="w-4 h-4" /></button>

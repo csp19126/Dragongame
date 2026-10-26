@@ -16,7 +16,7 @@ import { Avatar } from "@/components/Avatar";
 import { usePlayerSheet } from "@/components/PlayerSheet";
 import { LevelBadge, useAgo, useGameName } from "@/components/SocialBits";
 import { useFeedText } from "@/components/ActivityFeed";
-import { Sheet, useSocialErr } from "@/components/Social3Bits";
+import { Sheet, useSocialErr, MessagePhoto, PhotoPickButton, usePhotoBlur } from "@/components/Social3Bits";
 import { STICKERS, STICKER_BY_ID, type AlbumView } from "@shared/stickers";
 import { CHAT_MAX_LEN } from "@shared/chat";
 import { CLUB_NAME_MAX, CLUB_TAG_MAX, CLUB_DESC_MAX, clubAllowed, type ClubRole } from "@shared/social3";
@@ -34,7 +34,7 @@ interface ClubDetail extends Omit<ClubSummary, "members"> {
   requests: { username: string; avatarUrl: string | null; level: number; at: string }[];
   me: { role: ClubRole | null; requested: boolean; inOtherClub: boolean }; rewards: number[];
 }
-interface ClubMsg { id: number; username: string; text: string | null; sticker: string | null; createdAt: string; avatar: string | null; level: number; admin: boolean; role: ClubRole | null }
+interface ClubMsg { id: number; username: string; text: string | null; sticker: string | null; photo: number | null; createdAt: string; avatar: string | null; level: number; admin: boolean; role: ClubRole | null }
 
 export const CLUBS_KEY = ["/api/clubs"];
 const clubKey = (id: number) => [`/api/clubs/${id}`];
@@ -297,6 +297,10 @@ function ClubPage({ id }: { id: number }) {
             {c.description && <p className="text-xs text-white/80 mt-1 break-words">{c.description}</p>}
           </div>
           {role === "owner" && <button type="button" onClick={() => setEditing(true)} className="w-9 h-9 rounded-xl bg-black/30 flex items-center justify-center text-white/80" aria-label={tr("Cài đặt hội", "Club settings", "公會設定")} data-testid="button-club-settings"><Settings className="w-5 h-5" /></button>}
+          {role !== "owner" && <button type="button" onClick={async () => {
+            if (!confirm(tr("Báo cáo hội này (tên, biểu tượng hoặc giới thiệu) cho quản trị viên?", "Report this club (name, emblem or description) to the admins?", "要向管理員檢舉這個公會（名稱、徽章或簡介）嗎？"))) return;
+            try { await apiRequest("POST", `/api/clubs/${id}/report`, {}); toast({ title: tr("Đã báo cáo. Cảm ơn bạn!", "Reported. Thank you!", "已檢舉，謝謝你！") }); } catch (e) { toast({ title: err(e), variant: "destructive" }); }
+          }} className="w-9 h-9 rounded-xl bg-black/30 flex items-center justify-center text-white/50" aria-label={tr("Báo cáo hội", "Report club", "檢舉公會")} data-testid="button-club-report"><Flag className="w-4 h-4" /></button>}
         </div>
         <div className="relative grid grid-cols-3 gap-1.5 mt-3">
           <div className="rounded-xl bg-black/35 text-center py-1.5"><div className="text-[9px] font-black uppercase text-white/50">{tr("Hạng tuần", "Week rank", "週排名")}</div><div className="font-black text-yellow-200" data-testid="club-rank">#{c.rank}</div></div>
@@ -506,7 +510,8 @@ function ClubChat({ id }: { id: number }) {
     if (m.t === "club_chat" && m.clubId === id) add([m.m]);
     else if (m.t === "club_chat_removed" && m.clubId === id) setMsgs((cur) => cur.filter((x) => !m.ids.includes(x.id)));
   });
-  const post = async (body: { text?: string; sticker?: string }) => {
+  const blurFor = usePhotoBlur();
+  const post = async (body: { text?: string; sticker?: string; photoId?: number }) => {
     setSending(true);
     try {
       const m = await (await apiRequest("POST", `/api/clubs/${id}/chat`, body)).json() as ClubMsg;
@@ -533,7 +538,12 @@ function ClubChat({ id }: { id: number }) {
                   <span className="text-white/30 font-normal">{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </button>
                 <button type="button" onClick={() => setActive((a) => (a === m.id ? null : m.id))} className="text-left">
-                  {st ? <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div> : (
+                  {m.photo ? (
+                    <div className={`flex flex-col gap-1 ${mine ? "items-end" : "items-start"}`}>
+                      <MessagePhoto id={m.photo} blur={blurFor({ username: m.username, mine })} mine={mine} />
+                      {m.text && <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] ${mine ? "bg-gradient-to-b from-yellow-400 to-orange-500 text-black" : "bg-white/10 text-white"}`}>{m.text}</div>}
+                    </div>
+                  ) : st ? <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div> : (
                     <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] ${mine ? "bg-gradient-to-b from-yellow-400 to-orange-500 text-black rounded-br-md" : "bg-white/10 text-white rounded-bl-md"}`}>{m.text}</div>
                   )}
                 </button>
@@ -556,13 +566,14 @@ function ClubChat({ id }: { id: number }) {
       )}
       <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void post({ text }); }}>
         <button type="button" onClick={() => setTray((v) => !v)} className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${tray ? "bg-yellow-400 text-black" : "bg-white/10 text-white"}`} aria-label={tr("Sticker", "Stickers", "貼圖")}><Smile className="w-5 h-5" /></button>
+        <PhotoPickButton target={{ scope: "club" }} disabled={sending} onPhoto={(id) => post({ photoId: id, text: text.trim() || undefined })} />
         <input value={text} onChange={(e) => setText(e.target.value)} maxLength={CHAT_MAX_LEN} placeholder={tr("Nhắn cho cả hội…", "Message your club…", "傳訊息給公會…")} enterKeyHint="send"
           className="flex-1 min-w-0 rounded-xl bg-[#140b26] border border-white/15 px-3 text-white placeholder:text-white/30" data-testid="input-club-chat" />
         <button type="submit" disabled={sending || !text.trim()} className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black flex items-center justify-center disabled:opacity-40" aria-label={tr("Gửi", "Send", "發送")} data-testid="button-club-chat-send">
           {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
         </button>
       </form>
-      <p className="text-[10px] text-white/40 text-center">{tr("Lịch sự nhé. Không mua bán xu, không gửi link hay số điện thoại.", "Be kind. No selling coins, no links, no phone numbers.", "請保持禮貌。禁止買賣金幣，禁止發送連結或電話號碼。")}</p>
+      <p className="text-[10px] text-white/40 text-center">{tr("Chỉ thành viên hội đọc được. Bị làm phiền: chặn hoặc báo cáo.", "Only club members can read this. If someone bothers you: block or report.", "只有公會成員看得到。被騷擾時：封鎖或檢舉。")}</p>
     </div>
   );
 }

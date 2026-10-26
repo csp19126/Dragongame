@@ -79,6 +79,10 @@ function Lobby({ onOpen }: { onOpen: (code: string) => void }) {
   const [stake, setStake] = useState(5000);
   const list = useQuery<{ tables: TableSummary[]; mine: string | null; stakes: number[] }>({ queryKey: ["/api/cards/tables"], refetchInterval: 4000 });
   const target = useChallengeTarget();
+  // From a "find a match" post: start with the stake the poster asked for
+  const askedStake = Number(new URLSearchParams(useSearch()).get("stake"));
+  useEffect(() => { const list = listStakes(); if (target && askedStake > 0 && list.includes(askedStake)) setStake(askedStake); }, [target, askedStake, list.data?.stakes]); // eslint-disable-line react-hooks/exhaustive-deps
+  function listStakes() { return list.data?.stakes ?? [1000, 5000, 10000, 50000, 100000]; }
   const create = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/cards/tables", { mode, stake })).json(),
     onSuccess: (r) => onOpen(r.code),

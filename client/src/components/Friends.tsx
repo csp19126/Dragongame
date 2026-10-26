@@ -14,7 +14,7 @@ import { LevelBadge, useGameName } from "@/components/SocialBits";
 import { FRIENDS_KEY } from "@/hooks/use-social";
 import { useSocial3 } from "@/components/Challenge";
 import { OnlineNowButton } from "@/components/OnlineNow";
-import { ClubTagChip } from "@/components/Social3Bits";
+import { ClubTagChip, FactsLine } from "@/components/Social3Bits";
 import type { FriendsView, FriendView, GiftBlock, Relation } from "@shared/friends";
 
 interface Found { username: string; avatarUrl: string | null; level: number; online: boolean; relation: Relation }
@@ -73,7 +73,10 @@ export function FriendsTab() {
 
   return (
     <div className="w-full flex flex-col gap-3" data-testid="community-friends">
-      <OnlineNowButton className="self-center" />
+      <div className="flex items-center justify-center gap-2">
+        <OnlineNowButton />
+        <button type="button" onClick={() => setLocation("/community?tab=invite")} className="h-8 px-3 rounded-full bg-white/5 border border-white/10 text-white/75 text-xs font-black" data-testid="link-invite">🎁 {tr("Mời bạn mới", "Invite someone new", "邀請新朋友")}</button>
+      </div>
       {/* Find players */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2 rounded-xl bg-black/50 border border-white/15 px-3">
@@ -186,6 +189,7 @@ function FriendRow({ f, gameName, onShow, onMessage, onJoin, onChallenge, onGift
         <span className={`block text-[11px] truncate ${playing ? "text-yellow-200" : f.online ? "text-emerald-300" : "text-white/40"}`} data-testid={`friend-status-${f.username}`}>
           {playing ? <><Gamepad2 className="inline w-3 h-3 mr-1 -mt-0.5" />{tr("Đang chơi", "Playing", "正在玩")} {playing}</> : f.online ? tr("Đang online", "Online", "在線上") : tr("Ngoại tuyến", "Offline", "離線")}
         </span>
+        <FactsLine facts={f.facts} />
       </button>
       {f.join && (
         <button type="button" onClick={onJoin} className="h-9 px-2.5 rounded-xl bg-emerald-500 text-black text-xs font-black animate-pulse" data-testid={`button-join-${f.username}`}>{tr("Vào bàn", "Join", "加入")}</button>

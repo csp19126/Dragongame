@@ -14,6 +14,9 @@ import { LevelBadge, useGameName } from "@/components/SocialBits";
 import { RelationButton, useFriendActions } from "@/components/Friends";
 import { ALL_ACHIEVEMENTS } from "@/components/slot/achievements";
 import { useSocial3 } from "@/components/Challenge";
+import { useLangName, usePlayStyleName } from "@/components/Social3Bits";
+import { COUNTRY_BY_CODE } from "@shared/social3";
+import { PLAYABLE_BY_ID } from "@shared/friends";
 
 const BADGE_ICON: Record<string, string> = { star: "⭐", flame: "🔥", zap: "⚡", crown: "👑", gem: "💎", trophy: "🏆", target: "🎯", gift: "🎁", mail: "🧧", sparkles: "✨", repeat: "🔁" };
 
@@ -56,6 +59,8 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
   const gameName = useGameName();
   const friendAct = useFriendActions();
   const { challenge } = useSocial3();
+  const langName = useLangName();
+  const styleName = usePlayStyleName();
 
   const fail = (e: unknown) => toast({ title: e instanceof ApiError ? srv(e.message) : String(e), variant: "destructive" });
   const block = async () => {
@@ -118,8 +123,20 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
                   <span className="text-white/60 font-bold">· {p.club.role === "owner" ? tr("Trưởng hội", "Owner", "會長") : p.club.role === "officer" ? tr("Phó hội", "Officer", "幹部") : tr("Thành viên", "Member", "成員")}</span>
                 </button>
               )}
-              {p.bio && <p className="mt-2 text-sm text-white/85 italic break-words px-2" data-testid="sheet-bio">“{p.bio}”</p>}
-              {p.favGame && <p className="mt-1 text-[11px] text-white/55" data-testid="sheet-fav">{tr("Trò yêu thích: ", "Favourite game: ", "最愛遊戲：")}<b className="text-yellow-200">{gameName(p.favGame)}</b></p>}
+              {p.bio && <p className="mt-2 text-sm text-white/85 break-words px-2 whitespace-pre-wrap text-left" data-testid="sheet-bio">{p.bio}</p>}
+              {(p.country || p.languages?.length || p.playStyle) && (
+                <div className="mt-2 flex flex-wrap justify-center gap-1.5" data-testid="sheet-facts">
+                  {p.country && COUNTRY_BY_CODE.get(p.country) && <span className="h-7 px-2.5 rounded-full bg-white/10 text-white/85 text-xs font-bold flex items-center gap-1">{COUNTRY_BY_CODE.get(p.country)!.flag} {loc(COUNTRY_BY_CODE.get(p.country)!)}</span>}
+                  {(p.languages ?? []).map((l) => <span key={l} className="h-7 px-2.5 rounded-full bg-sky-500/20 text-sky-100 text-xs font-bold flex items-center">🗣️ {langName(l)}</span>)}
+                  {p.playStyle && <span className="h-7 px-2.5 rounded-full bg-orange-500/20 text-orange-100 text-xs font-bold flex items-center">{styleName(p.playStyle)}</span>}
+                </div>
+              )}
+              {(p.favGames?.length ? p.favGames : p.favGame ? [p.favGame] : []).length > 0 && (
+                <div className="mt-2 flex flex-wrap justify-center gap-1" data-testid="sheet-fav">
+                  <span className="text-[11px] text-white/55 self-center">{tr("Thích chơi:", "Likes to play:", "喜歡玩：")}</span>
+                  {(p.favGames?.length ? p.favGames : [p.favGame!]).filter((g) => PLAYABLE_BY_ID.has(g)).map((g) => <span key={g} className="h-6 px-2 rounded-full bg-yellow-400/15 text-yellow-200 text-[11px] font-bold flex items-center">{gameName(g)}</span>)}
+                </div>
+              )}
             </div>
             {p.showcase.length > 0 && (
               <div className="flex justify-center gap-2 w-full" data-testid="sheet-showcase">

@@ -181,6 +181,9 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: Strings; onO
   const [, setLocation] = useLocation();
   const tab = new URLSearchParams(search).get("tab") === "league" ? "league" : "play";
   const target = useChallengeTarget();
+  // From a "find a match" post: start with the stake the poster asked for
+  const askedStake = Number(new URLSearchParams(search).get("stake"));
+  useEffect(() => { if (target && askedStake > 0 && stakes.includes(askedStake)) setStake(askedStake); }, [target, askedStake, tables.data?.stakes]); // eslint-disable-line react-hooks/exhaustive-deps
   // Quick match: sit at the first free open table, or open one and wait
   const quick = useMutation({
     mutationFn: async () => {
