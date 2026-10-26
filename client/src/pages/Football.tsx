@@ -387,7 +387,8 @@ function OnlineMatch({ code, kit, userId, onExit, onJoined, onGo }: { code: stri
   const [myPick, setMyPick] = useState(false);
   const kicks = useKickQueue(({ shootout, decisive }) => {
     setShown(shootout);
-    if (!decisive && shootoutWinner(shootout) !== null) setEnded(true);
+    // Over after the replay of the winning kick, or because someone resigned or left mid-kick
+    if (!decisive && (shootoutWinner(shootout) !== null || latest.current?.result)) setEnded(true);
   });
   const latest = useRef<StateMsg | null>(null);
 
