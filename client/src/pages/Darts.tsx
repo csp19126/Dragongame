@@ -343,7 +343,7 @@ function PracticeGame({ level, legs, name, onExit }: { level: BotLevel; legs: 1 
 
 function EndBanner({ title, sub, actions, extra }: { title: string; sub: string; actions: { label: string; onClick: () => void; testid?: string }[]; extra?: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6" data-testid="darts-end">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6" data-testid="darts-end">
       <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-xs rounded-3xl p-6 text-center bg-gradient-to-b from-[#2a0f4f] to-[#140726] border-2 border-yellow-400/60 shadow-[0_0_50px_rgba(250,204,21,0.35)]">
         <p className="text-5xl mb-2">🎯</p>
         <p className="font-display text-4xl text-yellow-300">{title}</p>

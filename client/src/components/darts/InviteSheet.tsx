@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, Loader2, Send, Share2, X } from "lucide-react";
@@ -45,7 +46,8 @@ export function InviteSheet({ open, onClose, path, game }: { open: boolean; onCl
 
   const list = [...(friends.data?.friends ?? [])].sort((a, b) => Number(b.online) - Number(a.online) || a.username.localeCompare(b.username));
 
-  return (
+  // Portalled: the page content sits in its own stacking context under the bottom bar
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm text-left" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -79,6 +81,7 @@ export function InviteSheet({ open, onClose, path, game }: { open: boolean; onCl
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
