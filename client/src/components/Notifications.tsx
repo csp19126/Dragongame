@@ -17,6 +17,9 @@ import { useAgo, useGameName } from "@/components/SocialBits";
 import { useFriendActions } from "@/components/Friends";
 import { NOTIF_KEY, NOTIF_UNREAD_KEY, FRIENDS_KEY, useNotifUnread } from "@/hooks/use-social";
 import { PLAY_GAME_TO_PLAYABLE, type NotificationView } from "@shared/friends";
+import { useInviteGameName, safeInternalPath } from "@/components/Social3Bits";
+import { useSocial3 } from "@/components/Challenge";
+import { QUEST_BY_ID, questText, INVITE_FRESH_MS } from "@shared/social3";
 
 type Page = { items: NotificationView[]; more: boolean; unread: number };
 
@@ -37,10 +40,12 @@ export function NotificationBell() {
 }
 
 function NotificationSheet({ onClose }: { onClose: () => void }) {
-  const { tr, srv } = useLang();
+  const { tr, srv, loc } = useLang();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const showPlayer = usePlayerSheet();
+  const inviteGame = useInviteGameName();
+  const { openQuests } = useSocial3();
   const ago = useAgo();
   const gameName = useGameName();
   const q = useQuery<Page>({ queryKey: NOTIF_KEY, staleTime: 0 });
@@ -80,6 +85,10 @@ function NotificationSheet({ onClose }: { onClose: () => void }) {
     if ((n.kind === "mention" || n.kind === "reply" || n.kind === "reaction") && n.data.scope === "chat") { onClose(); setLocation(`/community?tab=chat&msg=${n.data.messageId}`); }
     else if (n.kind === "reaction" && n.data.scope === "dm" && n.actor) { onClose(); setLocation(`/community?tab=dm&dm=${encodeURIComponent(n.actor.username)}`); }
     else if (n.kind === "friend_accepted" || n.kind === "friend_request") { onClose(); setLocation("/community?tab=friends"); }
+    else if (n.kind === "invite" && n.actor) { onClose(); setLocation(`/community?tab=dm&dm=${encodeURIComponent(n.actor.username)}`); }
+    else if (n.kind === "quest") { onClose(); openQuests(); }
+    else if (n.kind === "club" && n.data.clubId && n.data.action !== "disbanded") { onClose(); setLocation(`/community?tab=clubs&club=${n.data.clubId}`); }
+    else if (n.kind === "moment" || (n.kind === "mention" && n.data.scope === "moment")) { onClose(); setLocation(`/community?tab=moments&moment=${n.data.momentId}`); }
     else if (n.actor) showPlayer(n.actor.username);
   };
 
@@ -89,7 +98,30 @@ function NotificationSheet({ onClose }: { onClose: () => void }) {
     switch (n.kind) {
       case "friend_request": return <>{who} {tr("muốn kết bạn với bạn", "wants to be your friend", "想加你為好友")}</>;
       case "friend_accepted": return <>{who} {tr("đã đồng ý kết bạn. Giờ hai bạn là bạn bè!", "accepted your friend request. You're friends now!", "接受了你的好友邀請，你們現在是好友了！")}</>;
-      case "mention": return <>{who} {tr("nhắc đến bạn trong phòng chat:", "mentioned you in the chat:", "在聊天室提到了你：")}{quote}</>;
+      case "mention": return n.data.scope === "moment"
+        ? <>{who} {tr("nhắc đến bạn trong một Khoảnh khắc:", "mentioned you in a Moment:", "在動態中提到了你：")}{quote}</>
+        : <>{who} {tr("nhắc đến bạn trong phòng chat:", "mentioned you in the chat:", "在聊天室提到了你：")}{quote}</>;
+      case "invite": return <>{who} {tr("thách bạn một ván", "challenged you to", "邀請你來一場")} <b className="text-yellow-200">{inviteGame(n.data.game)}</b> ⚔️</>;
+      case "quest": {
+        const d = QUEST_BY_ID.get(n.data.questId);
+        return <>{tr("Xong nhiệm vụ:", "Quest done:", "任務完成：")} <b className="text-white">{d ? loc(questText(d, d.text)) : ""}</b> · <b className="text-yellow-300">+{fmtCoins(n.data.reward ?? 0)}</b> {tr("đang chờ bạn nhận!", "waiting for you!", "等你領取！")}</>;
+      }
+      case "club": {
+        const club = <b className="text-white">{n.data.club}</b>;
+        switch (n.data.action) {
+          case "request": return <>{who} {tr("xin vào hội", "asked to join", "申請加入")} {club}</>;
+          case "accepted": return <>{tr("Bạn đã được nhận vào hội", "You're in! Welcome to", "你已加入公會")} {club} 🎉</>;
+          case "kicked": return <>{tr("Bạn đã bị mời ra khỏi hội", "You were removed from", "你已被移出公會")} {club}</>;
+          case "owner": return <>{who} {tr("đã chuyển cho bạn làm trưởng hội", "made you the owner of", "把會長轉讓給你：")} {club} 👑</>;
+          case "officer": return <>{who} {tr("phong bạn làm phó hội", "made you an officer of", "任命你為幹部：")} {club} ⭐</>;
+          case "disbanded": return <>{tr("Hội", "The club", "公會")} {club} {tr("đã giải tán", "was disbanded", "已解散")}</>;
+          case "reward": return <>{tr(`Hội ${n.data.club} đứng hạng #${n.data.rank} tuần trước! Bạn nhận`, `${n.data.club} finished #${n.data.rank} last week! You got`, `${n.data.club} 上週排名第 ${n.data.rank}！你獲得`)} <b className="text-yellow-300">{fmtCoins(n.data.amount ?? 0)} {tr("xu", "coins", "金幣")}</b> 🏆</>;
+          default: return club;
+        }
+      }
+      case "moment": return n.data.action === "like"
+        ? <>{who}{(n.data.likes ?? 1) > 1 && tr(` và ${n.data.likes - 1} người khác`, ` and ${n.data.likes - 1} more`, ` 等 ${n.data.likes} 人`)} {tr("thích Khoảnh khắc của bạn", "liked your Moment", "按讚了你的動態")} ❤️{quote}</>
+        : <>{who} {tr("bình luận Khoảnh khắc của bạn:", "commented on your Moment:", "留言了你的動態：")}{quote}</>;
       case "reply": return <>{who} {tr("trả lời bạn:", "replied to you:", "回覆了你：")}{quote}</>;
       case "reaction": {
         const names: string[] = n.data.actors ?? [];
@@ -106,7 +138,7 @@ function NotificationSheet({ onClose }: { onClose: () => void }) {
       default: return who;
     }
   };
-  const icon = (n: NotificationView) => ({ friend_request: "👋", friend_accepted: "🤝", mention: "💬", reply: "↩️", reaction: "❤️", gift: "🧧", big_win: "🎉" } as Record<string, string>)[n.kind] ?? "🔔";
+  const icon = (n: NotificationView) => ({ friend_request: "👋", friend_accepted: "🤝", mention: "💬", reply: "↩️", reaction: "❤️", gift: "🧧", big_win: "🎉", invite: "⚔️", quest: "📜", club: "🏯", moment: "📸" } as Record<string, string>)[n.kind] ?? "🔔";
 
   return (
     <motion.div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -146,6 +178,13 @@ function NotificationSheet({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
                 {n.kind === "friend_request" && n.data.state && <div className="text-[11px] mt-1 font-bold text-white/45">{n.data.state === "accepted" ? tr("✓ Đã đồng ý", "✓ Accepted", "✓ 已接受") : tr("Đã từ chối", "Declined", "已拒絕")}</div>}
+                {n.kind === "invite" && safeInternalPath(n.data.path) && (Date.now() - new Date(n.at).getTime() < INVITE_FRESH_MS ? (
+                  <button type="button" onClick={() => { if (!n.read) void read({ id: n.id }); onClose(); setLocation(n.data.path); }}
+                    className="mt-2 h-9 px-4 rounded-xl bg-emerald-500 text-black text-xs font-black" data-testid={`notif-join-${n.id}`}>⚔️ {tr("Vào chơi", "Join", "加入")}</button>
+                ) : <div className="text-[11px] mt-1 font-bold text-white/40">{tr("Lời mời đã cũ", "This invite has expired", "邀請已過期")}</div>)}
+                {n.kind === "quest" && (
+                  <button type="button" onClick={() => go(n)} className="mt-2 h-9 px-4 rounded-xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black text-xs font-black" data-testid={`notif-quest-${n.id}`}>📜 {tr("Nhận thưởng", "Claim", "領取")}</button>
+                )}
                 {n.kind === "gift" && (n.data.claimed ? (
                   <div className="text-[11px] mt-1 font-bold text-emerald-300">{tr("✓ Đã nhận", "✓ Opened", "✓ 已領取")}</div>
                 ) : (

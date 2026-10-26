@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Redirect, useLocation, useSearch } from "wouter";
+import { ChallengeBanner, InviteFriendsButton, useChallengeTarget } from "@/components/Challenge";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bot, Copy, Eye, Flag, Loader2, Plus, Share2, Users, Wifi, WifiOff, X } from "lucide-react";
 import { newGame, playShot, ballsLeft, groupOf, type GameState, type Shot, type Side, type Group } from "@shared/pool/engine";
@@ -30,7 +31,7 @@ const TXT = {
     tabPlay: "Chơi", tabLeague: "Bảng xếp hạng", quick: "Chơi nhanh", quickSub: "Tìm đối thủ ngay · tính điểm league",
     leaguePts: (n: number) => `+${n} điểm league`, notCounted: "Trận này không tính điểm league", dailyBonus: (n: string) => `🎁 Thắng đầu ngày +${n}`,
     create: "Tạo bàn", stake: "Mức cược", free: "Miễn phí", open: "Bàn đang chờ", live: "Đang thi đấu", none: "Chưa có bàn nào. Hãy tạo bàn và mời bạn bè!",
-    join: "Vào chơi", watch: "Xem", back: "Quay lại bàn của bạn", waiting: "Đang chờ đối thủ…", invite: "Mời bạn bè", copy: "Sao chép link", copied: "Đã sao chép!",
+    join: "Vào chơi", watch: "Xem", back: "Quay lại bàn của bạn", waiting: "Đang chờ đối thủ…", invite: "Mời bạn bè", shareLink: "Chia sẻ link mời", copy: "Sao chép link", copied: "Đã sao chép!",
     cancel: "Huỷ bàn", resign: "Đầu hàng", resignAsk: "Đầu hàng và thua ván này?", you: "Bạn", computer: "Máy", yourTurn: "Lượt của bạn", theirTurn: "Lượt đối thủ",
     solids: "Bi trơn", stripes: "Bi sọc", open8: "Bàn mở", ballInHand: "Bi trong tay", break: "Phá bi",
     foul: { scratch: "Phạm lỗi: bi trắng rơi lỗ", no_hit: "Phạm lỗi: không chạm bi", wrong_ball: "Phạm lỗi: chạm sai bi", no_rail: "Phạm lỗi: không bi nào chạm băng", timeout: "Hết giờ" } as Record<string, string>,
@@ -46,7 +47,7 @@ const TXT = {
     tabPlay: "Play", tabLeague: "League", quick: "Quick match", quickSub: "Find an opponent now · earns league points",
     leaguePts: (n: number) => `+${n} league point${n === 1 ? "" : "s"}`, notCounted: "This game doesn't count for the league", dailyBonus: (n: string) => `🎁 First win today +${n}`,
     create: "Create table", stake: "Stake", free: "Free", open: "Open tables", live: "Playing now", none: "No tables yet. Create one and invite your mates!",
-    join: "Join", watch: "Watch", back: "Back to your table", waiting: "Waiting for an opponent…", invite: "Invite a friend", copy: "Copy link", copied: "Copied!",
+    join: "Join", watch: "Watch", back: "Back to your table", waiting: "Waiting for an opponent…", invite: "Invite a friend", shareLink: "Share invite link", copy: "Copy link", copied: "Copied!",
     cancel: "Close table", resign: "Resign", resignAsk: "Resign and lose this game?", you: "You", computer: "Computer", yourTurn: "Your turn", theirTurn: "Their turn",
     solids: "Solids", stripes: "Stripes", open8: "Open table", ballInHand: "Ball in hand", break: "Break",
     foul: { scratch: "Foul: cue ball potted", no_hit: "Foul: missed everything", wrong_ball: "Foul: wrong ball first", no_rail: "Foul: no ball hit a cushion", timeout: "Out of time" } as Record<string, string>,
@@ -62,7 +63,7 @@ const TXT = {
     tabPlay: "對戰", tabLeague: "聯賽", quick: "快速配對", quickSub: "馬上找對手 · 可得聯賽積分",
     leaguePts: (n: number) => `+${n} 聯賽積分`, notCounted: "本局不計入聯賽積分", dailyBonus: (n: string) => `🎁 今日首勝 +${n}`,
     create: "開桌", stake: "底注", free: "免費", open: "等待中的球桌", live: "比賽中", none: "目前還沒有球桌。開一桌並邀請好友吧！",
-    join: "加入", watch: "觀戰", back: "回到你的球桌", waiting: "等待對手中…", invite: "邀請好友", copy: "複製連結", copied: "已複製！",
+    join: "加入", watch: "觀戰", back: "回到你的球桌", waiting: "等待對手中…", invite: "邀請好友", shareLink: "分享邀請連結", copy: "複製連結", copied: "已複製！",
     cancel: "關閉球桌", resign: "認輸", resignAsk: "確定認輸並輸掉這局嗎？", you: "你", computer: "電腦", yourTurn: "輪到你", theirTurn: "對手回合",
     solids: "全色球", stripes: "花色球", open8: "未分組", ballInHand: "自由球", break: "開球",
     foul: { scratch: "犯規：母球落袋", no_hit: "犯規：未碰到任何球", wrong_ball: "犯規：先碰到錯誤的球", no_rail: "犯規：沒有球碰到球台邊", timeout: "超時" } as Record<string, string>,
@@ -179,6 +180,7 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: Strings; onO
   const search = useSearch();
   const [, setLocation] = useLocation();
   const tab = new URLSearchParams(search).get("tab") === "league" ? "league" : "play";
+  const target = useChallengeTarget();
   // Quick match: sit at the first free open table, or open one and wait
   const quick = useMutation({
     mutationFn: async () => {
@@ -208,6 +210,16 @@ function Lobby({ L, onOpen, onPractice, toast, insufficient }: { L: Strings; onO
 
   return (
     <div className="w-full max-w-md flex flex-col gap-3" data-testid="pool-lobby">
+      {target && (
+        <ChallengeBanner game="pool" target={target} onOpen={onOpen}
+          settings={<>{L.stake}: {stake ? `${fmt(stake)} 🪙` : L.free}</>}
+          create={async () => {
+            if (mine) return mine;
+            const r = await (await apiRequest("POST", "/api/pool/tables", { stake })).json() as { code: string };
+            queryClient.invalidateQueries({ queryKey: STATE_KEY }); queryClient.invalidateQueries({ queryKey: ME_KEY });
+            return r.code;
+          }} />
+      )}
       {tabs}
       <button type="button" onClick={() => quick.mutate()} disabled={quick.isPending}
         className="w-full flex items-center gap-3 rounded-3xl p-4 bg-gradient-to-r from-yellow-300 via-amber-400 to-orange-500 text-left shadow-[0_8px_30px_rgba(245,158,11,0.35)] active:scale-[0.98] transition" data-testid="button-pool-quick">
@@ -454,7 +466,8 @@ function OnlineTable({ L, code, userId, onExit, onJoined, toast }: { L: Strings;
         <div className="text-6xl animate-bounce">🎱</div>
         <p className="font-display text-2xl text-yellow-300">{L.waiting}</p>
         <p className="text-white/70">{table.stake ? `${L.stake}: ${fmt(table.stake)} 🪙` : L.free} · <span className="font-mono">{code}</span></p>
-        <button type="button" onClick={share} className="w-full rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500 flex items-center justify-center gap-2" data-testid="button-pool-invite"><Share2 className="w-5 h-5" />{L.invite}</button>
+        {seat === 0 && <InviteFriendsButton game="pool" path={`/pool?table=${code}`} />}
+        <button type="button" onClick={share} className="w-full rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500 flex items-center justify-center gap-2" data-testid="button-pool-invite"><Share2 className="w-5 h-5" />{L.shareLink}</button>
         <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(inviteUrl); toast({ title: L.copied }); } catch { /* ignore */ } }} className="w-full rounded-2xl py-2.5 font-bold text-white/80 bg-white/5 border border-white/10 flex items-center justify-center gap-2"><Copy className="w-4 h-4" />{L.copy}</button>
         {seat === 0 && <button type="button" onClick={() => cancel.mutate()} className="text-sm text-red-300/80 underline flex items-center gap-1"><X className="w-4 h-4" />{L.cancel}</button>}
         {seat === null && (

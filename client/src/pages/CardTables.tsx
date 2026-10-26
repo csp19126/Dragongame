@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Redirect, useLocation, useSearch } from "wouter";
+import { ChallengeBanner, InviteFriendsButton, useChallengeTarget } from "@/components/Challenge";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown, Loader2, LogOut, Users } from "lucide-react";
@@ -77,6 +78,7 @@ function Lobby({ onOpen }: { onOpen: (code: string) => void }) {
   const [mode, setMode] = useState<TableMode>("banker");
   const [stake, setStake] = useState(5000);
   const list = useQuery<{ tables: TableSummary[]; mine: string | null; stakes: number[] }>({ queryKey: ["/api/cards/tables"], refetchInterval: 4000 });
+  const target = useChallengeTarget();
   const create = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/cards/tables", { mode, stake })).json(),
     onSuccess: (r) => onOpen(r.code),
@@ -91,6 +93,16 @@ function Lobby({ onOpen }: { onOpen: (code: string) => void }) {
   ];
   return (
     <div className="flex flex-col gap-3">
+      {target && (
+        <ChallengeBanner game="cards" target={target} onOpen={onOpen}
+          settings={<>{mode === "banker" ? tr("Xì Dách", "Xì Dách", "21點") : tr("Bàn Chung", "Shared table", "共享牌桌")} · {fmt(stake)} {tr("xu/ván", "a round", "金幣/局")}</>}
+          create={async () => {
+            try { return (await (await apiRequest("POST", "/api/cards/tables", { mode, stake })).json()).code as string; } catch (e) {
+              if (e instanceof ApiError && e.body?.code) return e.body.code as string;
+              throw e;
+            }
+          }} />
+      )}
       {list.data?.mine && (
         <button type="button" onClick={() => onOpen(list.data!.mine!)} className="rounded-2xl bg-yellow-400 text-black font-black py-3">{tr("Quay lại bàn của bạn", "Back to your table", "回到你的牌桌")} · {list.data.mine}</button>
       )}
@@ -297,6 +309,7 @@ function TableScreen({ code, onExit }: { code: string; onExit: () => void }) {
       <div className="flex justify-center gap-2">
         {EMOTES.map((e) => <button key={e} type="button" onClick={() => send({ t: "emote", e })} className="w-10 h-10 rounded-full bg-white/5 text-xl">{e}</button>)}
       </div>
+      <InviteFriendsButton game="cards" path={`/ban-bai?table=${s.code}`} className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-yellow-300 to-orange-500 text-black text-sm font-black flex items-center justify-center gap-2" />
       <button type="button" onClick={invite} className="w-full py-2.5 rounded-2xl bg-sky-500/20 border border-sky-300/40 text-sky-100 text-sm font-black" data-testid="invite">
         {tr("📲 Mời bạn bè vào bàn", "📲 Invite friends to this table", "📲 邀請好友加入這桌")}
       </button>

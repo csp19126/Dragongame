@@ -85,6 +85,10 @@ export function SocialProvider({ children }: { children: ReactNode }) {
             : n.kind === "friend_accepted" ? tr(`🤝 ${who} đã đồng ý kết bạn`, `🤝 ${who} accepted your request`, `🤝 ${who} 接受了你的好友邀請`)
             : n.kind === "mention" ? tr(`💬 ${who} nhắc đến bạn`, `💬 ${who} mentioned you`, `💬 ${who} 提到了你`)
             : n.kind === "gift" ? tr(`🧧 ${who} gửi bạn Lì Xì ${fmtCoins(n.data.amount)} xu!`, `🧧 ${who} sent you a Lì Xì of ${fmtCoins(n.data.amount)} coins!`, `🧧 ${who} 送你 ${fmtCoins(n.data.amount)} 金幣紅包！`)
+            : n.kind === "invite" ? tr(`⚔️ ${who} thách bạn một ván!`, `⚔️ ${who} challenged you!`, `⚔️ ${who} 向你發起挑戰！`)
+            : n.kind === "quest" ? tr("📜 Xong một nhiệm vụ! Vào nhận thưởng nhé", "📜 Quest complete! Claim your reward", "📜 任務完成！快去領取獎勵")
+            : n.kind === "club" && n.data.action === "reward" ? tr(`🏆 Thưởng hội tuần: +${fmtCoins(n.data.amount)} xu!`, `🏆 Weekly club reward: +${fmtCoins(n.data.amount)} coins!`, `🏆 公會週獎勵：+${fmtCoins(n.data.amount)} 金幣！`)
+            : n.kind === "club" && n.data.action === "request" ? tr(`🏯 ${who} xin vào hội`, `🏯 ${who} wants to join your club`, `🏯 ${who} 申請加入公會`)
             : null;
           if (title) { soundManager.ping(); toast({ title, description: tr("Mở 🔔 để xem", "Open 🔔 to see it", "打開 🔔 查看") }); }
           if (n.kind === "friend_request" || n.kind === "friend_accepted") queryClient.invalidateQueries({ queryKey: FRIENDS_KEY });

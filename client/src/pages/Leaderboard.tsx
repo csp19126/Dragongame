@@ -9,6 +9,8 @@ import { usePlayerSheet } from "@/components/PlayerSheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
 import { FriendsBoard } from "@/components/FriendsBoard";
+import { ClubTagChip } from "@/components/Social3Bits";
+import type { ClubTag } from "@shared/social3";
 
 export default function Leaderboard() {
   const { data: leaderboard, isLoading } = useLeaderboard();
@@ -68,9 +70,10 @@ export default function Leaderboard() {
                           <button type="button" onClick={() => showPlayer(entry.username)} className="flex items-center gap-2.5 min-w-0 text-left" data-testid={`leader-${entry.username}`}>
                             <Avatar user={entry} size={36} />
                             <span className="truncate">{entry.username}</span>
+                            <ClubTagChip club={(entry as { club?: ClubTag | null }).club} />
                           </button>
                         ) : (
-                          <span className="flex items-center gap-2.5 min-w-0"><Avatar user={entry} size={36} /><span className="truncate">{entry.username}</span></span>
+                          <span className="flex items-center gap-2.5 min-w-0"><Avatar user={entry} size={36} /><span className="truncate">{entry.username}</span><ClubTagChip club={(entry as { club?: ClubTag | null }).club} /></span>
                         )}
                       </TableCell>
                       <TableCell className="text-right pr-4 sm:pr-10 font-mono font-black text-lg sm:text-2xl whitespace-nowrap text-yellow-400 drop-shadow-sm">

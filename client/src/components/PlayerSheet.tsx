@@ -13,6 +13,7 @@ import type { PlayerProfile } from "@shared/social";
 import { LevelBadge, useGameName } from "@/components/SocialBits";
 import { RelationButton, useFriendActions } from "@/components/Friends";
 import { ALL_ACHIEVEMENTS } from "@/components/slot/achievements";
+import { useSocial3 } from "@/components/Challenge";
 
 const BADGE_ICON: Record<string, string> = { star: "⭐", flame: "🔥", zap: "⚡", crown: "👑", gem: "💎", trophy: "🏆", target: "🎯", gift: "🎁", mail: "🧧", sparkles: "✨", repeat: "🔁" };
 
@@ -54,6 +55,7 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
   const p = q.data;
   const gameName = useGameName();
   const friendAct = useFriendActions();
+  const { challenge } = useSocial3();
 
   const fail = (e: unknown) => toast({ title: e instanceof ApiError ? srv(e.message) : String(e), variant: "destructive" });
   const block = async () => {
@@ -110,6 +112,12 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
                 <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-gradient-to-r from-yellow-300 to-orange-500" style={{ width: `${Math.round(p.level.progress * 100)}%` }} /></div>
                 <span className="text-[10px] text-white/45 font-bold">{fmtCoins(p.level.xp)} XP</span>
               </div>
+              {p.club && (
+                <button type="button" onClick={() => { onClose(); setLocation(`/community?tab=clubs&club=${p.club!.id}`); }} className="mt-2 mx-auto inline-flex items-center gap-1.5 rounded-full px-3 h-7 border text-xs font-black" style={{ background: `${p.club.color}26`, borderColor: `${p.club.color}99`, color: p.club.color }} data-testid="sheet-club">
+                  <span className="text-sm">{p.club.emblem}</span>{p.club.name} <span className="opacity-70">[{p.club.tag}]</span>
+                  <span className="text-white/60 font-bold">· {p.club.role === "owner" ? tr("Trưởng hội", "Owner", "會長") : p.club.role === "officer" ? tr("Phó hội", "Officer", "幹部") : tr("Thành viên", "Member", "成員")}</span>
+                </button>
+              )}
               {p.bio && <p className="mt-2 text-sm text-white/85 italic break-words px-2" data-testid="sheet-bio">“{p.bio}”</p>}
               {p.favGame && <p className="mt-1 text-[11px] text-white/55" data-testid="sheet-fav">{tr("Trò yêu thích: ", "Favourite game: ", "最愛遊戲：")}<b className="text-yellow-200">{gameName(p.favGame)}</b></p>}
             </div>
@@ -154,6 +162,11 @@ function PlayerSheet({ username, onClose }: { username: string; onClose: () => v
                       <MessageCircle className="w-5 h-5" />{tr("Nhắn tin", "Message", "傳訊息")}
                     </button>
                   </div>
+                  {!p.blockedByYou && (
+                    <button type="button" onClick={() => { onClose(); challenge(p.username); }} className="col-span-3 h-12 rounded-2xl bg-gradient-to-b from-red-500 to-red-700 border border-yellow-300/60 text-yellow-100 font-black flex items-center justify-center gap-2 active:scale-[0.98] shadow-[0_0_16px_rgba(239,68,68,0.3)]" data-testid="button-sheet-challenge">
+                      ⚔️ {tr("Thách đấu", "Challenge", "挑戰")}
+                    </button>
+                  )}
                   {p.friendsOnlyDm && p.relation !== "friends" && <p className="col-span-3 -mt-1 text-[10px] text-white/45 text-center">{tr("Người này chỉ nhận tin nhắn từ bạn bè", "Only takes messages from friends", "只接受好友的訊息")}</p>}
                   <button type="button" disabled={busy} onClick={block} className={`col-span-2 h-11 rounded-xl font-black text-sm flex items-center justify-center gap-1.5 ${p.blockedByYou ? "bg-emerald-600/25 text-emerald-200 border border-emerald-400/30" : "bg-white/10 text-white/85"}`} data-testid="button-sheet-block">
                     <Ban className="w-4 h-4" />{p.blockedByYou ? tr("Bỏ chặn", "Unblock", "解除封鎖") : tr("Chặn", "Block", "封鎖")}

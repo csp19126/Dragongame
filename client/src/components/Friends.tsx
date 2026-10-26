@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Clock, Gamepad2, Loader2, MessageCircle, Search, UserMinus, UserPlus, Users, X } from "lucide-react";
+import { Check, Clock, Gamepad2, Loader2, MessageCircle, Search, Swords, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useLang, fmtCoins } from "@/lib/lang-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
@@ -12,6 +12,9 @@ import { Avatar } from "@/components/Avatar";
 import { usePlayerSheet } from "@/components/PlayerSheet";
 import { LevelBadge, useGameName } from "@/components/SocialBits";
 import { FRIENDS_KEY } from "@/hooks/use-social";
+import { useSocial3 } from "@/components/Challenge";
+import { OnlineNowButton } from "@/components/OnlineNow";
+import { ClubTagChip } from "@/components/Social3Bits";
 import type { FriendsView, FriendView, GiftBlock, Relation } from "@shared/friends";
 
 interface Found { username: string; avatarUrl: string | null; level: number; online: boolean; relation: Relation }
@@ -51,6 +54,7 @@ export function FriendsTab() {
   const [term, setTerm] = useState("");
   const search = useQuery<{ players: Found[] }>({ queryKey: [`/api/friends/search?q=${encodeURIComponent(term.trim())}`], enabled: term.trim().length >= 2, staleTime: 5_000 });
   const act = useFriendActions();
+  const { challenge } = useSocial3();
   const [removing, setRemoving] = useState<string | null>(null);
 
   const gift = useMutation({
@@ -69,6 +73,7 @@ export function FriendsTab() {
 
   return (
     <div className="w-full flex flex-col gap-3" data-testid="community-friends">
+      <OnlineNowButton className="self-center" />
       {/* Find players */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2 rounded-xl bg-black/50 border border-white/15 px-3">
@@ -125,7 +130,7 @@ export function FriendsTab() {
               </div>
             ) : v.friends.map((f) => (
               <FriendRow key={f.username} f={f} gameName={gameName} onShow={() => showPlayer(f.username)} onMessage={() => message(f.username)}
-                onJoin={() => f.join && setLocation(f.join.href)} onGift={() => (f.gift ? toast({ title: giftReason(f.gift, tr) }) : gift.mutate(f.username))} giftBusy={gift.isPending && gift.variables === f.username}
+                onJoin={() => f.join && setLocation(f.join.href)} onChallenge={() => challenge(f.username)} onGift={() => (f.gift ? toast({ title: giftReason(f.gift, tr) }) : gift.mutate(f.username))} giftBusy={gift.isPending && gift.variables === f.username}
                 onRemove={() => setRemoving(f.username)} />
             ))}
             <p className="text-[10px] text-white/45 px-3 py-2 border-t border-white/5 leading-snug" data-testid="gift-explainer">
@@ -168,8 +173,8 @@ export function FriendsTab() {
   );
 }
 
-function FriendRow({ f, gameName, onShow, onMessage, onJoin, onGift, giftBusy, onRemove }: {
-  f: FriendView; gameName: (id: string | null) => string | null; onShow: () => void; onMessage: () => void; onJoin: () => void; onGift: () => void; giftBusy: boolean; onRemove: () => void;
+function FriendRow({ f, gameName, onShow, onMessage, onJoin, onChallenge, onGift, giftBusy, onRemove }: {
+  f: FriendView; gameName: (id: string | null) => string | null; onShow: () => void; onMessage: () => void; onJoin: () => void; onChallenge: () => void; onGift: () => void; giftBusy: boolean; onRemove: () => void;
 }) {
   const { tr } = useLang();
   const playing = gameName(f.playing);
@@ -177,7 +182,7 @@ function FriendRow({ f, gameName, onShow, onMessage, onJoin, onGift, giftBusy, o
     <div className="flex items-center gap-2.5 px-3 py-2 border-t border-white/5" data-testid={`friend-${f.username}`}>
       <Avatar user={f} size={44} online={f.online} onClick={onShow} />
       <button type="button" onClick={onShow} className="flex-1 min-w-0 text-left">
-        <span className="flex items-center gap-1.5"><span className="font-black text-white truncate">{f.username}</span><LevelBadge level={f.level} /></span>
+        <span className="flex items-center gap-1.5 min-w-0"><span className="font-black text-white truncate">{f.username}</span><ClubTagChip club={f.club} /><LevelBadge level={f.level} /></span>
         <span className={`block text-[11px] truncate ${playing ? "text-yellow-200" : f.online ? "text-emerald-300" : "text-white/40"}`} data-testid={`friend-status-${f.username}`}>
           {playing ? <><Gamepad2 className="inline w-3 h-3 mr-1 -mt-0.5" />{tr("Đang chơi", "Playing", "正在玩")} {playing}</> : f.online ? tr("Đang online", "Online", "在線上") : tr("Ngoại tuyến", "Offline", "離線")}
         </span>
@@ -185,6 +190,7 @@ function FriendRow({ f, gameName, onShow, onMessage, onJoin, onGift, giftBusy, o
       {f.join && (
         <button type="button" onClick={onJoin} className="h-9 px-2.5 rounded-xl bg-emerald-500 text-black text-xs font-black animate-pulse" data-testid={`button-join-${f.username}`}>{tr("Vào bàn", "Join", "加入")}</button>
       )}
+      {!f.join && <button type="button" onClick={onChallenge} className="h-9 w-9 rounded-xl bg-gradient-to-b from-red-500 to-red-700 text-yellow-100 flex items-center justify-center" aria-label={tr("Thách đấu", "Challenge", "挑戰")} data-testid={`button-challenge-${f.username}`}><Swords className="w-4 h-4" /></button>}
       <button type="button" onClick={onGift} disabled={giftBusy} className={`h-9 w-9 rounded-xl flex items-center justify-center text-lg ${f.gift ? "bg-white/5 grayscale opacity-50" : "bg-gradient-to-b from-red-500 to-red-700 border border-yellow-300/70 shadow-[0_0_12px_rgba(250,204,21,0.35)]"}`}
         aria-label={tr("Gửi Lì Xì", "Send Lì Xì", "送紅包")} data-testid={`button-gift-${f.username}`}>
         {giftBusy ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : f.gift === "sent_today" ? <Check className="w-4 h-4 text-emerald-300" /> : "🧧"}
