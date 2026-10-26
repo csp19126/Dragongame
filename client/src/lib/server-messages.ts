@@ -16,6 +16,12 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "Player not found": { vi: "Không tìm thấy người chơi", zh: "找不到玩家" },
   "No such player": { vi: "Không có người chơi này", zh: "沒有這位玩家" },
 
+  // Darts
+  "Start a new game": { vi: "Hãy bắt đầu ván mới", zh: "請開始新的一局" },
+  "Start the challenge first": { vi: "Hãy bắt đầu thử thách trước", zh: "請先開始挑戰" },
+  "You've already played today's ranked challenge": { vi: "Bạn đã chơi lượt tính điểm hôm nay rồi", zh: "你今天已經完成排名挑戰了" },
+  "This table is saved for someone else": { vi: "Bàn này đang giữ chỗ cho người khác", zh: "這張牌桌已為其他玩家保留" },
+
   // Account
   "Too many attempts, try again in a few minutes": { vi: "Thử quá nhiều lần, vui lòng thử lại sau vài phút", zh: "嘗試次數過多，請幾分鐘後再試" },
   "Not logged in": { vi: "Bạn chưa đăng nhập", zh: "尚未登入" },
