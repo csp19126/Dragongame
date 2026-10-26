@@ -1031,3 +1031,120 @@ describe("darts", async () => {
     }
   });
 });
+
+describe("penalty shootout (football)", async () => {
+  const f = await import("../shared/football");
+  const play = (first: 0 | 1, results: boolean[]) => results.reduce((s, r) => f.addKick(s, r, r ? "goal" : "save"), f.newShootout(first));
+
+  it("alternates the kicker starting with whoever goes first", () => {
+    let s = f.newShootout(1);
+    const order: number[] = [];
+    for (let i = 0; i < 6; i++) { order.push(f.shooterOf(s)); expect(f.keeperOf(s)).toBe(1 - f.shooterOf(s)); s = f.addKick(s, true, "goal"); }
+    expect(order).toEqual([1, 0, 1, 0, 1, 0]);
+  });
+
+  it("finishes early once a side can't be caught", () => {
+    // first=0: A scores 3 of 3, B misses 3 of 3 → B can reach 2 at most: A has won
+    const s = play(0, [true, false, true, false, true, false]);
+    expect(f.shootoutWinner(s)).toBe(0);
+    // Still alive one kick earlier: A 3/3, B 0/2 → B could still reach 3
+    expect(f.shootoutWinner(play(0, [true, false, true, false, true]))).toBeNull();
+    // A misses everything, B scores the first 3: decided after B's 3rd (A can reach 2 at most)
+    expect(f.shootoutWinner(play(0, [false, true, false, true, false, true]))).toBe(1);
+  });
+
+  it("goes to sudden death after 5 each when level, decided only after a completed pair", () => {
+    let s = play(0, Array(10).fill(true));
+    expect(f.shootoutWinner(s)).toBeNull();
+    expect(f.inSuddenDeath(s)).toBe(true);
+    s = f.addKick(s, false, "save"); // A misses the 6th
+    expect(f.shootoutWinner(s)).toBeNull(); // B still has to kick
+    expect(f.shootoutWinner(f.addKick(s, true, "goal"))).toBe(1);
+    // Both score the 6th: carry on; both miss the 7th: carry on
+    let t = f.addKick(f.addKick(play(0, Array(10).fill(true)), true, "goal"), true, "goal");
+    t = f.addKick(f.addKick(t, false, "save"), false, "wide");
+    expect(f.shootoutWinner(t)).toBeNull();
+    expect(f.shootoutWinner(f.addKick(f.addKick(t, true, "goal"), false, "post"))).toBe(0);
+  });
+
+  it("4-5 after regulation: the last kick decides it, not earlier", () => {
+    // A: ✓✓✓✓✕, B: ✓✓✓✓✓ — B wins only when the 10th kick goes in
+    const kicks = [true, true, true, true, true, true, true, true, false];
+    expect(f.shootoutWinner(play(0, kicks))).toBeNull();
+    expect(f.shootoutWinner(play(0, [...kicks, true]))).toBe(1);
+    expect(f.shootoutWinner(play(0, [...kicks, false]))).toBeNull();
+  });
+
+  it("resolves a kick deterministically for a given seed", () => {
+    const shot = { x: 0.7, y: 0.6, power: 0.75, curve: 0.3 };
+    const a = f.resolveKick(shot, 2, 123456789);
+    const b = f.resolveKick(shot, 2, 123456789);
+    expect(a).toEqual(b);
+    expect(a.seed).toBe(123456789);
+    // Different seeds give different execution errors
+    const spots = new Set(Array.from({ length: 50 }, (_, i) => `${f.resolveKick(shot, 2, i).fx}`));
+    expect(spots.size).toBeGreaterThan(40);
+    // A snapshot of the maths: changing it changes every recorded replay
+    expect(f.resolveKick({ x: 0, y: 0.25, power: 0.5, curve: 0 }, 1, 42)).toMatchObject({ dive: 1, zone: 1, seed: 42 });
+  });
+
+  it("never trusts the client's numbers", () => {
+    expect(f.cleanShot({ x: 99, y: -5, power: 7, curve: NaN } as any)).toEqual({ x: 1.6, y: 0, power: 1, curve: 0 });
+    expect(f.cleanShot(null)).toEqual({ x: 0, y: 0.3, power: 0.5, curve: 0 });
+    expect(f.isZone(3)).toBe(true);
+    expect(f.isZone(6)).toBe(false);
+    expect(f.isZone("2")).toBe(false);
+    expect(f.isZone(1.5)).toBe(false);
+  });
+
+  it("execution error grows with power and with corner aim; too hard goes over", () => {
+    const e = (x: number, y: number, power: number) => f.executionError({ x, y, power, curve: 0 });
+    expect(e(0, 0.3, 0.9)).toBeGreaterThan(e(0, 0.3, 0.4));
+    expect(e(0.95, 0.9, 0.5)).toBeGreaterThan(e(0, 0.3, 0.5));
+    let over = 0;
+    for (let i = 0; i < 2000; i++) if (["over", "bar"].includes(f.resolveKick({ x: 0, y: 0.6, power: 1, curve: 0 }, 0, i).outcome)) over++;
+    expect(over / 2000).toBeGreaterThan(0.8);
+  });
+
+  it("the keeper saves only in or next to his zone; soft shots are easier; top corners are hard", () => {
+    expect(f.saveChance(0, 0.9, 0.9, 0.5)).toBe(0); // dived bottom-left, ball top-right
+    expect(f.saveChance(1, 0, 0.2, 0.2)).toBeGreaterThan(f.saveChance(1, 0, 0.2, 0.9));
+    expect(f.saveChance(5, 0.95, 0.95, 0.6)).toBeLessThan(f.saveChance(2, 0.7, 0.2, 0.6));
+    expect(f.saveChance(1, 0, 0.2, 0.5)).toBeGreaterThan(0.5);
+    // Measured: a medium-power shot to a random zone vs a random dive scores most of the time
+    let goals = 0;
+    const N = 20000;
+    const rng = f.seededRng(7);
+    for (let i = 0; i < N; i++) {
+      const z = Math.floor(rng() * 6) as 0 | 1 | 2 | 3 | 4 | 5;
+      const c = f.zoneCentre(z);
+      const k = f.resolveKick({ x: c.x * 1.05, y: c.y, power: 0.6, curve: 0 }, Math.floor(rng() * 6) as 0, i);
+      if (k.scored) goals++;
+    }
+    expect(goals / N).toBeGreaterThan(0.6);
+    expect(goals / N).toBeLessThan(0.9);
+  });
+
+  it("the computer at every level plays legal choices", () => {
+    const rng = f.seededRng(99);
+    for (const level of f.LEVELS) {
+      for (let i = 0; i < 200; i++) {
+        const s = f.aiShot(level, rng, [0, 0, 1]);
+        expect(f.cleanShot(s)).toEqual(s);
+        expect(f.isZone(f.aiDive(level, rng, [2, 2, 2]))).toBe(true);
+      }
+    }
+  });
+
+  it("Elo moves the same both ways and favours upsets; weeks run Monday 00:00 Vietnam time", () => {
+    expect(f.eloDelta(1000, 1000)).toBe(16);
+    expect(f.eloDelta(1200, 1000)).toBeLessThan(16);
+    expect(f.eloDelta(1000, 1200)).toBeGreaterThan(16);
+    expect(f.eloDelta(3000, 0)).toBe(1);
+    // Sunday 23:30 in Vietnam is still the week that began Monday the 19th
+    expect(f.weekOf(new Date("2026-10-25T16:30:00Z"))).toBe("2026-10-19");
+    expect(f.weekOf(new Date("2026-10-25T17:00:00Z"))).toBe("2026-10-26");
+    expect(f.weekEnd("2026-10-19").toISOString()).toBe("2026-10-25T17:00:00.000Z");
+    expect(f.previousWeek("2026-11-02")).toBe("2026-10-26");
+  });
+});
