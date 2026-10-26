@@ -287,6 +287,8 @@ export const directMessages = pgTable("direct_messages", {
   sticker: text("sticker"),
   /** The message this one answers (in the same conversation) */
   replyTo: integer("reply_to"),
+  /** A game invite / challenge card ({ kind: "invite", game, path }), shown instead of text */
+  card: jsonb("card").$type<{ kind: "invite"; game: string; path: string }>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   readAt: timestamp("read_at"),
   deleted: boolean("deleted").default(false).notNull(),
@@ -397,6 +399,136 @@ export const userSocial = pgTable("user_social", {
   level: integer("level").default(1).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// ---- Social 3: clubs, daily quests, Moments ----
+
+// A club (Hội): one per player, up to 30 members. Starting one costs coins (a sink).
+export const clubs = pgTable("clubs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  tag: text("tag").notNull(),
+  emblem: text("emblem").notNull(),
+  color: text("color").notNull(),
+  description: text("description"),
+  /** Anyone can join (true) or the owner/officers approve requests (false) */
+  open: boolean("open").default(true).notNull(),
+  ownerId: varchar("owner_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("clubs_name_lower").on(sql`lower(${t.name})`)]);
+
+// The primary key on user_id is what makes it one club per player
+export const clubMembers = pgTable("club_members", {
+  userId: varchar("user_id").primaryKey(),
+  clubId: integer("club_id").notNull(),
+  role: text("role").notNull(), // owner | officer | member
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+}, (t) => [index("club_members_club").on(t.clubId)]);
+
+export const clubRequests = pgTable("club_requests", {
+  clubId: integer("club_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.clubId, t.userId] }), index("club_requests_user").on(t.userId)]);
+
+export const clubMessages = pgTable("club_messages", {
+  id: serial("id").primaryKey(),
+  clubId: integer("club_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  username: text("username").notNull(),
+  text: text("text"),
+  sticker: text("sticker"),
+  deleted: boolean("deleted").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("club_messages_club").on(t.clubId, t.id), index("club_messages_user").on(t.userId)]);
+
+export const clubChatReports = pgTable("club_chat_reports", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull(),
+  reporterId: varchar("reporter_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("club_chat_reports_once").on(t.messageId, t.reporterId)]);
+
+// The weekly club reward: one row per finished Vietnam week once it has been paid (restart safe)
+export const clubWeeks = pgTable("club_weeks", {
+  week: text("week").primaryKey(), // YYYY-MM-DD of the Monday
+  winners: jsonb("winners").$type<{ clubId: number; name: string; rank: number; xp: number; paid: number }[]>().default([]).notNull(),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+});
+export const clubRewardPayouts = pgTable("club_reward_payouts", {
+  week: text("week").notNull(),
+  userId: varchar("user_id").notNull(),
+  clubId: integer("club_id").notNull(),
+  rank: integer("rank").notNull(),
+  amount: integer("amount").notNull(),
+}, (t) => [primaryKey({ columns: [t.week, t.userId] })]);
+
+// Three quests per player per Vietnam day, drawn the first time they look
+export const dailyQuests = pgTable("daily_quests", {
+  userId: varchar("user_id").notNull(),
+  day: text("day").notNull(),
+  slot: integer("slot").notNull(),
+  questId: text("quest_id").notNull(),
+  notified: boolean("notified").default(false).notNull(),
+  claimedAt: timestamp("claimed_at"),
+}, (t) => [primaryKey({ columns: [t.userId, t.day, t.slot] })]);
+
+// Social things a player did that quests count; `ref` makes each one count once
+export const questEvents = pgTable("quest_events", {
+  userId: varchar("user_id").notNull(),
+  day: text("day").notNull(),
+  kind: text("kind").notNull(),
+  ref: text("ref").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.userId, t.day, t.kind, t.ref] })]);
+
+// The chest for finishing all three of a day's quests (and the 7-day streak bonus paid with it)
+export const questChests = pgTable("quest_chests", {
+  userId: varchar("user_id").notNull(),
+  day: text("day").notNull(),
+  amount: integer("amount").notNull(),
+  streakBonus: integer("streak_bonus").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.userId, t.day] })]);
+
+// Moments: short public posts, optionally with a sticker or a verified win from game_plays
+export const moments = pgTable("moments", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  text: text("text"),
+  sticker: text("sticker"),
+  /** The game_plays row shown as a win card (copied by the server, one Moment per play) */
+  playId: integer("play_id"),
+  win: jsonb("win").$type<{ game: string; bet: number; payout: number; at: string }>(),
+  likes: integer("likes").default(0).notNull(),
+  comments: integer("comments").default(0).notNull(),
+  hidden: boolean("hidden").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("moments_created").on(t.createdAt), index("moments_user").on(t.userId), uniqueIndex("moments_play").on(t.playId)]);
+
+export const momentLikes = pgTable("moment_likes", {
+  momentId: integer("moment_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.momentId, t.userId] }), index("moment_likes_user").on(t.userId)]);
+
+export const momentComments = pgTable("moment_comments", {
+  id: serial("id").primaryKey(),
+  momentId: integer("moment_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  text: text("text").notNull(),
+  hidden: boolean("hidden").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("moment_comments_moment").on(t.momentId, t.id), index("moment_comments_user").on(t.userId)]);
+
+// A reported Moment ("moment") or comment ("comment")
+export const momentReports = pgTable("moment_reports", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(),
+  targetId: integer("target_id").notNull(),
+  reporterId: varchar("reporter_id").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [uniqueIndex("moment_reports_once").on(t.kind, t.targetId, t.reporterId), index("moment_reports_reporter").on(t.reporterId)]);
 
 // The sticker album: how many of each sticker a player holds
 export const userStickers = pgTable("user_stickers", {

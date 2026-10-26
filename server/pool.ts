@@ -6,6 +6,7 @@ import { randomInt } from "crypto";
 import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "./db";
 import { logPlay } from "./storage";
+import { questFriendMatch } from "./quests";
 import { poolMatches, users, deposits } from "@shared/schema";
 import { MIN_SHOTS, MAX_PER_PAIR_PER_DAY, DAILY_WIN_BONUS, seasonOf, vnDay } from "@shared/league";
 import { newGame, playShot, cleanShot, type GameState, type Shot, type Side } from "@shared/pool/engine";
@@ -111,6 +112,7 @@ async function finish(room: Room, winner: Side, reason: string) {
   const dayStart = new Date(new Date(`${vnDay(now)}T00:00:00Z`).getTime() - 7 * 3600_000);
   let counted = false;
   let bonus = 0;
+  let settled = false;
   await db.transaction(async (tx) => {
     // League: a real game (both there, long enough), and not too many today between the same two
     let counts = reason !== "no_show" && shots >= MIN_SHOTS;
@@ -126,6 +128,7 @@ async function finish(room: Room, winner: Side, reason: string) {
       .where(and(eq(poolMatches.id, room.id), eq(poolMatches.status, "playing")))
       .returning({ id: poolMatches.id });
     if (!m) return; // already settled
+    settled = true;
     counted = counts;
     await tx.update(users).set({
       balance: sql`${users.balance} + ${payout}`,
@@ -148,6 +151,8 @@ async function finish(room: Room, winner: Side, reason: string) {
     }
   });
   room.result = { winner, reason, payout, league: { counted, bonus } };
+  // Daily quests: a real match between two friends
+  if (settled && reason !== "no_show") void questFriendMatch([winnerId, loserId], `pool:${room.id}`);
   for (const id of room.players) if (id && activeByUser.get(id) === room.code) activeByUser.delete(id);
   broadcastState(room);
   if (room.tournament && tournamentHook) {

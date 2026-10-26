@@ -26,6 +26,8 @@ import { push, pushAll, isConnected, playingNow, connectedUsers, setHubHandlers,
 import { isOnline, unreadTotal } from "./social";
 import { cardSeatOf } from "./cardtables";
 import { poolRoomOf } from "./pool";
+import { clubProfileOf, clubTagOf } from "./clubs";
+import { questEvent } from "./quests";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -141,6 +143,7 @@ export async function socialProfile(u: User, viewer: User) {
     acceptsRequests: p.requestsFrom === "everyone",
     friendsOnlyDm: p.dmFrom === "friends",
     playing: showPlaying ? playingNow(u.id) : null,
+    club: clubProfileOf(u.id),
   };
 }
 
@@ -231,7 +234,7 @@ export async function notifyChat(author: User, messageId: number, text: string |
 
 // ---------------- Presence ----------------
 
-function joinOf(userId: string): FriendView["join"] {
+export function joinOf(userId: string): FriendView["join"] {
   const card = cardSeatOf(userId);
   if (card?.free) return { kind: "cards", href: `/ban-bai?table=${card.code}` };
   const room = poolRoomOf(userId);
@@ -471,7 +474,7 @@ async function friendsView(me: User): Promise<FriendsView> {
     const online = visibleOnline(r.id, r.last_seen_at);
     const shown = online && !hiddenPresence.has(r.id);
     return {
-      username: r.username, avatarUrl: r.profile_image_url ?? null, level: Number(r.level), online,
+      username: r.username, avatarUrl: r.profile_image_url ?? null, level: Number(r.level), online, club: clubTagOf(r.id),
       playing: shown ? playingNow(r.id) : null, join: shown ? joinOf(r.id) : null,
       since: new Date(r.since).toISOString(),
       gift: giftBlock({ friends: true, friendsSince: new Date(r.since).getTime(), myGames: me.gamesPlayed, theirGames: r.games_played, sentToday: r.sent, now }),
@@ -514,6 +517,7 @@ export async function sendGift(me: User, to: User): Promise<{ ok: true; id: numb
   });
   if ("ok" in r) {
     await notify(to.id, "gift", me.id, { giftId: r.id, amount: FRIEND_GIFT_AMOUNT, claimed: false }, `gift:${r.id}`);
+    await questEvent(me.id, "gift", `gift:${r.id}`);
     push(me.id, { t: "friends" });
   }
   return r;

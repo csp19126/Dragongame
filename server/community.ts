@@ -20,6 +20,9 @@ import { findMentions, isReaction, quote, type ReactionCount, type ReplyRef } fr
 import { notifyChat, notifyReaction, blockedEither } from "./friends";
 import { reactionsFor, reactAllowed, toggleReaction } from "./social";
 import { pushAll, disconnect } from "./hub";
+import { clubTagOf } from "./clubs";
+import { questEvent } from "./quests";
+import type { ClubTag } from "@shared/social3";
 import { and, desc, eq, gt, gte, lt, isNull, or, sql, count, inArray } from "drizzle-orm";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
@@ -228,12 +231,12 @@ export async function claimReferrals(userId: string) {
 
 type ChatOut = {
   id: number; username: string; text: string | null; sticker: string | null; createdAt: Date; admin: boolean | null; avatar: string | null;
-  level: number; reply: ReplyRef | null; reactions: ReactionCount[];
+  level: number; reply: ReplyRef | null; reactions: ReactionCount[]; club: ClubTag | null;
 };
 
 async function chatRows(where: ReturnType<typeof and> | undefined, limit: number, newestFirst: boolean, viewer: string): Promise<ChatOut[]> {
   const rows = await db.select({
-    id: chatMessages.id, username: chatMessages.username, text: chatMessages.text, sticker: chatMessages.sticker, replyTo: chatMessages.replyTo,
+    id: chatMessages.id, userId: chatMessages.userId, username: chatMessages.username, text: chatMessages.text, sticker: chatMessages.sticker, replyTo: chatMessages.replyTo,
     createdAt: chatMessages.createdAt, admin: users.isAdmin, avatar: users.profileImageUrl, level: userSocial.level,
   }).from(chatMessages).leftJoin(users, eq(users.id, chatMessages.userId)).leftJoin(userSocial, eq(userSocial.userId, chatMessages.userId))
     .where(where).orderBy(newestFirst ? desc(chatMessages.id) : chatMessages.id).limit(limit);
@@ -241,14 +244,14 @@ async function chatRows(where: ReturnType<typeof and> | undefined, limit: number
 }
 
 /** Adds the quoted message (if it's still visible) and the reactions to chat rows */
-async function withExtras(rows: { id: number; username: string; text: string | null; sticker: string | null; replyTo: number | null; createdAt: Date; admin: boolean | null; avatar: string | null; level: number | null }[], viewer: string): Promise<ChatOut[]> {
+async function withExtras(rows: { id: number; userId?: string; username: string; text: string | null; sticker: string | null; replyTo: number | null; createdAt: Date; admin: boolean | null; avatar: string | null; level: number | null }[], viewer: string): Promise<ChatOut[]> {
   const replyIds = [...new Set(rows.map((r) => r.replyTo).filter((x): x is number => !!x))];
   const quoted = new Map((replyIds.length ? await db.select().from(chatMessages).where(inArray(chatMessages.id, replyIds)) : []).map((r) => [r.id, r]));
   const reactions = await reactionsFor("chat", rows.map((r) => r.id), viewer);
-  return rows.map(({ replyTo, level, ...r }) => {
+  return rows.map(({ replyTo, level, userId, ...r }) => {
     const q = replyTo ? quoted.get(replyTo) : undefined;
     const reply: ReplyRef | null = replyTo ? (q && !q.deleted ? { id: q.id, username: q.username, text: quote(q.text), sticker: q.sticker } : { id: replyTo, username: null, text: null, sticker: null }) : null;
-    return { ...r, level: level ?? 1, reply, reactions: reactions.get(r.id) ?? [] };
+    return { ...r, level: level ?? 1, reply, reactions: reactions.get(r.id) ?? [], club: clubTagOf(userId) };
   });
 }
 
@@ -363,9 +366,10 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
     chatPace.record(u, msg.text);
     const [m] = await db.insert(chatMessages).values({ userId: u.id, username: u.username, text: msg.text, sticker: msg.sticker, replyTo }).returning();
     const [lvl] = await db.select({ level: userSocial.level }).from(userSocial).where(eq(userSocial.userId, u.id));
-    const [out] = await withExtras([{ id: m.id, username: m.username, text: m.text, sticker: m.sticker, replyTo, createdAt: m.createdAt, admin: u.isAdmin, avatar: u.profileImageUrl, level: lvl?.level ?? 1 }], u.id);
+    const [out] = await withExtras([{ id: m.id, userId: u.id, username: m.username, text: m.text, sticker: m.sticker, replyTo, createdAt: m.createdAt, admin: u.isAdmin, avatar: u.profileImageUrl, level: lvl?.level ?? 1 }], u.id);
     // Everyone with the app open sees it at once (screens skip ids they already have)
     pushAll({ t: "chat", m: out });
+    await questEvent(u.id, "chat", `chat:${m.id}`);
     res.json(out);
     // Bells for the replied-to player and anyone @mentioned (real players only, not across a block)
     void notifyChat(u, m.id, m.text, m.text ? findMentions(m.text, req.body?.mentions) : [], replyAuthor).catch((e) => console.error("[chat notify]", e));
@@ -384,6 +388,8 @@ export function registerCommunityRoutes(app: Express, requireUser: Mw, requireAd
     const on = await toggleReaction("chat", id, u.id, emoji);
     pushAll({ t: "react", scope: "chat", id, e: emoji, by: u.username, on });
     if (on && m.userId !== u.id && !(await blockedEither(u.id, m.userId))) await notifyReaction(m.userId, u.id, "chat", id, quote(m.text), emoji);
+    // Quests count reactions to other players' messages, once per message
+    if (on && m.userId !== u.id) await questEvent(u.id, "react", `chat:${id}`);
     res.json({ on, reactions: (await reactionsFor("chat", [id], u.id)).get(id) ?? [] });
   });
 

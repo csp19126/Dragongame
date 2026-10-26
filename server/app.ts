@@ -15,6 +15,8 @@ import { attachCardTableSockets, recoverTableEscrows } from "./cardtables";
 import { AVATAR_ROUTE } from "./social";
 import { attachSocialSockets } from "./hub";
 import { startSocial } from "./friends";
+import { startClubs } from "./clubs";
+import { startQuestTicker } from "./quests";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -80,6 +82,8 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   attachCardTableSockets(httpServer, sessionMiddleware);
   attachSocialSockets(httpServer, sessionMiddleware);
   await startSocial(httpServer);
+  await startClubs(httpServer);
+  startQuestTicker(httpServer);
   startTournamentScheduler(httpServer);
   startLeagueScheduler(httpServer);
   startLotoScheduler(httpServer);
