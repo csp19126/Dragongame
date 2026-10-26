@@ -506,9 +506,17 @@ function OnlineMatch({ code, kit, userId, onExit, onJoined, onGo }: { code: stri
   const t = s ? tally(s) : { goals: [0, 0] };
   const r = table.result;
   const iWon = r && seat !== null && r.winner === seat;
+  // Why it ended, told from the viewer's side (a spectator gets the loser's name)
+  const loserName = r ? names[(1 - r.winner) as Side] : "";
+  const who = seat === null ? loserName : iWon ? tr("đối thủ", "opponent", "對手") : tr("bạn", "you", "你");
   const reason: Record<string, string> = {
-    win: "", resign: tr("(đối thủ bỏ cuộc)", "(resigned)", "（認輸）"), left: tr("(rời trận)", "(left the match)", "（離開比賽）"), timeouts: tr("(hết giờ quá nhiều lần)", "(ran out of time too often)", "（多次超時）"),
+    win: "",
+    resign: tr(`(${who} bỏ cuộc)`, `(${who} resigned)`, `（${who}認輸）`),
+    left: tr(`(${who} rời trận)`, `(${who} left the match)`, `（${who}離開比賽）`),
+    timeouts: tr(`(${who} hết giờ quá nhiều lần)`, `(${who} ran out of time too often)`, `（${who}多次超時）`),
   };
+  const score = seat === null ? `${t.goals[0]} – ${t.goals[1]}` : `${t.goals[seat]} – ${t.goals[(1 - seat) as Side]}`;
+  const money = !r || !table.stake ? "" : seat === null ? `\n🏆 ${fmtCoins(r.payout)} 🪙` : iWon ? `\n+${fmtCoins(r.payout)} 🪙` : `\n−${fmtCoins(table.stake)} 🪙`;
 
   return (
     <div className="w-full max-w-md flex flex-col gap-1.5 relative" data-testid="football-online">
@@ -548,7 +556,7 @@ function OnlineMatch({ code, kit, userId, onExit, onJoined, onGo }: { code: stri
         <EndBanner
           won={seat === null || !!iWon}
           title={seat === null ? `${names[r.winner]} ${tr("thắng", "wins", "獲勝")}` : iWon ? tr("BẠN THẮNG!", "YOU WIN!", "你贏了！") : tr("BẠN THUA", "YOU LOSE", "你輸了")}
-          sub={`${t.goals[0]} – ${t.goals[1]} ${reason[r.reason] ?? ""}${r.payout ? `\n${iWon ? "+" : ""}${fmtCoins(r.payout)} 🪙` : ""}${seat !== null && r.ladder ? `\n👑 ${r.ladder.counted ? `${iWon ? "+" : "−"}${r.ladder.delta} Elo` : tr("Trận này không tính Elo", "This match doesn't count for Elo", "本場不計入 Elo")}` : ""}`}
+          sub={`${score} ${reason[r.reason] ?? ""}${money}${seat !== null && r.ladder ? `\n👑 ${r.ladder.counted ? `${iWon ? "+" : "−"}${r.ladder.delta} Elo` : tr("Trận này không tính Elo", "This match doesn't count for Elo", "本場不計入 Elo")}` : ""}`}
           actions={seat !== null ? [
             { label: table.rematch[seat] ? tr("Đang chờ…", "Waiting…", "等待中…") : tr("Đá lại", "Rematch", "再戰"), onClick: () => send({ t: "rematch" }), disabled: table.rematch[seat], testid: "button-football-rematch" },
             { label: tr("Sảnh", "Lobby", "大廳"), onClick: onExit },
