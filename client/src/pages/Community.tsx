@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Redirect, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, BookOpen, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Mail, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
+import { Activity, BookOpen, Camera, Shield, Check, Clock, Copy, Flag, Gift, Loader2, Lock, Mail, Megaphone, MessageCircle, Repeat, Send, Share2, Smile, Sparkles, Users, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { ShareDialog, type ShareWhat } from "@/components/ShareCard";
 import { useAuth, ME_KEY } from "@/hooks/use-auth";
@@ -26,6 +26,10 @@ import { useSocial, useSocialEvent, FRIENDS_KEY } from "@/hooks/use-social";
 import { LevelBadge, QuoteBlock, ReplyingBar, ReactionChips, MessageActions, applyReaction } from "@/components/SocialBits";
 import { FriendsTab } from "@/components/Friends";
 import { ActivityFeed } from "@/components/ActivityFeed";
+import { ClubsTab } from "@/components/Clubs";
+import { MomentsTab } from "@/components/Moments";
+import { ClubTagChip } from "@/components/Social3Bits";
+import type { ClubTag } from "@shared/social3";
 import type { ReactionCount, ReplyRef, FriendsView } from "@shared/friends";
 
 const fmt = fmtCoins;
@@ -33,7 +37,7 @@ const fmt = fmtCoins;
 const TXT = {
   vi: {
     title: "Cộng Đồng", subtitle: "Bạn bè · Trò chuyện · Sưu tầm",
-    tabChat: "Trò chuyện", tabDm: "Tin nhắn", tabFriends: "Bạn bè", tabActivity: "Hoạt động", tabAlbum: "Album", tabInvite: "Mời bạn",
+    tabChat: "Trò chuyện", tabDm: "Tin nhắn", tabFriends: "Bạn bè", tabMoments: "Khoảnh khắc", tabClubs: "Hội", tabActivity: "Hoạt động", tabAlbum: "Album", tabInvite: "Mời bạn",
     rules: "Lịch sự nhé. Không mua bán xu, không gửi link hay số điện thoại.",
     placeholder: "Nhắn gì đó…", send: "Gửi", stickers: "Sticker của bạn", noStickers: "Bạn chưa có sticker nào. Mở gói trong Album!",
     playFirst: (n: number) => `Chơi thêm ${n} ván để mở khóa trò chuyện`, mutedUntil: "Bạn bị tạm khóa chat đến",
@@ -52,7 +56,7 @@ const TXT = {
   },
   en: {
     title: "Community", subtitle: "Friends · Chat · Collect",
-    tabChat: "Chat", tabDm: "Messages", tabFriends: "Friends", tabActivity: "Activity", tabAlbum: "Album", tabInvite: "Invite",
+    tabChat: "Chat", tabDm: "Messages", tabFriends: "Friends", tabMoments: "Moments", tabClubs: "Clubs", tabActivity: "Activity", tabAlbum: "Album", tabInvite: "Invite",
     rules: "Be kind. No selling coins, no links, no phone numbers.",
     placeholder: "Say something…", send: "Send", stickers: "Your stickers", noStickers: "No stickers yet. Open a pack in the Album!",
     playFirst: (n: number) => `Play ${n} more game${n === 1 ? "" : "s"} to unlock chat`, mutedUntil: "You're muted until",
@@ -71,7 +75,7 @@ const TXT = {
   },
   zh: {
     title: "社群", subtitle: "好友 · 聊天 · 收集",
-    tabChat: "聊天", tabDm: "私訊", tabFriends: "好友", tabActivity: "動態", tabAlbum: "圖鑑", tabInvite: "邀請好友",
+    tabChat: "聊天", tabDm: "私訊", tabFriends: "好友", tabMoments: "動態牆", tabClubs: "公會", tabActivity: "動態", tabAlbum: "圖鑑", tabInvite: "邀請好友",
     rules: "請保持禮貌。禁止買賣金幣，禁止發送連結或電話號碼。",
     placeholder: "說點什麼…", send: "發送", stickers: "你的貼圖", noStickers: "你還沒有貼圖。到圖鑑開卡包吧！",
     playFirst: (n: number) => `再玩 ${n} 局即可解鎖聊天`, mutedUntil: "你已被暫時禁言，直到",
@@ -106,7 +110,9 @@ export default function Community() {
   const [, setLocation] = useLocation();
   const params = new URLSearchParams(search);
   const dm = params.get("dm")?.trim() || null;
-  const tab = (params.get("tab") as "chat" | "dm" | "friends" | "activity" | "album" | "invite" | null) ?? (dm ? "dm" : "chat");
+  const tab = (params.get("tab") as "chat" | "dm" | "friends" | "moments" | "clubs" | "activity" | "album" | "invite" | null) ?? (dm ? "dm" : "chat");
+  const clubId = Number(params.get("club")) || null;
+  const momentId = Number(params.get("moment")) || null;
   const focus = Number(params.get("msg")) || null;
   const unread = useDmUnread();
   const friends = useQuery<FriendsView>({ queryKey: FRIENDS_KEY, enabled: !!user, refetchInterval: 60_000 });
@@ -119,6 +125,8 @@ export default function Community() {
     { id: "chat", icon: <MessageCircle className="w-4 h-4" />, label: L.tabChat, badge: 0 },
     { id: "dm", icon: <Mail className="w-4 h-4" />, label: L.tabDm, badge: unread },
     { id: "friends", icon: <Users className="w-4 h-4" />, label: L.tabFriends, badge: incoming },
+    { id: "moments", icon: <Camera className="w-4 h-4" />, label: L.tabMoments, badge: 0 },
+    { id: "clubs", icon: <Shield className="w-4 h-4" />, label: L.tabClubs, badge: 0 },
     { id: "activity", icon: <Activity className="w-4 h-4" />, label: L.tabActivity, badge: 0 },
     { id: "album", icon: <BookOpen className="w-4 h-4" />, label: L.tabAlbum, badge: 0 },
     { id: "invite", icon: <Gift className="w-4 h-4" />, label: L.tabInvite, badge: 0 },
@@ -132,7 +140,7 @@ export default function Community() {
           <h1 className="font-display text-3xl sm:text-4xl leading-none bg-gradient-to-b from-yellow-200 via-yellow-400 to-orange-500 bg-clip-text text-transparent" data-testid="text-community-title">{L.title}</h1>
           <p className="text-[11px] font-black tracking-[0.25em] text-yellow-500/80 uppercase mt-1">{L.subtitle}</p>
         </div>
-        <div className="w-full grid grid-cols-6 gap-0.5 p-1 rounded-2xl bg-black/40 border border-white/10">
+        <div className={`w-full grid grid-cols-4 gap-0.5 p-1 rounded-2xl bg-black/40 border border-white/10 ${tab === "dm" && dm ? "hidden" : ""}`}>
           {tabs.map((t) => (
             <button key={t.id} type="button" onClick={() => setLocation(`/community?tab=${t.id}`)}
               className={`relative py-1.5 rounded-xl text-[10px] leading-tight font-black flex flex-col items-center justify-center gap-0.5 transition ${tab === t.id ? "bg-gradient-to-b from-yellow-300 to-orange-500 text-black shadow" : "text-white/70"}`}
@@ -145,6 +153,8 @@ export default function Community() {
         {tab === "chat" && <ChatTab L={L} me={user.username} focus={focus} />}
         {tab === "dm" && <DmTab dm={dm} errs={L.err} />}
         {tab === "friends" && <FriendsTab />}
+        {tab === "moments" && <MomentsTab focus={momentId} />}
+        {tab === "clubs" && <ClubsTab clubId={clubId} />}
         {tab === "activity" && <ActivityFeed />}
         {tab === "album" && <AlbumTab L={L} lang={lang} />}
         {tab === "invite" && <InviteTab L={L} />}
@@ -366,7 +376,7 @@ function GiftDialog({ s, count, left, L, lang, onClose }: { s: Sticker; count: n
 
 interface Msg {
   id: number; username: string; text: string | null; sticker: string | null; createdAt: string; admin: boolean | null; avatar?: string | null;
-  level?: number; reply?: ReplyRef | null; reactions?: ReactionCount[];
+  level?: number; reply?: ReplyRef | null; reactions?: ReactionCount[]; club?: ClubTag | null;
 }
 interface ChatResp { messages: Msg[]; removed: number[]; me: { mutedUntil: string | null; gamesToUnlock: number } }
 
@@ -519,7 +529,7 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
         </div>
       )}
       <div ref={listRef} onClick={(e) => { if (e.target === e.currentTarget) setActive(null); }}
-        className={`${tray ? "h-[calc(100dvh-490px)] min-h-[180px]" : replyTo ? "h-[calc(100dvh-425px)] min-h-[240px]" : "h-[calc(100dvh-365px)] min-h-[280px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`} data-testid="chat-list">
+        className={`${tray ? "h-[calc(100dvh-538px)] min-h-[180px]" : replyTo ? "h-[calc(100dvh-473px)] min-h-[240px]" : "h-[calc(100dvh-413px)] min-h-[280px]"} overflow-y-auto overscroll-contain rounded-2xl bg-black/40 border border-white/10 p-2.5 flex flex-col gap-2`} data-testid="chat-list">
         {msgs.length === 0 && <p className="m-auto text-sm text-white/50">{L.empty}</p>}
         {msgs.map((m) => {
           const mine = m.username === me;
@@ -531,6 +541,7 @@ function ChatTab({ L, me, focus }: { L: L; me: string; focus: number | null }) {
               <div className={`flex flex-col min-w-0 ${mine ? "items-end" : "items-start"}`}>
                 <button type="button" disabled={m.admin === null} onClick={() => showPlayer(m.username)} className="text-[10px] font-black px-1 text-left flex items-center gap-1 flex-wrap" style={{ color: `hsl(${hue(m.username)} 80% 70%)` }}>
                   <span>{m.admin && "🛡️ "}{m.username}</span>
+                  <ClubTagChip club={m.club} />
                   <LevelBadge level={m.level} />
                   <span className="text-white/30 font-normal">{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </button>
