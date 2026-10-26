@@ -72,7 +72,7 @@ export function levelProgress(xp: number) {
 
 // ---------------- Profiles ----------------
 
-export const BIO_MAX = 80;
+export const BIO_MAX = 300;
 export const SHOWCASE_MAX = 3;
 
 export type DmFrom = "everyone" | "friends";

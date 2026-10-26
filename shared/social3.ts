@@ -2,7 +2,6 @@
  * Social 3, the pure part shared by the server, the browser and the tests: game invites and
  * challenges, clubs, daily quests and Moments. No database code here.
  */
-import { checkChat } from "./chat";
 
 type Text = { vi: string; en: string; zh: string };
 
@@ -63,14 +62,12 @@ export const ROLE_RANK: Record<ClubRole, number> = { owner: 3, officer: 2, membe
 
 export interface ClubTag { id: number; tag: string; emblem: string; color: string }
 
-/** A club name: 3–20 letters, digits, spaces and - _ ' . ; no links, numbers or swearing */
+/** A club name: 3–20 letters, digits, spaces and - _ ' . (no content filter: owner policy) */
 export function checkClubName(raw: unknown): { ok: true; name: string } | { ok: false; reason: string } {
   if (typeof raw !== "string") return { ok: false, reason: "Club name must be 3–20 characters" };
   const name = raw.replace(/\s+/g, " ").trim();
   if (Array.from(name).length < CLUB_NAME_MIN || Array.from(name).length > CLUB_NAME_MAX) return { ok: false, reason: "Club name must be 3–20 characters" };
   if (!/^[\p{L}\p{M}\p{N} _'.-]+$/u.test(name)) return { ok: false, reason: "Club name can only use letters, numbers and spaces" };
-  const c = checkChat(name, CLUB_NAME_MAX);
-  if (!c.ok || c.text !== name) return { ok: false, reason: "That club name isn't allowed" };
   return { ok: true, name };
 }
 
@@ -80,8 +77,6 @@ export function checkClubTag(raw: unknown): { ok: true; tag: string } | { ok: fa
   const tag = raw.trim().toLocaleUpperCase();
   const n = Array.from(tag).length;
   if (n < CLUB_TAG_MIN || n > CLUB_TAG_MAX || !/^[\p{L}\p{M}\p{N}]+$/u.test(tag)) return { ok: false, reason: "Club tag must be 2–5 letters or numbers" };
-  const c = checkChat(tag, CLUB_TAG_MAX);
-  if (!c.ok || c.text !== tag) return { ok: false, reason: "That club tag isn't allowed" };
   return { ok: true, tag };
 }
 

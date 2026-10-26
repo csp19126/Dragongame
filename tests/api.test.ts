@@ -663,7 +663,7 @@ describe.skipIf(!TEST_DB)("API", () => {
   describe("community", () => {
     const games = (username: string, n: number) => pool.query("update users set games_played = $1 where username = $2", [n, username]);
 
-    it("chat: needs a few games, filters money talk and links, masks swearing, rate limits, reports hide", async () => {
+    it("chat: needs a few games, no content filter (owner policy), rate limits, reports hide", async () => {
       const a = new Player(), b = new Player(), c = new Player(), d = new Player();
       for (const p of [a, b, c, d]) await p.register();
       expect((await a.req("POST", "/api/chat", { text: "xin chào" })).body.message).toBe("play_first");
@@ -671,12 +671,11 @@ describe.skipIf(!TEST_DB)("API", () => {
       const hi = await a.req("POST", "/api/chat", { text: "  xin   chào các bạn  " });
       expect(hi.status).toBe(200);
       expect(hi.body.text).toBe("xin chào các bạn");
-      expect((await b.req("POST", "/api/chat", { text: "bán xu giá rẻ, ib zalo" })).body.message).toBe("trade");
-      expect((await b.req("POST", "/api/chat", { text: "vào vnslot888.online" })).body.message).toBe("link");
-      expect((await b.req("POST", "/api/chat", { text: "gọi 0912 345 678" })).body.message).toBe("phone");
       expect((await b.req("POST", "/api/chat", { text: "x".repeat(201) })).body.message).toBe("long");
-      const sw = await b.req("POST", "/api/chat", { text: "đm thua rồi" });
-      expect(sw.body.text).toBe("** thua rồi");
+      // Nothing is filtered or masked: words, links and numbers go through as typed
+      const sw = await b.req("POST", "/api/chat", { text: "đm thua rồi, xem vnslot888.online 0912 345 678" });
+      expect(sw.status).toBe(200);
+      expect(sw.body.text).toBe("đm thua rồi, xem vnslot888.online 0912 345 678");
       expect((await b.req("POST", "/api/chat", { text: "again" })).status).toBe(429); // 3 s between messages
       expect((await d.req("POST", "/api/chat", { sticker: "legend_rong" })).body.message).toBe("not_owned");
 
@@ -904,13 +903,12 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(m1.body).toMatchObject({ mine: true, text: "chào bạn", read: false });
       expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "again" })).status).toBe(429);
       await sleep(1600);
-      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "zalo 0912345678" })).body.message).toBe("phone");
-      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "bán xu giá rẻ" })).body.message).toBe("trade");
       expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "x".repeat(501) })).body.message).toBe("long");
       expect((await a.req("POST", "/api/dm/send", { to: b.username, sticker: "legend_rong" })).body.message).toBe("not_owned");
       const m2 = await a.req("POST", "/api/dm/send", { to: b.username, text: "y".repeat(500) });
       expect(m2.status).toBe(200);
-      await c.req("POST", "/api/dm/send", { to: b.username, text: "hello from c" });
+      const raw = await c.req("POST", "/api/dm/send", { to: b.username, text: "zalo 0912345678, fuck" });
+      expect(raw.body.text).toBe("zalo 0912345678, fuck"); // no content filter
 
       expect((await b.req("GET", "/api/dm/unread")).body.total).toBe(3);
       const convs = (await b.req("GET", "/api/dm/conversations")).body.conversations;
@@ -1283,9 +1281,8 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(feed.some((i: any) => i.kind === "joined" && i.user.username === a.username)).toBe(true);
       expect((await b.req("GET", "/api/chat")).body.messages).toBeDefined();
 
-      // Bio is filtered like chat, 80 characters at most
-      expect((await a.req("PUT", "/api/social/profile", { bio: "zalo 0912345678" })).body.message).toBe("phone");
-      expect((await a.req("PUT", "/api/social/profile", { bio: "x".repeat(81) })).body.message).toBe("long");
+      // About me: not filtered, 300 characters at most
+      expect((await a.req("PUT", "/api/social/profile", { bio: "x".repeat(301) })).body.message).toBe("long");
       expect((await a.req("PUT", "/api/social/profile", { favGame: "poker" })).status).toBe(400);
       expect((await a.req("PUT", "/api/social/profile", { showcase: ["no_hu"] })).body.message).toBe("You haven't earned that badge");
       await pool.query("insert into achievements (user_id, badge_id, badge_name, description, icon) values ($1, 'first_win', 'First Win', 'x', 'star')", [aid]);
@@ -1464,7 +1461,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       const make = (p: Player, body: any) => p.req("POST", "/api/clubs", { emblem: "🐉", color: "#f59e0b", tag: "RONG", open: true, ...body });
       const n = `Rồng ${Date.now() % 100000}`;
       expect((await make(owner, { name: "ab" })).status).toBe(400);
-      expect((await make(owner, { name: "www.x.com club" })).status).toBe(400);
+      expect((await make(owner, { name: "<b>club</b>" })).status).toBe(400);
       expect((await make(owner, { name: n, emblem: "💩" })).status).toBe(400);
       expect((await make(owner, { name: n, color: "red" })).status).toBe(400);
       const ok = await make(owner, { name: n, description: "Chào mừng!" });
@@ -1547,8 +1544,8 @@ describe.skipIf(!TEST_DB)("API", () => {
       const say = (p: Player, body: any) => p.req("POST", `/api/clubs/${id}/chat`, body);
       expect((await say(out, { text: "chào" })).status).toBe(403);
       expect((await out.req("GET", `/api/clubs/${id}/chat`)).status).toBe(403);
-      expect((await say(owner, { text: "vào www.scam.com" })).body.message).toBe("link");
-      expect((await say(owner, { text: "gọi 0912345678" })).body.message).toBe("phone");
+      expect((await say(owner, { text: "x".repeat(201) })).body.message).toBe("long");
+      expect((await say(owner, { text: "" })).body.message).toBe("empty");
       const m = await say(owner, { text: "Chào cả hội!" });
       expect(m.status).toBe(200);
       expect((await say(owner, { text: "nữa nè" })).body.message).toBe("slow_down");
