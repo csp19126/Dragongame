@@ -2,7 +2,7 @@
  * Daily quests: three per player per Vietnam day, at least one of them social. Progress is
  * counted from what really happened: game quests straight from game_plays, social ones from
  * quest_events (written by small questEvent() calls; each event has a ref so it counts once).
- * Rewards, the chest for finishing all three and the 7-day streak bonus are made by the game
+ * Quiet by design: no notifications, just the Lobby card. Rewards, the chest for finishing all three and the 7-day streak bonus are made by the game
  * and logged as bonuses (method "daily_quest").
  */
 import type { Express, Request, Response, NextFunction } from "express";
@@ -11,12 +11,12 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "./db";
 import { users, deposits, dailyQuests, questEvents, questChests } from "@shared/schema";
 import {
-  QUESTS, QUEST_BY_ID, QUEST_CHEST, QUEST_STREAK_DAYS, QUEST_STREAK_BONUS, PLAY_QUEST_KINDS,
+  QUESTS, QUEST_BY_ID, QUEST_CHEST, QUEST_STREAK_DAYS, QUEST_STREAK_BONUS,
   drawQuests, streakOf, type QuestKind, type EventQuestKind,
 } from "@shared/social3";
 import { PLAY_GAME_TO_PLAYABLE } from "@shared/friends";
 import { vnDay } from "@shared/league";
-import { notify, areFriends } from "./friends";
+import { areFriends } from "./friends";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -56,23 +56,8 @@ export async function progressOf(userId: string, day: string, q: Db = db): Promi
   return {
     spins: Number(p?.spins ?? 0), plays: Number(p?.plays ?? 0), wins: Number(p?.wins ?? 0), horse_win: Number(p?.horse_win ?? 0), games: games.size,
     friend_match: ev.get("friend_match") ?? 0, chat: ev.get("chat") ?? 0, react: ev.get("react") ?? 0, gift: ev.get("gift") ?? 0,
-    moment: ev.get("moment") ?? 0, like: ev.get("like") ?? 0,
+    talk: ev.get("talk") ?? 0,
   };
-}
-
-/** Rings the bell for quests that just got done (once each: the notified flag is set conditionally) */
-async function announceDone(userId: string, day: string, kinds?: QuestKind[]) {
-  const rows = await db.select().from(dailyQuests).where(and(eq(dailyQuests.userId, userId), eq(dailyQuests.day, day), eq(dailyQuests.notified, false), isNull(dailyQuests.claimedAt)));
-  const todo = rows.filter((r) => { const d = QUEST_BY_ID.get(r.questId); return d && (!kinds || kinds.includes(d.kind)); });
-  if (!todo.length) return;
-  const prog = await progressOf(userId, day);
-  for (const r of todo) {
-    const d = QUEST_BY_ID.get(r.questId)!;
-    if (prog[d.kind] < d.target) continue;
-    const [won] = await db.update(dailyQuests).set({ notified: true })
-      .where(and(eq(dailyQuests.userId, userId), eq(dailyQuests.day, day), eq(dailyQuests.slot, r.slot), eq(dailyQuests.notified, false))).returning();
-    if (won) await notify(userId, "quest", null, { questId: d.id, reward: d.reward, slot: r.slot }, `quest:${day}:${r.slot}`);
-  }
 }
 
 /**
@@ -82,8 +67,7 @@ async function announceDone(userId: string, day: string, kinds?: QuestKind[]) {
 export async function questEvent(userId: string, kind: EventQuestKind, ref: string): Promise<void> {
   try {
     const day = vnDay(new Date());
-    const [added] = await db.insert(questEvents).values({ userId, day, kind, ref: ref.slice(0, 120) }).onConflictDoNothing().returning();
-    if (added) await announceDone(userId, day, [kind]);
+    await db.insert(questEvents).values({ userId, day, kind, ref: ref.slice(0, 120) }).onConflictDoNothing();
   } catch (e) {
     console.error("[quest event]", e);
   }
@@ -99,28 +83,6 @@ export async function questFriendMatch(players: string[], ref: string): Promise<
       await questEvent(ids[j], "friend_match", `${ref}:${ids[i]}`);
     } catch (e) { console.error("[quest match]", e); }
   }
-}
-
-// ---- Game quests: noticed from game_plays every few seconds ----
-
-let scannedUpTo = -1;
-/** Players with new plays since the last look: tell them about game quests they just finished */
-export async function questTick() {
-  if (scannedUpTo < 0) {
-    const [m] = (await db.execute(sql`select coalesce(max(id), 0)::int as m from game_plays`)).rows as { m: number }[];
-    scannedUpTo = Math.max(0, Number(m?.m ?? 0) - 2000);
-  }
-  const rows = (await db.execute(sql`select user_id, max(id)::int as m from game_plays where id > ${scannedUpTo} group by user_id limit 2000`)).rows as { user_id: string; m: number }[];
-  if (!rows.length) return;
-  scannedUpTo = Math.max(scannedUpTo, ...rows.map((r) => Number(r.m)));
-  const day = vnDay(new Date());
-  for (const r of rows) await announceDone(r.user_id, day, PLAY_QUEST_KINDS).catch((e) => console.error("[quest tick]", e));
-}
-
-export function startQuestTicker(httpServer: { on: (e: "close", f: () => void) => unknown }) {
-  const timer = setInterval(() => { questTick().catch((e) => console.error("[quest tick]", e)); }, 6000);
-  timer.unref?.();
-  httpServer.on("close", () => clearInterval(timer));
 }
 
 // ---- View, claim, chest ----

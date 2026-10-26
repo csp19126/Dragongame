@@ -21,6 +21,7 @@ import {
 import { checkChat } from "@shared/chat";
 import { vnDay } from "@shared/league";
 import { SOCIAL_MIN_GAMES } from "@shared/social";
+import { COUNTRY_BY_CODE, PROFILE_LANGUAGES, PLAY_STYLES, type PlayerFacts } from "@shared/social3";
 import { speakerRefusal, paceLimiter } from "./speech";
 import { push, pushAll, isConnected, playingNow, connectedUsers, setHubHandlers, disconnect, type HubClient } from "./hub";
 import { isOnline, unreadTotal } from "./social";
@@ -96,7 +97,23 @@ export async function socialOf(userId: string, q: Db = db): Promise<SocialRow | 
 }
 export function privacyFrom(r: SocialRow | null): PrivacySettings {
   if (!r) return { ...DEFAULT_PRIVACY };
-  return { dmFrom: r.dmFrom === "friends" ? "friends" : "everyone", requestsFrom: r.requestsFrom === "nobody" ? "nobody" : "everyone", showPresence: r.showPresence, showInFeed: r.showInFeed };
+  return { dmFrom: r.dmFrom === "friends" ? "friends" : "everyone", requestsFrom: r.requestsFrom === "nobody" ? "nobody" : "everyone", showPresence: r.showPresence, showInFeed: r.showInFeed, hideCountry: r.hideCountry, showPhotos: r.showPhotos };
+}
+
+/** The "find people to play with" facts of a profile (country left out if they hide it) */
+export function factsOf(r: SocialRow | null | undefined): PlayerFacts {
+  return {
+    country: r && !r.hideCountry && r.country && COUNTRY_BY_CODE.has(r.country) ? r.country : null,
+    languages: (r?.languages ?? []).filter((l) => (PROFILE_LANGUAGES as readonly string[]).includes(l)),
+    playStyle: r?.playStyle && (PLAY_STYLES as readonly string[]).includes(r.playStyle) ? r.playStyle : null,
+    favGames: (r?.favGames ?? []).filter((g) => PLAYABLE_BY_ID.has(g)),
+  };
+}
+/** Facts for many players at once (lists) */
+export async function factsFor(ids: string[]): Promise<Map<string, PlayerFacts>> {
+  const rows = ids.length ? await db.select().from(userSocial).where(inArray(userSocial.userId, ids)) : [];
+  const by = new Map(rows.map((r) => [r.userId, r]));
+  return new Map(ids.map((id) => [id, factsOf(by.get(id))]));
 }
 async function ensureSocial(userId: string, q: Db = db) {
   await q.insert(userSocial).values({ userId }).onConflictDoNothing();
@@ -144,6 +161,7 @@ export async function socialProfile(u: User, viewer: User) {
     friendsOnlyDm: p.dmFrom === "friends",
     playing: showPlaying ? playingNow(u.id) : null,
     club: clubProfileOf(u.id),
+    ...factsOf(row),
   };
 }
 
@@ -470,11 +488,12 @@ async function friendsView(me: User): Promise<FriendsView> {
     where (f.user_a = ${me.id} or f.user_b = ${me.id}) and not u.banned
     order by u.username`)).rows as Record<string, any>[];
   const now = Date.now();
+  const facts = await factsFor(rows.map((r) => r.id as string));
   const friends: FriendView[] = rows.map((r) => {
     const online = visibleOnline(r.id, r.last_seen_at);
     const shown = online && !hiddenPresence.has(r.id);
     return {
-      username: r.username, avatarUrl: r.profile_image_url ?? null, level: Number(r.level), online, club: clubTagOf(r.id),
+      username: r.username, avatarUrl: r.profile_image_url ?? null, level: Number(r.level), online, club: clubTagOf(r.id), facts: facts.get(r.id),
       playing: shown ? playingNow(r.id) : null, join: shown ? joinOf(r.id) : null,
       since: new Date(r.since).toISOString(),
       gift: giftBlock({ friends: true, friendsSince: new Date(r.since).getTime(), myGames: me.gamesPlayed, theirGames: r.games_played, sentToday: r.sent, now }),
@@ -549,11 +568,17 @@ const privacySchema = z.object({
   requestsFrom: z.enum(["everyone", "nobody"]).optional(),
   showPresence: z.boolean().optional(),
   showInFeed: z.boolean().optional(),
+  hideCountry: z.boolean().optional(),
+  showPhotos: z.boolean().optional(),
 });
 const profileSchema = z.object({
   bio: z.string().max(400).nullable().optional(),
   favGame: z.string().max(20).nullable().optional(),
   showcase: z.array(z.string().max(40)).max(SHOWCASE_MAX).optional(),
+  country: z.string().max(8).nullable().optional(),
+  favGames: z.array(z.string().max(20)).max(12).optional(),
+  languages: z.array(z.string().max(8)).max(4).optional(),
+  playStyle: z.enum(PLAY_STYLES).nullable().optional(),
 });
 
 function escapeLike(s: string) { return s.replace(/[\\%_]/g, (c) => `\\${c}`); }
@@ -741,6 +766,7 @@ export function registerFriendRoutes(app: Express, requireUser: Mw, requireAdmin
     const row = await socialOf(u.id);
     res.json({
       bio: row?.bio ?? null, favGame: row?.favGame ?? null, showcase: row?.showcase ?? [],
+      country: row?.country ?? null, favGames: row?.favGames ?? [], languages: row?.languages ?? [], playStyle: row?.playStyle ?? null,
       privacy: privacyFrom(row), badges: await earnedBadges(u.id), level: levelProgress(await xpFor(u.id)),
     });
   });
@@ -770,6 +796,19 @@ export function registerFriendRoutes(app: Express, requireUser: Mw, requireAdmin
       if (parsed.data.favGame !== null && !PLAYABLE_BY_ID.has(parsed.data.favGame)) return res.status(400).json({ message: "Bad request" });
       set.favGame = parsed.data.favGame;
     }
+    if (parsed.data.country !== undefined) {
+      if (parsed.data.country !== null && !COUNTRY_BY_CODE.has(parsed.data.country)) return res.status(400).json({ message: "Bad request" });
+      set.country = parsed.data.country;
+    }
+    if (parsed.data.favGames !== undefined) {
+      if (parsed.data.favGames.some((g) => !PLAYABLE_BY_ID.has(g))) return res.status(400).json({ message: "Bad request" });
+      set.favGames = [...new Set(parsed.data.favGames)];
+    }
+    if (parsed.data.languages !== undefined) {
+      if (parsed.data.languages.some((l) => !(PROFILE_LANGUAGES as readonly string[]).includes(l))) return res.status(400).json({ message: "Bad request" });
+      set.languages = [...new Set(parsed.data.languages)];
+    }
+    if (parsed.data.playStyle !== undefined) set.playStyle = parsed.data.playStyle;
     if (parsed.data.showcase !== undefined) {
       const earned = new Set(await earnedBadges(u.id));
       const pick = [...new Set(parsed.data.showcase)];
@@ -778,7 +817,7 @@ export function registerFriendRoutes(app: Express, requireUser: Mw, requireAdmin
     }
     await ensureSocial(u.id);
     const [row] = await db.update(userSocial).set({ ...set, updatedAt: new Date() }).where(eq(userSocial.userId, u.id)).returning();
-    res.json({ bio: row.bio, favGame: row.favGame, showcase: row.showcase });
+    res.json({ bio: row.bio, favGame: row.favGame, showcase: row.showcase, country: row.country, favGames: row.favGames, languages: row.languages, playStyle: row.playStyle });
   });
 
   app.put("/api/social/privacy", requireUser, async (req, res) => {

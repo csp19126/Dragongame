@@ -13,10 +13,10 @@ import { startHorseScheduler } from "./horse";
 import { startBancaLogger } from "./banca";
 import { attachCardTableSockets, recoverTableEscrows } from "./cardtables";
 import { AVATAR_ROUTE } from "./social";
+import { PHOTO_UPLOAD_ROUTE } from "./photos";
 import { attachSocialSockets } from "./hub";
 import { startSocial } from "./friends";
 import { startClubs } from "./clubs";
-import { startQuestTicker } from "./quests";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -49,7 +49,7 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
 
   // Small JSON bodies everywhere, except the profile photo upload, which parses its own (bigger) body
   const json = express.json({ limit: "100kb" });
-  app.use((req, res, next) => (req.path === AVATAR_ROUTE ? next() : json(req, res, next)));
+  app.use((req, res, next) => (req.path === AVATAR_ROUTE || req.path === PHOTO_UPLOAD_ROUTE ? next() : json(req, res, next)));
 
   // Health check for the host (Railway, Docker). Also confirms the database answers.
   app.get("/api/health", async (_req, res) => {
@@ -83,7 +83,6 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   attachSocialSockets(httpServer, sessionMiddleware);
   await startSocial(httpServer);
   await startClubs(httpServer);
-  startQuestTicker(httpServer);
   startTournamentScheduler(httpServer);
   startLeagueScheduler(httpServer);
   startLotoScheduler(httpServer);

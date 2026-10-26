@@ -18,7 +18,10 @@ import { registerCardTableRoutes } from "./cardtables";
 import { registerSocialRoutes, markActive } from "./social";
 import { registerFriendRoutes, onJoined, forgetUser } from "./friends";
 import { registerClubRoutes, clubTagOf } from "./clubs";
-import { registerMomentRoutes } from "./moments";
+import { registerTalkRoutes } from "./talk";
+import { registerMatchRoutes } from "./matches";
+import { registerPhotoRoutes } from "./photos";
+import { registerReportRoutes } from "./reports3";
 import { registerQuestRoutes } from "./quests";
 import { registerInviteRoutes } from "./invites";
 import { play777, spin777Schema } from "./slot777";
@@ -278,7 +281,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerSocialRoutes(app, requireUser, requireAdmin);
   registerFriendRoutes(app, requireUser, requireAdmin);
   registerClubRoutes(app, requireUser, requireAdmin);
-  registerMomentRoutes(app, requireUser, requireAdmin);
+  registerTalkRoutes(app, requireUser);
+  registerMatchRoutes(app, requireUser);
+  registerPhotoRoutes(app, requireUser);
+  registerReportRoutes(app, requireUser, requireAdmin);
   registerQuestRoutes(app, requireUser);
   registerInviteRoutes(app, requireUser);
 

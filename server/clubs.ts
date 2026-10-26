@@ -8,7 +8,7 @@ import { z } from "zod";
 import { and, asc, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
-  users, deposits, clubs, clubMembers, clubRequests, clubMessages, clubChatReports, clubWeeks, clubRewardPayouts, userSocial, feedItems, type User,
+  users, deposits, clubs, clubMembers, ugcReports, clubRequests, clubMessages, clubChatReports, clubWeeks, clubRewardPayouts, userSocial, feedItems, type User,
 } from "@shared/schema";
 import {
   CLUB_FEE, CLUB_MAX_MEMBERS, CLUB_DESC_MAX, CLUB_EMBLEMS, CLUB_COLORS, CLUB_WEEKLY_REWARDS, CLUB_MAX_REQUESTS,
@@ -224,7 +224,7 @@ async function chatOut(rows: ClubMsgRow[]) {
     .from(users).leftJoin(userSocial, eq(userSocial.userId, users.id)).where(inArray(users.id, ids)) : [];
   const by = new Map(people.map((p) => [p.id, p]));
   return rows.map((m) => ({
-    id: m.id, username: m.username, text: m.text, sticker: m.sticker, createdAt: m.createdAt.toISOString(),
+    id: m.id, username: m.username, text: m.text, sticker: m.sticker, photo: m.photoId ?? null, createdAt: m.createdAt.toISOString(),
     avatar: by.get(m.userId)?.avatar ?? null, level: by.get(m.userId)?.level ?? 1, admin: !!by.get(m.userId)?.admin, role: byUser.get(m.userId)?.role ?? null,
   }));
 }
@@ -256,6 +256,7 @@ export async function disbandClub(clubId: number, reason: "owner" | "admin" | "e
     await tx.delete(clubMessages).where(eq(clubMessages.clubId, clubId));
     await tx.delete(clubRequests).where(eq(clubRequests.clubId, clubId));
     await tx.delete(clubMembers).where(eq(clubMembers.clubId, clubId));
+    await tx.delete(ugcReports).where(and(eq(ugcReports.kind, "club"), eq(ugcReports.targetId, clubId)));
     await tx.delete(clubs).where(eq(clubs.id, clubId));
   });
   await syncClub(clubId);
@@ -553,12 +554,12 @@ export function registerClubRoutes(app: Express, requireUser: Mw, requireAdmin: 
     if (no) return res.status(no.status).json({ message: no.message, until: no.until });
     const early = clubChatPace.check(u, null);
     if (early) return res.status(early.status).json({ message: early.message });
-    const msg = await readMessage(u, req.body);
+    const msg = await readMessage(u, req.body, undefined, { scope: "club", ref: String(id) });
     if ("status" in msg) return res.status(msg.status).json({ message: msg.message });
     const again = msg.text ? clubChatPace.check(u, msg.text) : null;
     if (again) return res.status(again.status).json({ message: again.message });
     clubChatPace.record(u, msg.text);
-    const [m] = await db.insert(clubMessages).values({ clubId: id, userId: u.id, username: u.username, text: msg.text, sticker: msg.sticker }).returning();
+    const [m] = await db.insert(clubMessages).values({ clubId: id, userId: u.id, username: u.username, text: msg.text, sticker: msg.sticker, photoId: msg.photoId }).returning();
     const [out] = await chatOut([m]);
     pushClub(id, { t: "club_chat", clubId: id, m: out });
     await questEvent(u.id, "chat", `club:${m.id}`);
@@ -680,6 +681,7 @@ export async function deleteClubData(tx: Tx, userId: string) {
       await tx.delete(clubChatReports).where(inArray(clubChatReports.messageId, msgs));
       await tx.delete(clubMessages).where(eq(clubMessages.clubId, mine.clubId));
       await tx.delete(clubRequests).where(eq(clubRequests.clubId, mine.clubId));
+      await tx.delete(ugcReports).where(and(eq(ugcReports.kind, "club"), eq(ugcReports.targetId, mine.clubId)));
       await tx.delete(clubs).where(eq(clubs.id, mine.clubId));
     }
   }

@@ -16,7 +16,7 @@ import {
 } from "@shared/social3";
 import { speakerRefusal } from "./speech";
 import { push, connectedUsers, playingNow } from "./hub";
-import { findPlayer, blockedEither, areFriends, privacyFrom, socialOf, notify, pushUnread, presenceHidden, friendIdsOf, relationOf, joinOf } from "./friends";
+import { findPlayer, blockedEither, areFriends, privacyFrom, socialOf, notify, pushUnread, presenceHidden, friendIdsOf, relationOf, joinOf, factsFor } from "./friends";
 import { clubTagOf } from "./clubs";
 import { toDm } from "./social";
 
@@ -90,9 +90,10 @@ export function registerInviteRoutes(app: Express, requireUser: Mw) {
     const blocked = new Set((await db.execute(sql`select blocked_id as id from ${userBlocks} where blocker_id = ${me.id} union select blocker_id from ${userBlocks} where blocked_id = ${me.id}`)).rows.map((r: any) => r.id as string));
     const rows = await db.select({ id: users.id, username: users.username, avatar: users.profileImageUrl, banned: users.banned, level: userSocial.level })
       .from(users).leftJoin(userSocial, sql`${userSocial.userId} = ${users.id}`).where(inArray(users.id, ids.slice(0, 500)));
+    const facts = await factsFor(rows.map((r) => r.id));
     const list = rows.filter((r) => !r.banned && !blocked.has(r.id)).map((r) => ({
       username: r.username, avatarUrl: r.avatar ?? null, level: r.level ?? 1, playing: playingNow(r.id), join: joinOf(r.id),
-      club: clubTagOf(r.id), friend: friendSet.has(r.id),
+      club: clubTagOf(r.id), friend: friendSet.has(r.id), facts: facts.get(r.id),
     }));
     // Playing something first, then by name
     const sort = (a: typeof list[number], b: typeof list[number]) => Number(!!b.playing) - Number(!!a.playing) || a.username.localeCompare(b.username);

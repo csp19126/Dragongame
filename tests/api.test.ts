@@ -699,8 +699,12 @@ describe.skipIf(!TEST_DB)("API", () => {
       await games(bad.username, 5);
       const m = await bad.req("POST", "/api/chat", { text: "hello" });
       expect((await bad.req("GET", "/api/admin/community/chat")).status).toBe(403);
+      // No monitoring: unreported messages aren't in the admin's view; a reported one is
+      expect((await admin.req("GET", "/api/admin/community/chat")).body.messages.some((x: any) => x.id === m.body.id)).toBe(false);
+      const witness = new Player(); await witness.register(); await games(witness.username, 5);
+      await witness.req("POST", `/api/chat/${m.body.id}/report`);
       const view = await admin.req("GET", "/api/admin/community/chat");
-      expect(view.body.messages.find((x: any) => x.id === m.body.id)).toMatchObject({ username: bad.username, reports: 0, deleted: false });
+      expect(view.body.messages.find((x: any) => x.id === m.body.id)).toMatchObject({ username: bad.username, reports: 1, deleted: false });
 
       expect((await admin.req("POST", `/api/admin/community/users/${bUser.id}`, { minutes: 60 })).status).toBe(200);
       expect((await bad.req("POST", "/api/chat", { text: "still here" })).body.message).toBe("muted");

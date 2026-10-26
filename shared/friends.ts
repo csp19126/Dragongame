@@ -87,8 +87,12 @@ export interface PrivacySettings {
   showPresence: boolean;
   /** Show my wins, level-ups and friendships in the activity feed */
   showInFeed: boolean;
+  /** Social 3: keep my country off my profile */
+  hideCountry: boolean;
+  /** Social 3: show photos from non-friends without the blur (off by default) */
+  showPhotos: boolean;
 }
-export const DEFAULT_PRIVACY: PrivacySettings = { dmFrom: "everyone", requestsFrom: "everyone", showPresence: true, showInFeed: true };
+export const DEFAULT_PRIVACY: PrivacySettings = { dmFrom: "everyone", requestsFrom: "everyone", showPresence: true, showInFeed: true, hideCountry: false, showPhotos: false };
 
 // ---------------- What a player is playing ----------------
 
@@ -201,7 +205,7 @@ export interface FeedItem {
 
 export type NotifKind = "friend_request" | "friend_accepted" | "mention" | "reply" | "reaction" | "gift" | "big_win"
   // Social 3: a game invite/challenge, a finished daily quest, club news, likes and comments on a Moment
-  | "invite" | "quest" | "club" | "moment";
+  | "invite" | "club" | "talk" | "match";
 /** Kept per player, and for how long */
 export const NOTIF_KEEP = 200;
 export const NOTIF_DAYS = 30;
@@ -232,6 +236,8 @@ export interface FriendView {
   gift: GiftBlock | null;
   /** Their club's tag (Social 3) */
   club?: { id: number; tag: string; emblem: string; color: string } | null;
+  /** Social 3: where they live, languages, play style, favourite games (all optional) */
+  facts?: { country: string | null; languages: string[]; playStyle: string | null; favGames: string[] };
 }
 export interface FriendRequestView { username: string; avatarUrl: string | null; level: number; at: string }
 export interface FriendsView {

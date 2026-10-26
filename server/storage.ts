@@ -16,7 +16,10 @@ import * as bj from "./blackjack";
 import { deleteSocialData } from "./social";
 import { deleteFriendData } from "./friends";
 import { deleteClubData, afterClubDataDeleted } from "./clubs";
-import { deleteMomentData } from "./moments";
+import { deleteTalkData } from "./talk";
+import { deleteMatchData } from "./matches";
+import { deletePhotoData } from "./photos";
+import { deleteReportData } from "./reports3";
 import { deleteQuestData } from "./quests";
 
 /** Unambiguous characters (no 0/O, 1/I/L) so codes are easy to read out and type */
@@ -565,9 +568,12 @@ export class DatabaseStorage {
   async adminDeleteUser(userId: string): Promise<void> {
     let clubId: number | null = null;
     await db.transaction(async (tx) => {
-      // Social 3: club membership (an owner's club passes on), club chat, Moments, likes, comments, quests
+      // Social 3: club membership (an owner's club passes on), club chat, reports, Talk, match posts, photos, quests
       clubId = await deleteClubData(tx, userId);
-      await deleteMomentData(tx, userId);
+      await deleteReportData(tx, userId);
+      await deleteTalkData(tx, userId);
+      await deleteMatchData(tx, userId);
+      await deletePhotoData(tx, userId);
       await deleteQuestData(tx, userId);
       // Friends, notifications, reactions, feed, gifts and settings (first: it needs their messages to find reactions)
       await deleteFriendData(tx, userId);

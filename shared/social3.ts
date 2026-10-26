@@ -105,7 +105,7 @@ export const clubXp = (coinsStaked: number) => Math.floor(Math.max(0, coinsStake
 // ---------------- Daily quests ----------------
 
 /** "plays" quests are counted straight from game_plays; the others from social events */
-export type QuestKind = "spins" | "plays" | "games" | "wins" | "horse_win" | "friend_match" | "chat" | "react" | "gift" | "moment" | "like";
+export type QuestKind = "spins" | "plays" | "games" | "wins" | "horse_win" | "friend_match" | "chat" | "react" | "gift" | "talk";
 export const PLAY_QUEST_KINDS: QuestKind[] = ["spins", "plays", "games", "wins", "horse_win"];
 export type EventQuestKind = Exclude<QuestKind, "spins" | "plays" | "games" | "wins" | "horse_win">;
 
@@ -124,8 +124,7 @@ export const QUESTS: QuestDef[] = [
   q("chat3", "chat", 3, 10_000, true, "💬", { vi: "Gửi {n} tin nhắn trò chuyện", en: "Send {n} chat messages", zh: "在聊天室發送 {n} 則訊息" }),
   q("react5", "react", 5, 10_000, true, "❤️", { vi: "Thả cảm xúc vào {n} tin nhắn", en: "React to {n} messages", zh: "對 {n} 則訊息按表情" }),
   q("gift1", "gift", 1, 20_000, true, "🧧", { vi: "Gửi Lì Xì cho một người bạn", en: "Send a friend a Lì Xì", zh: "送好友一個紅包" }),
-  q("moment1", "moment", 1, 15_000, true, "📸", { vi: "Đăng một Khoảnh khắc", en: "Post a Moment", zh: "發布一則動態" }),
-  q("like3", "like", 3, 10_000, true, "💖", { vi: "Thích {n} Khoảnh khắc", en: "Like {n} Moments", zh: "按讚 {n} 則動態" }),
+  q("talk1", "talk", 1, 15_000, true, "🗣️", { vi: "Viết hoặc trả lời một chủ đề ở mục Trò chuyện", en: "Start or reply to a Talk thread", zh: "在「聊天」發文或回覆" }),
 ];
 export const QUEST_BY_ID = new Map(QUESTS.map((x) => [x.id, x]));
 export const QUESTS_PER_DAY = 3;
@@ -162,36 +161,95 @@ export function streakOf(days: string[], today: string): number {
   return n;
 }
 
-// ---------------- Moments ----------------
+// ---------------- Talk: topic boards ----------------
 
-export const MOMENT_MAX_LEN = 200;
-export const MOMENT_COMMENT_MAX = 200;
-export const MOMENTS_PER_DAY = 10;
-export const MOMENT_COOLDOWN_MS = 20_000;
-export const MOMENT_COMMENT_COOLDOWN_MS = 4_000;
-export const MOMENT_PAGE = 15;
-/** A win can be attached to a Moment for this long after it happened */
-export const WIN_CARD_DAYS = 7;
+export const TALK_BOARDS = [
+  { id: "intro", icon: "👋", vi: "Giới thiệu bản thân", en: "Introduce yourself", zh: "自我介紹" },
+  { id: "lfg", icon: "🤝", vi: "Tìm người chơi", en: "Looking for a game", zh: "找人一起玩" },
+  { id: "pool", icon: "🎱", vi: "Bi-a", en: "Pool", zh: "撞球" },
+  { id: "darts", icon: "🎯", vi: "Phi tiêu & Đá phạt", en: "Darts & penalties", zh: "飛鏢與 PK" },
+  { id: "cards", icon: "🃏", vi: "Bài & Slot", en: "Cards & slots", zh: "牌類與老虎機" },
+  { id: "abroad", icon: "✈️", vi: "Người Việt xa quê", en: "Vietnamese abroad", zh: "海外越南人" },
+  { id: "zh", icon: "🀄", vi: "中文", en: "中文", zh: "中文" },
+  { id: "misc", icon: "☕", vi: "Chuyện phiếm", en: "Anything goes", zh: "閒聊" },
+] as const;
+export type TalkBoard = (typeof TALK_BOARDS)[number]["id"];
+export const isTalkBoard = (b: unknown): b is TalkBoard => TALK_BOARDS.some((x) => x.id === b);
+export const TALK_TITLE_MAX = 100;
+export const TALK_BODY_MAX = 2000;
+export const TALK_REPLY_MAX = 1000;
+export const TALK_PAGE = 20;
+export const TALK_REPLY_PAGE = 30;
+/** Seconds between two new threads, and between two replies, from one player */
+export const TALK_THREAD_COOLDOWN_MS = 30_000;
+export const TALK_REPLY_COOLDOWN_MS = 4_000;
+export const TALK_THREADS_PER_DAY = 20;
 
-/** A play worth showing off: ×5 or more with at least 10,000 profit, or 200,000 profit at any multiple */
-export function isBragWorthy(bet: number, payout: number): boolean {
-  const profit = payout - bet;
-  if (profit <= 0) return false;
-  return (bet > 0 && payout >= 5 * bet && profit >= 10_000) || profit >= 200_000;
+export interface TalkAuthor { username: string; avatarUrl: string | null; level: number; club: ClubTag | null }
+export interface TalkThreadView {
+  id: number; board: TalkBoard; title: string; body: string; photo: number | null; author: TalkAuthor;
+  replies: number; thumbs: number; thumbed: boolean; lastAt: string; at: string; mine: boolean; friend: boolean;
+}
+export interface TalkReplyView { id: number; text: string | null; photo: number | null; author: TalkAuthor; at: string; mine: boolean; friend: boolean }
+
+// ---------------- Lounge rooms (the public chat) ----------------
+
+export const LOUNGE_ROOMS = [
+  { id: "main", icon: "🏮", vi: "Sảnh chung", en: "Main lounge", zh: "大廳" },
+  { id: "eu", icon: "🇪🇺", vi: "UK & Châu Âu", en: "UK & Europe", zh: "英國與歐洲" },
+  { id: "us", icon: "🇺🇸", vi: "Mỹ & Canada", en: "USA & Canada", zh: "美國與加拿大" },
+  { id: "au", icon: "🇦🇺", vi: "Úc", en: "Australia", zh: "澳洲" },
+  { id: "zh", icon: "🀄", vi: "中文", en: "中文", zh: "中文" },
+] as const;
+export type LoungeRoom = (typeof LOUNGE_ROOMS)[number]["id"];
+export const loungeRoom = (r: unknown): LoungeRoom => (LOUNGE_ROOMS.some((x) => x.id === r) ? (r as LoungeRoom) : "main");
+
+// ---------------- Find a match ----------------
+
+export const MATCH_MINUTES = [15, 30, 60] as const;
+export const MATCH_STAKES = [0, 1_000, 10_000, 50_000, 100_000, 500_000] as const;
+export const MATCH_NOTE_MAX = 80;
+export interface MatchPostView {
+  id: number; game: InviteGame; stake: number; note: string | null; expiresAt: string; at: string; mine: boolean;
+  author: TalkAuthor & { online: boolean; languages: string[]; country: string | null; playStyle: string | null };
 }
 
-export interface WinCard { playId: number; game: string; bet: number; payout: number; at: string }
-export interface MomentAuthor { username: string; avatarUrl: string | null; level: number; club: ClubTag | null }
-export interface MomentView {
-  id: number;
-  author: MomentAuthor;
-  text: string | null;
-  sticker: string | null;
-  win: WinCard | null;
-  likes: number;
-  liked: boolean;
-  comments: number;
-  mine: boolean;
-  at: string;
-}
-export interface MomentComment { id: number; author: MomentAuthor; text: string; mine: boolean; at: string }
+// ---------------- Richer profiles ----------------
+
+export const PROFILE_LANGUAGES = ["vi", "en", "zh", "other"] as const;
+export const PLAY_STYLES = ["casual", "competitive"] as const;
+/** Countries Vietnamese players commonly live in, first; any ISO code from the list is accepted */
+export const COUNTRIES: { code: string; flag: string; vi: string; en: string; zh: string }[] = [
+  { code: "VN", flag: "🇻🇳", vi: "Việt Nam", en: "Vietnam", zh: "越南" },
+  { code: "GB", flag: "🇬🇧", vi: "Anh", en: "United Kingdom", zh: "英國" },
+  { code: "US", flag: "🇺🇸", vi: "Mỹ", en: "United States", zh: "美國" },
+  { code: "CA", flag: "🇨🇦", vi: "Canada", en: "Canada", zh: "加拿大" },
+  { code: "AU", flag: "🇦🇺", vi: "Úc", en: "Australia", zh: "澳洲" },
+  { code: "DE", flag: "🇩🇪", vi: "Đức", en: "Germany", zh: "德國" },
+  { code: "FR", flag: "🇫🇷", vi: "Pháp", en: "France", zh: "法國" },
+  { code: "CZ", flag: "🇨🇿", vi: "Séc", en: "Czechia", zh: "捷克" },
+  { code: "PL", flag: "🇵🇱", vi: "Ba Lan", en: "Poland", zh: "波蘭" },
+  { code: "NL", flag: "🇳🇱", vi: "Hà Lan", en: "Netherlands", zh: "荷蘭" },
+  { code: "JP", flag: "🇯🇵", vi: "Nhật Bản", en: "Japan", zh: "日本" },
+  { code: "KR", flag: "🇰🇷", vi: "Hàn Quốc", en: "South Korea", zh: "韓國" },
+  { code: "TW", flag: "🇹🇼", vi: "Đài Loan", en: "Taiwan", zh: "台灣" },
+  { code: "HK", flag: "🇭🇰", vi: "Hồng Kông", en: "Hong Kong", zh: "香港" },
+  { code: "CN", flag: "🇨🇳", vi: "Trung Quốc", en: "China", zh: "中國" },
+  { code: "SG", flag: "🇸🇬", vi: "Singapore", en: "Singapore", zh: "新加坡" },
+  { code: "MY", flag: "🇲🇾", vi: "Malaysia", en: "Malaysia", zh: "馬來西亞" },
+  { code: "TH", flag: "🇹🇭", vi: "Thái Lan", en: "Thailand", zh: "泰國" },
+  { code: "NZ", flag: "🇳🇿", vi: "New Zealand", en: "New Zealand", zh: "紐西蘭" },
+  { code: "OTHER", flag: "🌏", vi: "Nơi khác", en: "Somewhere else", zh: "其他地區" },
+];
+export const COUNTRY_BY_CODE = new Map(COUNTRIES.map((c) => [c.code, c]));
+
+/** The "find people to play with" facts shown in lists (Online now, friends, match posts) */
+export interface PlayerFacts { country: string | null; languages: string[]; playStyle: string | null; favGames: string[] }
+
+// ---------------- Photos in messages ----------------
+
+/** After the phone shrinks it: the most a photo may weigh, how many a player may send an hour and keep */
+export const PHOTO_MAX_BYTES = 600_000;
+export const PHOTOS_PER_HOUR = 20;
+export const PHOTOS_KEPT = 300;
+export type PhotoScope = "dm" | "club" | "lounge" | "talk";

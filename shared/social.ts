@@ -84,12 +84,17 @@ export interface PlayerProfile {
   playing: string | null;
   /** Social 3: their club */
   club: (ClubTag & { name: string; role: ClubRole }) | null;
+  /** Social 3: where they live (unless hidden), languages, play style, favourite games */
+  country: string | null;
+  languages: string[];
+  playStyle: string | null;
+  favGames: string[];
 }
 
 export interface DmPeer { username: string; avatarUrl: string | null; online: boolean; level?: number; club?: ClubTag | null }
 
 export interface DmConversation extends DmPeer {
-  last: { text: string | null; sticker: string | null; card?: InviteCard | null; mine: boolean; at: string };
+  last: { text: string | null; sticker: string | null; card?: InviteCard | null; photo?: boolean; mine: boolean; at: string };
   unread: number;
 }
 
@@ -105,6 +110,8 @@ export interface DmMessage {
   reactions: ReactionCount[];
   /** A game invite / challenge card (Social 3) */
   card: InviteCard | null;
+  /** A photo (message_photos id, fetched from /api/photos/:id) */
+  photo: number | null;
 }
 
 export interface DmThread {

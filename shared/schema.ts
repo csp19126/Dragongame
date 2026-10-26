@@ -252,9 +252,12 @@ export const chatMessages = pgTable("chat_messages", {
   sticker: text("sticker"),
   /** The message this one answers */
   replyTo: integer("reply_to"),
+  /** Social 3: the lounge room ("main", "eu", "us", "au", "zh") and an attached photo */
+  room: text("room").default("main").notNull(),
+  photoId: integer("photo_id"),
   deleted: boolean("deleted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (t) => [index("chat_messages_created").on(t.createdAt)]);
+}, (t) => [index("chat_messages_created").on(t.createdAt), index("chat_messages_room").on(t.room, t.id)]);
 
 export const chatReports = pgTable("chat_reports", {
   id: serial("id").primaryKey(),
@@ -289,6 +292,8 @@ export const directMessages = pgTable("direct_messages", {
   replyTo: integer("reply_to"),
   /** A game invite / challenge card ({ kind: "invite", game, path }), shown instead of text */
   card: jsonb("card").$type<{ kind: "invite"; game: string; path: string }>(),
+  /** A photo sent in the conversation (message_photos.id) */
+  photoId: integer("photo_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   readAt: timestamp("read_at"),
   deleted: boolean("deleted").default(false).notNull(),
@@ -395,12 +400,20 @@ export const userSocial = pgTable("user_social", {
   requestsFrom: text("requests_from").default("everyone").notNull(),
   showPresence: boolean("show_presence").default(true).notNull(),
   showInFeed: boolean("show_in_feed").default(true).notNull(),
+  // Social 3: a richer profile (all optional) and photo viewing
+  country: text("country"),
+  hideCountry: boolean("hide_country").default(false).notNull(),
+  favGames: jsonb("fav_games").$type<string[]>().default([]).notNull(),
+  languages: jsonb("languages").$type<string[]>().default([]).notNull(),
+  playStyle: text("play_style"),
+  /** Show photos from non-friends without the blur (off by default) */
+  showPhotos: boolean("show_photos").default(false).notNull(),
   xp: bigint("xp", { mode: "number" }).default(0).notNull(),
   level: integer("level").default(1).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// ---- Social 3: clubs, daily quests, Moments ----
+// ---- Social 3: clubs, daily quests, Talk, photos, find a match ----
 
 // A club (Hội): one per player, up to 30 members. Starting one costs coins (a sink).
 export const clubs = pgTable("clubs", {
@@ -437,6 +450,7 @@ export const clubMessages = pgTable("club_messages", {
   username: text("username").notNull(),
   text: text("text"),
   sticker: text("sticker"),
+  photoId: integer("photo_id"),
   deleted: boolean("deleted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [index("club_messages_club").on(t.clubId, t.id), index("club_messages_user").on(t.userId)]);
@@ -490,45 +504,71 @@ export const questChests = pgTable("quest_chests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => [primaryKey({ columns: [t.userId, t.day] })]);
 
-// Moments: short public posts, optionally with a sticker or a verified win from game_plays
-export const moments = pgTable("moments", {
+// Photos sent in messages (DMs, club chat, lounge rooms, Talk). Metadata is stripped on upload.
+export const messagePhotos = pgTable("message_photos", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  /** Where it was sent: "dm" (ref = the receiver's id), "club" (ref = club id), "lounge", "talk" */
+  scope: text("scope").notNull(),
+  ref: text("ref"),
+  mime: text("mime").notNull(),
+  data: bytea("data").notNull(),
+  bytes: integer("bytes").notNull(),
+  deleted: boolean("deleted").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("message_photos_user").on(t.userId, t.createdAt)]);
+
+// Talk: topic boards (fixed list in shared/social3.ts) with threads and replies
+export const talkThreads = pgTable("talk_threads", {
+  id: serial("id").primaryKey(),
+  board: text("board").notNull(),
+  userId: varchar("user_id").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  photoId: integer("photo_id"),
+  replies: integer("replies").default(0).notNull(),
+  thumbs: integer("thumbs").default(0).notNull(),
+  lastAt: timestamp("last_at").defaultNow().notNull(),
+  hidden: boolean("hidden").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [index("talk_threads_board").on(t.board, t.lastAt), index("talk_threads_user").on(t.userId)]);
+
+export const talkReplies = pgTable("talk_replies", {
+  id: serial("id").primaryKey(),
+  threadId: integer("thread_id").notNull(),
   userId: varchar("user_id").notNull(),
   text: text("text"),
-  sticker: text("sticker"),
-  /** The game_plays row shown as a win card (copied by the server, one Moment per play) */
-  playId: integer("play_id"),
-  win: jsonb("win").$type<{ game: string; bet: number; payout: number; at: string }>(),
-  likes: integer("likes").default(0).notNull(),
-  comments: integer("comments").default(0).notNull(),
+  photoId: integer("photo_id"),
   hidden: boolean("hidden").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (t) => [index("moments_created").on(t.createdAt), index("moments_user").on(t.userId), uniqueIndex("moments_play").on(t.playId)]);
+}, (t) => [index("talk_replies_thread").on(t.threadId, t.id), index("talk_replies_user").on(t.userId)]);
 
-export const momentLikes = pgTable("moment_likes", {
-  momentId: integer("moment_id").notNull(),
+export const talkThumbs = pgTable("talk_thumbs", {
+  threadId: integer("thread_id").notNull(),
   userId: varchar("user_id").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (t) => [primaryKey({ columns: [t.momentId, t.userId] }), index("moment_likes_user").on(t.userId)]);
+}, (t) => [primaryKey({ columns: [t.threadId, t.userId] }), index("talk_thumbs_user").on(t.userId)]);
 
-export const momentComments = pgTable("moment_comments", {
+// "Find a match": a short-lived post saying what you want to play
+export const matchPosts = pgTable("match_posts", {
   id: serial("id").primaryKey(),
-  momentId: integer("moment_id").notNull(),
   userId: varchar("user_id").notNull(),
-  text: text("text").notNull(),
-  hidden: boolean("hidden").default(false).notNull(),
+  game: text("game").notNull(),
+  stake: integer("stake").default(0).notNull(),
+  note: text("note"),
+  expiresAt: timestamp("expires_at").notNull(),
+  closedAt: timestamp("closed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (t) => [index("moment_comments_moment").on(t.momentId, t.id), index("moment_comments_user").on(t.userId)]);
+}, (t) => [index("match_posts_open").on(t.expiresAt), index("match_posts_user").on(t.userId)]);
 
-// A reported Moment ("moment") or comment ("comment")
-export const momentReports = pgTable("moment_reports", {
+// Reports on Social 3 things: "photo", "thread", "reply", "club", "match"
+export const ugcReports = pgTable("ugc_reports", {
   id: serial("id").primaryKey(),
   kind: text("kind").notNull(),
   targetId: integer("target_id").notNull(),
   reporterId: varchar("reporter_id").notNull(),
   reason: text("reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (t) => [uniqueIndex("moment_reports_once").on(t.kind, t.targetId, t.reporterId), index("moment_reports_reporter").on(t.reporterId)]);
+}, (t) => [uniqueIndex("ugc_reports_once").on(t.kind, t.targetId, t.reporterId), index("ugc_reports_reporter").on(t.reporterId)]);
 
 // The sticker album: how many of each sticker a player holds
 export const userStickers = pgTable("user_stickers", {
