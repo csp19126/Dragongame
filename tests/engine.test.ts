@@ -829,3 +829,55 @@ describe("Social 2.0 (pure rules)", async () => {
     expect(f.vnWeekStart(new Date("2026-10-25T17:30:00Z")).toISOString()).toBe("2026-10-25T17:00:00.000Z");
   });
 });
+
+describe("Social 3 rules", async () => {
+  const s3 = await import("../shared/social3");
+  it("invite links stay on the site and on the game's own page", () => {
+    expect(s3.validInvitePath("pool", "/pool?table=AB12")).toBe(true);
+    expect(s3.validInvitePath("pool", "/pool")).toBe(true);
+    expect(s3.validInvitePath("darts", "/phi-tieu?table=X")).toBe(true);
+    expect(s3.validInvitePath("cards", "/ban-bai?table=Q7")).toBe(true);
+    for (const bad of ["//evil.com", "/\\evil", "http://x", "/poolside", "/pool/../x", "/pool?x=<script>", "/pool#x", "", 5]) {
+      expect(s3.validInvitePath("pool", bad)).toBe(false);
+    }
+    expect(s3.validInvitePath("darts", "/pool")).toBe(false);
+  });
+  it("draws three different quests, always at least one social", () => {
+    let seed = 1;
+    const rand = (n: number) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
+    for (let i = 0; i < 2000; i++) {
+      const q = s3.drawQuests(rand);
+      expect(q.length).toBe(3);
+      expect(new Set(q.map((x) => x.kind)).size).toBe(3);
+      expect(q.some((x) => x.social)).toBe(true);
+    }
+    for (const q of s3.QUESTS) { expect(q.reward).toBeGreaterThanOrEqual(10_000); expect(q.reward).toBeLessThanOrEqual(50_000); }
+  });
+  it("club roles: owner does all, officers approve and remove members, members nothing", () => {
+    expect(s3.clubAllowed("owner", "kick", "officer")).toBe(true);
+    expect(s3.clubAllowed("officer", "kick", "member")).toBe(true);
+    expect(s3.clubAllowed("officer", "kick", "officer")).toBe(false);
+    expect(s3.clubAllowed("member", "kick", "member")).toBe(false);
+    expect(s3.clubAllowed("officer", "promote", "member")).toBe(false);
+    expect(s3.clubAllowed("officer", "approve")).toBe(true);
+    expect(s3.clubAllowed("member", "approve")).toBe(false);
+    expect(s3.clubAllowed("officer", "disband")).toBe(false);
+    expect(s3.clubAllowed("owner", "transfer", "member")).toBe(true);
+  });
+  it("club names and tags are checked", () => {
+    expect(s3.checkClubName("  Rồng   Vàng ")).toEqual({ ok: true, name: "Rồng Vàng" });
+    expect(s3.checkClubName("ab").ok).toBe(false);
+    expect(s3.checkClubName("x".repeat(21)).ok).toBe(false);
+    expect(s3.checkClubName("bit.ly/abc").ok).toBe(false);
+    expect(s3.checkClubTag("rong")).toEqual({ ok: true, tag: "RONG" });
+    expect(s3.checkClubTag("r").ok).toBe(false);
+  });
+  it("streaks and brag-worthy wins", () => {
+    expect(s3.streakOf(["2026-10-24", "2026-10-25", "2026-10-26", "2026-10-20"], "2026-10-26")).toBe(3);
+    expect(s3.streakOf(["2026-10-25"], "2026-10-26")).toBe(0);
+    expect(s3.isBragWorthy(10_000, 60_000)).toBe(true);
+    expect(s3.isBragWorthy(10_000, 40_000)).toBe(false);
+    expect(s3.isBragWorthy(1_000, 6_000)).toBe(false);
+    expect(s3.isBragWorthy(500_000, 700_000)).toBe(true);
+  });
+});

@@ -1403,6 +1403,404 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("Social 3: invites, clubs, quests, Moments", () => {
+    const games = (username: string, n: number) => pool.query("update users set games_played = $1 where username = $2", [n, username]);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const idOf = async (p: Player) => (await p.req("GET", "/api/me")).body.id as string;
+    async function players(n: number, played = 12) {
+      const ps = Array.from({ length: n }, () => new Player());
+      for (const p of ps) { await p.register(); await games(p.username, played); }
+      return ps;
+    }
+    async function befriend(a: Player, b: Player) {
+      expect((await a.req("POST", "/api/friends/request", { username: b.username })).body.relation).toBe("sent");
+      expect((await b.req("POST", "/api/friends/accept", { username: a.username })).body.relation).toBe("friends");
+    }
+    const notifs = async (p: Player) => (await p.req("GET", "/api/notifications")).body.items as any[];
+    const balanceOf = async (p: Player) => Number((await pool.query("select balance from users where username = $1", [p.username])).rows[0].balance);
+    const play = (uid: string, game: string, bet: number, payout: number, at = "now()") =>
+      pool.query(`insert into game_plays (user_id, game, bet, payout, created_at) values ($1, $2, $3, $4, ${at}) returning id`, [uid, game, bet, payout]).then((r) => r.rows[0].id as number);
+
+    it("invites: the contract, a bell with Join and a challenge card in the DM thread", async () => {
+      const [a, b, c] = await players(3);
+      const send = (p: Player, body: any) => p.req("POST", "/api/invites", body);
+      expect((await send(a, { to: b.username, game: "chess", path: "/pool" })).status).toBe(400);
+      for (const path of ["//evil.com", "/\\evil", "https://evil.com", "/phi-tieu?table=AB12", "/poolx", "/pool/../admin", "pool"]) {
+        expect((await send(a, { to: b.username, game: "pool", path })).status).toBe(400);
+      }
+      expect((await send(a, { to: "no_such_player_zz", game: "pool", path: "/pool" })).status).toBe(404);
+      expect((await send(a, { to: a.username, game: "pool", path: "/pool" })).status).toBe(400);
+      const ok = await send(a, { to: b.username, game: "pool", path: "/pool?table=AB12" });
+      expect(ok).toMatchObject({ status: 200, body: { ok: true } });
+      const n = (await notifs(b)).find((x) => x.kind === "invite");
+      expect(n).toMatchObject({ actor: { username: a.username }, data: { game: "pool", path: "/pool?table=AB12" } });
+      const thread = (await b.req("GET", `/api/dm/thread/${a.username}`)).body;
+      expect(thread.messages.at(-1)).toMatchObject({ mine: false, text: null, card: { kind: "invite", game: "pool", path: "/pool?table=AB12" } });
+      const conv = (await b.req("GET", "/api/dm/conversations")).body.conversations.find((x: any) => x.username === a.username);
+      expect(conv.last.card).toMatchObject({ game: "pool" });
+      // Rate limited: straight away again, and the same player again soon
+      expect((await send(a, { to: c.username, game: "cards", path: "/ban-bai?table=XY99" })).status).toBe(429);
+      await sleep(3100);
+      expect((await send(a, { to: b.username, game: "darts", path: "/phi-tieu?table=AB12" })).status).toBe(429);
+      expect((await send(a, { to: c.username, game: "football", path: "/da-bong" })).status).toBe(200);
+      // Blocks
+      await c.req("POST", `/api/players/${a.username}/block`, { block: true });
+      await sleep(3100);
+      expect((await send(a, { to: c.username, game: "cards", path: "/ban-bai" })).status).toBe(403);
+      // Friends-only messages: strangers can't invite; friends can, even with friend requests off
+      const [d, e] = await players(2);
+      await befriend(d, b);
+      await b.req("PUT", "/api/social/privacy", { dmFrom: "friends", requestsFrom: "nobody" });
+      expect((await send(e, { to: b.username, game: "pool", path: "/pool" })).status).toBe(403);
+      expect((await send(d, { to: b.username, game: "pool", path: "/pool" })).status).toBe(200);
+      // Brand-new accounts can't send invites
+      const newbie = new Player(); await newbie.register();
+      expect((await send(newbie, { to: b.username, game: "pool", path: "/pool" })).body.message).toBe("play_first");
+    });
+
+    it("clubs: the fee is a sink, one club each, names filtered, 30 members, roles", async () => {
+      const [owner, m1, m2, m3, rich] = await players(5);
+      await setBalance(owner.username, 60_000);
+      const make = (p: Player, body: any) => p.req("POST", "/api/clubs", { emblem: "🐉", color: "#f59e0b", tag: "RONG", open: true, ...body });
+      const n = `Rồng ${Date.now() % 100000}`;
+      expect((await make(owner, { name: "ab" })).status).toBe(400);
+      expect((await make(owner, { name: "www.x.com club" })).status).toBe(400);
+      expect((await make(owner, { name: n, emblem: "💩" })).status).toBe(400);
+      expect((await make(owner, { name: n, color: "red" })).status).toBe(400);
+      const ok = await make(owner, { name: n, description: "Chào mừng!" });
+      expect(ok.status).toBe(200);
+      expect(ok.body.balance).toBe(10_000);
+      expect(await balanceOf(owner)).toBe(10_000);
+      const oid = await idOf(owner);
+      expect((await pool.query("select amount from deposits where user_id = $1 and method = 'club_fee'", [oid])).rows.map((r) => Number(r.amount))).toEqual([-50_000]);
+      const id = ok.body.id;
+      await setBalance(owner.username, 200_000);
+      expect((await make(owner, { name: `${n}x` })).status).toBe(409); // one club each
+      await setBalance(rich.username, 200_000);
+      expect((await make(rich, { name: n.toUpperCase() })).status).toBe(409); // name taken (any case)
+      await setBalance(m1.username, 1000);
+      expect((await make(m1, { name: "Nghèo quá" })).status).toBe(400); // not enough coins
+      expect(await balanceOf(m1)).toBe(1000);
+      // Join, roles
+      for (const p of [m1, m2, m3]) expect((await p.req("POST", `/api/clubs/${id}/join`)).body.joined).toBe(true);
+      expect((await m1.req("POST", `/api/clubs/${id}/join`)).status).toBe(409);
+      const act = (p: Player, action: string, who: Player) => p.req("POST", `/api/clubs/${id}/members`, { action, username: who.username });
+      expect((await act(m1, "kick", m2)).status).toBe(403);
+      expect((await act(m1, "promote", m2)).status).toBe(403);
+      expect((await act(owner, "promote", m1)).status).toBe(200);
+      expect((await act(m1, "kick", owner)).status).toBe(403);
+      expect((await act(m1, "promote", m2)).status).toBe(403); // officers can't promote
+      expect((await act(m1, "kick", m3)).status).toBe(200);    // officers remove members
+      expect((await m3.req("POST", `/api/clubs/${id}/join`)).status).toBe(403); // kicked: not straight back
+      expect((await notifs(m3)).some((x) => x.kind === "club" && x.data.action === "kicked")).toBe(true);
+      const view = (await m2.req("GET", `/api/clubs/${id}`)).body;
+      expect(view.members.map((x: any) => [x.username, x.role])).toEqual([[owner.username, "owner"], [m1.username, "officer"], [m2.username, "member"]]);
+      expect(view.me.role).toBe("member");
+      // The tag shows on the profile, the rich list and in chat
+      expect((await rich.req("GET", `/api/players/${m2.username}/profile`)).body.club).toMatchObject({ id, tag: "RONG", name: n, role: "member" });
+      // The owner can't just walk out; hands over first
+      expect((await owner.req("POST", `/api/clubs/${id}/leave`)).status).toBe(409);
+      expect((await act(owner, "transfer", m2)).status).toBe(200);
+      const v2 = (await owner.req("GET", `/api/clubs/${id}`)).body;
+      expect(v2.members.find((x: any) => x.username === m2.username).role).toBe("owner");
+      expect(v2.me.role).toBe("officer");
+      expect((await owner.req("POST", `/api/clubs/${id}/leave`)).status).toBe(200);
+      // Full at 30
+      for (let i = 0; i < 27; i++) {
+        const u = (await pool.query("insert into users (username, password) values ($1, 'x') returning id", [`fill${Date.now() % 1e6}_${i}`])).rows[0].id;
+        await pool.query("insert into club_members (user_id, club_id, role) values ($1, $2, 'member')", [u, id]);
+      }
+      await (await import("../server/clubs")).loadClubs();
+      const count = Number((await pool.query("select count(*) from club_members where club_id = $1", [id])).rows[0].count);
+      expect(count).toBe(29);
+      const [x1, x2] = await players(2);
+      expect((await x1.req("POST", `/api/clubs/${id}/join`)).status).toBe(200);
+      expect((await x2.req("POST", `/api/clubs/${id}/join`)).body.message).toBe("This club is full");
+      // Approval clubs: a request, then the leader decides
+      await setBalance(rich.username, 200_000);
+      const c2 = (await make(rich, { name: `Kín ${Date.now() % 100000}`, tag: "KIN", open: false })).body.id;
+      expect((await x2.req("POST", `/api/clubs/${c2}/join`)).body).toMatchObject({ joined: false, requested: true });
+      expect((await notifs(rich)).some((x) => x.kind === "club" && x.data.action === "request")).toBe(true);
+      expect((await rich.req("GET", `/api/clubs/${c2}`)).body.requests.map((r: any) => r.username)).toEqual([x2.username]);
+      expect((await rich.req("POST", `/api/clubs/${c2}/requests`, { username: x2.username, accept: true })).status).toBe(200);
+      expect((await x2.req("GET", `/api/clubs/${c2}`)).body.me.role).toBe("member");
+      // Disband: only the owner
+      expect((await x2.req("POST", `/api/clubs/${c2}/disband`)).status).toBe(403);
+      expect((await rich.req("POST", `/api/clubs/${c2}/disband`)).status).toBe(200);
+      expect((await x2.req("GET", `/api/clubs/${c2}`)).status).toBe(404);
+      expect((await rich.req("GET", `/api/players/${x2.username}/profile`)).body.club).toBeNull();
+      // Admin can rename and disband
+      const adm = (await players(1))[0];
+      await pool.query("update users set is_admin = true where username = $1", [adm.username]);
+      expect((await adm.req("POST", `/api/admin/clubs/${id}/rename`, { name: "Đã đổi tên" })).status).toBe(200);
+      expect((await adm.req("GET", "/api/admin/clubs")).body.clubs.find((c: any) => c.id === id).name).toBe("Đã đổi tên");
+      expect((await m2.req("GET", "/api/admin/clubs")).status).toBe(403);
+      expect((await adm.req("POST", `/api/admin/clubs/${id}/disband`)).status).toBe(200);
+      expect((await m2.req("GET", "/api/clubs")).body.mine).toBeNull();
+    });
+
+    it("club chat: members only, same filters and pace as the public chat, reports reach the admin", async () => {
+      const [owner, a, b, c, out] = await players(5);
+      await setBalance(owner.username, 100_000);
+      const id = (await owner.req("POST", "/api/clubs", { name: `Chat ${Date.now() % 100000}`, tag: "CHAT", emblem: "🔥", color: "#ef4444" })).body.id;
+      for (const p of [a, b, c]) await p.req("POST", `/api/clubs/${id}/join`);
+      const say = (p: Player, body: any) => p.req("POST", `/api/clubs/${id}/chat`, body);
+      expect((await say(out, { text: "chào" })).status).toBe(403);
+      expect((await out.req("GET", `/api/clubs/${id}/chat`)).status).toBe(403);
+      expect((await say(owner, { text: "vào www.scam.com" })).body.message).toBe("link");
+      expect((await say(owner, { text: "gọi 0912345678" })).body.message).toBe("phone");
+      const m = await say(owner, { text: "Chào cả hội!" });
+      expect(m.status).toBe(200);
+      expect((await say(owner, { text: "nữa nè" })).body.message).toBe("slow_down");
+      const list = (await a.req("GET", `/api/clubs/${id}/chat`)).body.messages;
+      expect(list.map((x: any) => x.text)).toEqual(["Chào cả hội!"]);
+      expect((await out.req("POST", `/api/clubs/chat/${m.body.id}/report`)).status).toBe(404);
+      for (const p of [a, b, c]) expect((await p.req("POST", `/api/clubs/chat/${m.body.id}/report`)).status).toBe(200);
+      expect((await a.req("GET", `/api/clubs/${id}/chat`)).body.messages).toEqual([]);
+      const adm = (await players(1))[0];
+      await pool.query("update users set is_admin = true where username = $1", [adm.username]);
+      const rep = (await adm.req("GET", "/api/admin/social3/reports")).body.clubMessages.find((x: any) => x.id === m.body.id);
+      expect(rep).toMatchObject({ reports: 3, deleted: true, username: owner.username });
+      expect((await adm.req("POST", `/api/admin/clubs/messages/${m.body.id}`, { hidden: false })).status).toBe(200);
+      expect((await a.req("GET", `/api/clubs/${id}/chat`)).body.messages.length).toBe(1);
+      // Chat messages carry the club tag
+      await sleep(3100);
+      const pub = (await owner.req("POST", "/api/chat", { text: "xin chào mọi người" })).body;
+      expect(pub.club).toMatchObject({ id, tag: "CHAT", emblem: "🔥" });
+    });
+
+    it("the weekly club reward: top three clubs' active members, paid exactly once", async () => {
+      const ps = await players(4);
+      const ids = await Promise.all(ps.map(idOf));
+      const clubsMod = await import("../server/clubs");
+      const { vnWeekStart } = await import("../shared/friends");
+      // Two weeks back, so the startup scheduler (which pays last week) hasn't touched it
+      const week = new Date(vnWeekStart(new Date()).getTime() - 14 * 86_400_000);
+      const inWeek = `'${new Date(week.getTime() + 3 * 86_400_000).toISOString()}'::timestamp`;
+      const mk = async (p: Player, uid: string, name: string) => {
+        await setBalance(p.username, 100_000);
+        const id = (await p.req("POST", "/api/clubs", { name, tag: "WK", emblem: "⭐", color: "#3b82f6" })).body.id;
+        await pool.query("update club_members set joined_at = $2 where user_id = $1", [uid, new Date(week.getTime() - 86_400_000)]);
+        return id;
+      };
+      const s = Date.now() % 100000;
+      const c1 = await mk(ps[0], ids[0], `Tuần A ${s}`);
+      await ps[1].req("POST", `/api/clubs/${c1}/join`);
+      await pool.query("update club_members set joined_at = $2 where user_id = $1", [ids[1], new Date(week.getTime() - 86_400_000)]);
+      const c2 = await mk(ps[2], ids[2], `Tuần B ${s}`);
+      await mk(ps[3], ids[3], `Tuần C ${s}`);
+      // Club 1: 900K staked (900 XP) by one member, the other did nothing; club 2: 500 XP; club 3: nothing
+      await play(ids[0], "slot", 900_000, 0, inWeek);
+      await play(ids[2], "slot", 500_000, 0, inWeek);
+      const before = await Promise.all(ps.map(balanceOf));
+      expect(await clubsMod.payClubWeek(week)).toBe(true);
+      expect(await clubsMod.payClubWeek(week)).toBe(false);
+      await Promise.all([clubsMod.payClubWeek(week), clubsMod.payClubWeek(week)]);
+      const after = await Promise.all(ps.map(balanceOf));
+      expect(after.map((x, i) => x - before[i])).toEqual([100_000, 0, 50_000, 0]);
+      const rows = (await pool.query("select user_id, amount from deposits where method = 'club_weekly' and user_id = any($1)", [ids])).rows;
+      expect(rows.length).toBe(2);
+      const w = (await pool.query("select winners from club_weeks where week = $1", [(await import("../shared/league")).vnDay(week)])).rows[0].winners;
+      expect(w.slice(0, 2).map((x: any) => [x.clubId, x.rank])).toEqual([[c1, 1], [c2, 2]]);
+      expect((await notifs(ps[0])).some((n) => n.kind === "club" && n.data.action === "reward" && n.data.amount === 100_000)).toBe(true);
+      // The live board: this week's XP
+      await play(ids[1], "slot", 7_000, 0);
+      const board = (await ps[1].req("GET", "/api/clubs")).body;
+      expect(board.clubs.find((c: any) => c.id === c1).weeklyXp).toBe(7);
+      expect((await ps[1].req("GET", `/api/clubs/${c1}`)).body.members.find((m: any) => m.username === ps[1].username).weeklyXp).toBe(7);
+    });
+
+    it("daily quests: progress from real plays and posts, each claim paid once, the chest and the 7-day streak", async () => {
+      const [p] = await players(1);
+      await setBalance(p.username, 1_000_000);
+      const uid = await idOf(p);
+      const { vnDay } = await import("../shared/league");
+      const day = vnDay(new Date());
+      const first = (await p.req("GET", "/api/quests")).body;
+      expect(first.quests.length).toBe(3);
+      expect(first.quests.some((q: any) => q.social)).toBe(true);
+      expect(new Set(first.quests.map((q: any) => q.kind)).size).toBe(3);
+      // Same quests on a second look
+      expect((await p.req("GET", "/api/quests")).body.quests.map((q: any) => q.id)).toEqual(first.quests.map((q: any) => q.id));
+      // Pin today's quests so the test knows what to do
+      await pool.query("delete from daily_quests where user_id = $1", [uid]);
+      await pool.query("insert into daily_quests (user_id, day, slot, quest_id) values ($1, $2, 0, 'spins20'), ($1, $2, 1, 'plays30'), ($1, $2, 2, 'moment1')", [uid, day]);
+      expect((await p.req("POST", "/api/quests/0/claim")).status).toBe(409); // not done yet
+      for (let i = 0; i < 30; i++) expect((await p.play(1000)).status).toBe(200);
+      const mid = (await p.req("GET", "/api/quests")).body;
+      expect(mid.quests.map((q: any) => q.progress)).toEqual([20, 30, 0]);
+      expect((await p.req("POST", "/api/moments", { text: "Hôm nay đẹp trời!" })).status).toBe(200);
+      expect((await p.req("GET", "/api/quests")).body.quests[2].progress).toBe(1);
+      // Two taps at once: one payout
+      const before = await balanceOf(p);
+      const claims = await Promise.all([p.req("POST", "/api/quests/0/claim"), p.req("POST", "/api/quests/0/claim")]);
+      expect(claims.map((c) => c.status).sort()).toEqual([200, 409]);
+      expect(await balanceOf(p)).toBe(before + 20_000);
+      expect((await p.req("POST", "/api/quests/chest")).status).toBe(409); // not all claimed
+      expect((await p.req("POST", "/api/quests/1/claim")).body.reward).toBe(15_000);
+      expect((await p.req("POST", "/api/quests/2/claim")).body.reward).toBe(15_000);
+      // Six chests in the days before: today's makes seven in a row
+      for (let i = 1; i <= 6; i++) {
+        const d = new Date(new Date(`${day}T00:00:00Z`).getTime() - i * 86_400_000).toISOString().slice(0, 10);
+        await pool.query("insert into quest_chests (user_id, day, amount) values ($1, $2, 50000)", [uid, d]);
+      }
+      const b2 = await balanceOf(p);
+      const chest = await Promise.all([p.req("POST", "/api/quests/chest"), p.req("POST", "/api/quests/chest")]);
+      expect(chest.map((c) => c.status).sort()).toEqual([200, 409]);
+      expect(chest.find((c) => c.status === 200)!.body).toMatchObject({ amount: 50_000, streakBonus: 250_000, streak: 7 });
+      expect(await balanceOf(p)).toBe(b2 + 300_000);
+      const v = (await p.req("GET", "/api/quests")).body;
+      expect(v.chest).toMatchObject({ claimed: true, ready: false });
+      expect(v.streak.days).toBe(7);
+      const paid = (await pool.query("select coalesce(sum(amount), 0)::int as s from deposits where user_id = $1 and method = 'daily_quest'", [uid])).rows[0].s;
+      expect(paid).toBe(20_000 + 15_000 + 15_000 + 50_000 + 250_000);
+      // Social quests count each thing once and only from real events
+      const { questEvent } = await import("../server/quests");
+      await questEvent(uid, "chat", "chat:1");
+      await questEvent(uid, "chat", "chat:1");
+      expect((await pool.query("select count(*)::int as n from quest_events where user_id = $1 and kind = 'chat'", [uid])).rows[0].n).toBe(1);
+    });
+
+    it("quests: finishing one rings the bell; play-a-friend counts real matches between friends", async () => {
+      const [a, b] = await players(2);
+      const [ua, ub] = await Promise.all([idOf(a), idOf(b)]);
+      const { vnDay } = await import("../shared/league");
+      const day = vnDay(new Date());
+      for (const u of [ua, ub]) await pool.query("insert into daily_quests (user_id, day, slot, quest_id) values ($1, $2, 0, 'friendmatch'), ($1, $2, 1, 'chat3'), ($1, $2, 2, 'gift1')", [u, day]);
+      const { questFriendMatch } = await import("../server/quests");
+      await questFriendMatch([ua, ub], "test:1");
+      expect((await a.req("GET", "/api/quests")).body.quests[0].progress).toBe(0); // not friends
+      await befriend(a, b);
+      await questFriendMatch([ua, ub], "test:2");
+      await questFriendMatch([ua, ub], "test:2");
+      expect((await a.req("GET", "/api/quests")).body.quests[0].progress).toBe(1);
+      expect((await notifs(b)).filter((n) => n.kind === "quest" && n.data.questId === "friendmatch").length).toBe(1);
+    });
+
+    it("Moments: win cards come from the player's own plays only, likes, comments, limits", async () => {
+      const [a, b, c] = await players(3);
+      const [ua, ub] = await Promise.all([idOf(a), idOf(b)]);
+      const big = await play(ua, "slot", 10_000, 120_000);
+      const small = await play(ua, "slot", 10_000, 12_000);
+      const old = await play(ua, "slot", 10_000, 500_000, "now() - interval '9 days'");
+      const theirs = await play(ub, "slot", 10_000, 900_000);
+      const wins = (await a.req("GET", "/api/moments/wins")).body.wins;
+      expect(wins.map((w: any) => w.playId)).toEqual([big]);
+      for (const playId of [small, old, theirs, 999_999_999]) expect((await a.req("POST", "/api/moments", { playId })).status).toBe(400);
+      const forged = await a.req("POST", "/api/moments", { text: "Nổ to!", playId: big, win: { payout: 99_999_999 }, likes: 500 });
+      expect(forged.status).toBe(200);
+      expect(forged.body).toMatchObject({ text: "Nổ to!", likes: 0, win: { playId: big, game: "slot", bet: 10_000, payout: 120_000 } });
+      await sleep(100);
+      expect((await a.req("POST", "/api/moments", { text: "lại" })).body.message).toBe("slow_down");
+      // Filters and the 3-games gate
+      const newbie = new Player(); await newbie.register();
+      expect((await newbie.req("POST", "/api/moments", { text: "hi" })).body.message).toBe("play_first");
+      expect((await b.req("POST", "/api/moments", { text: "xem www.abc.com" })).body.message).toBe("link");
+      expect((await b.req("POST", "/api/moments", {})).status).toBe(400);
+      expect((await b.req("POST", "/api/moments", { text: "x".repeat(201) })).status).toBe(400);
+      expect((await b.req("POST", "/api/moments", { playId: big })).status).toBe(400); // someone else's win
+      // Likes toggle and are counted from the likes themselves
+      const id = forged.body.id;
+      expect((await b.req("POST", `/api/moments/${id}/like`)).body).toEqual({ on: true, likes: 1 });
+      expect((await c.req("POST", `/api/moments/${id}/like`)).body).toEqual({ on: true, likes: 2 });
+      expect((await c.req("POST", `/api/moments/${id}/like`)).body).toEqual({ on: false, likes: 1 });
+      expect((await notifs(a)).some((n) => n.kind === "moment" && n.data.action === "like")).toBe(true);
+      // Comments: filtered and paced; mentions ring the bell
+      expect((await b.req("POST", `/api/moments/${id}/comments`, { text: "gọi 0912345678" })).body.message).toBe("phone");
+      const cm = await b.req("POST", `/api/moments/${id}/comments`, { text: `Đỉnh quá @${c.username}`, mentions: [c.username] });
+      expect(cm.status).toBe(200);
+      expect((await b.req("POST", `/api/moments/${id}/comments`, { text: "nữa" })).body.message).toBe("slow_down");
+      expect((await c.req("GET", `/api/moments/${id}/comments`)).body.comments.map((x: any) => x.text)).toEqual([`Đỉnh quá @${c.username}`]);
+      await sleep(200);
+      expect((await notifs(c)).some((n) => n.kind === "mention" && n.data.scope === "moment")).toBe(true);
+      expect((await notifs(a)).some((n) => n.kind === "moment" && n.data.action === "comment")).toBe(true);
+      const wall = (await c.req("GET", "/api/moments")).body.items.find((m: any) => m.id === id);
+      expect(wall).toMatchObject({ likes: 1, comments: 1, liked: false, author: { username: a.username } });
+      // The same win can't be shared twice
+      await sleep(20_100 - 300);
+      expect((await a.req("POST", "/api/moments", { playId: big })).status).toBe(409);
+      // Friends and club tabs
+      expect((await c.req("GET", "/api/moments?scope=friends")).body.items.some((m: any) => m.id === id)).toBe(false);
+      await befriend(a, c);
+      expect((await c.req("GET", "/api/moments?scope=friends")).body.items.some((m: any) => m.id === id)).toBe(true);
+      expect((await c.req("GET", "/api/moments?scope=club")).body.items).toEqual([]);
+      // A block hides it both ways
+      await b.req("POST", `/api/players/${a.username}/block`, { block: true });
+      expect((await b.req("GET", "/api/moments")).body.items.some((m: any) => m.id === id)).toBe(false);
+      expect((await b.req("POST", `/api/moments/${id}/like`)).status).toBe(404);
+      // Top of the day
+      expect((await c.req("GET", "/api/moments/top")).body.item).not.toBeNull();
+    }, 40_000);
+
+    it("Moments reports: three hide a post until an admin looks", async () => {
+      const [a, r1, r2, r3, adm] = await players(5);
+      await pool.query("update users set is_admin = true where username = $1", [adm.username]);
+      const id = (await a.req("POST", "/api/moments", { text: "bài đăng" })).body.id;
+      expect((await a.req("POST", `/api/moments/${id}/report`)).status).toBe(400);
+      for (const p of [r1, r1, r2]) await p.req("POST", `/api/moments/${id}/report`, { reason: "spam" });
+      expect((await r3.req("GET", `/api/moments/${id}`)).status).toBe(200);
+      await r3.req("POST", `/api/moments/${id}/report`);
+      expect((await r3.req("GET", `/api/moments/${id}`)).status).toBe(404);
+      const rep = (await adm.req("GET", "/api/admin/social3/reports")).body.moments.find((x: any) => x.kind === "moment" && x.id === id);
+      expect(rep).toMatchObject({ reports: 3, hidden: true, username: a.username, reasons: ["spam", "spam"] });
+      expect((await adm.req("POST", `/api/admin/moments/${id}`, { hidden: false })).status).toBe(200);
+      expect((await r3.req("GET", `/api/moments/${id}`)).status).toBe(200);
+      expect((await adm.req("GET", "/api/admin/social3/reports")).body.moments.some((x: any) => x.id === id && x.kind === "moment")).toBe(false);
+    });
+
+    it("online now: friends first, then others who share their presence", async () => {
+      const [a, b, c] = await players(3);
+      await befriend(a, b);
+      const { WebSocket } = await import("ws");
+      const open = (p: Player) => new Promise<import("ws").WebSocket>((resolve, reject) => {
+        const ws = new WebSocket(base.replace("http", "ws") + "/ws/social", { headers: { Cookie: p.cookie } });
+        ws.on("open", () => resolve(ws)); ws.on("error", reject);
+      });
+      const socks = [await open(b), await open(c)];
+      await sleep(150);
+      let v = (await a.req("GET", "/api/online")).body;
+      expect(v.friends.map((f: any) => f.username)).toEqual([b.username]);
+      expect(v.others.some((o: any) => o.username === c.username)).toBe(true);
+      await c.req("PUT", "/api/social/privacy", { showPresence: false });
+      v = (await a.req("GET", "/api/online")).body;
+      expect(v.others.some((o: any) => o.username === c.username)).toBe(false);
+      for (const s of socks) s.close();
+    });
+
+    it("deleting an account removes clubs data, Moments, likes, comments, reports and quests", async () => {
+      const [gone, keep, other] = await players(3);
+      await setBalance(gone.username, 100_000);
+      const gid = await idOf(gone);
+      const club = (await gone.req("POST", "/api/clubs", { name: `Xoá ${Date.now() % 100000}`, tag: "DEL", emblem: "🌙", color: "#06b6d4" })).body.id;
+      await keep.req("POST", `/api/clubs/${club}/join`);
+      const msg = (await gone.req("POST", `/api/clubs/${club}/chat`, { text: "tạm biệt hội" })).body;
+      await keep.req("POST", `/api/clubs/chat/${msg.id}/report`);
+      const mine = (await gone.req("POST", "/api/moments", { text: "của tôi" })).body.id;
+      await keep.req("POST", `/api/moments/${mine}/like`);
+      const theirs = (await keep.req("POST", "/api/moments", { text: "của bạn" })).body.id;
+      await gone.req("POST", `/api/moments/${theirs}/like`);
+      await gone.req("POST", `/api/moments/${theirs}/comments`, { text: "hay đấy" });
+      await other.req("POST", `/api/moments/${mine}/report`);
+      await gone.req("GET", "/api/quests");
+      await (await import("../server/quests")).questEvent(gid, "chat", "x:1");
+      await gone.req("POST", "/api/invites", { to: keep.username, game: "pool", path: "/pool" });
+      const count = async () => Number((await pool.query(`select
+        (select count(*) from club_members where user_id = $1) + (select count(*) from club_messages where user_id = $1) +
+        (select count(*) from club_chat_reports where reporter_id = $1 or message_id = $2) + (select count(*) from moments where user_id = $1) +
+        (select count(*) from moment_likes where user_id = $1 or moment_id = $3) + (select count(*) from moment_comments where user_id = $1) +
+        (select count(*) from moment_reports where reporter_id = $1 or (kind = 'moment' and target_id = $3)) +
+        (select count(*) from daily_quests where user_id = $1) + (select count(*) from quest_events where user_id = $1) +
+        (select count(*) from direct_messages where from_id = $1 or to_id = $1) as n`, [gid, msg.id, mine])).rows[0].n);
+      expect(await count()).toBeGreaterThan(10);
+      expect((await gone.req("POST", "/api/user/delete", { password: gone.password })).status).toBe(200);
+      expect(await count()).toBe(0);
+      // The club passed to the remaining member; their like/comment counts are right
+      const v = (await keep.req("GET", `/api/clubs/${club}`)).body;
+      expect(v.members.map((m: any) => [m.username, m.role])).toEqual([[keep.username, "owner"]]);
+      expect((await keep.req("GET", `/api/moments/${theirs}`)).body).toMatchObject({ likes: 0, comments: 0 });
+    });
+  });
+
   describe("pool tournament", () => {
     async function connect(p: Player, code: string) {
       const { WebSocket } = await import("ws");
