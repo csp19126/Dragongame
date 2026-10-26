@@ -72,11 +72,11 @@ export default function Darts() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a0515] via-[#1d0a35] to-[#0a0515] flex flex-col">
       <Header />
-      <main className={`flex-1 w-full flex flex-col items-center relative z-10 ${inGame ? "gap-1.5 px-2 py-2" : "gap-3 px-3 py-3"}`}>
+      <main className={`flex-1 w-full flex flex-col items-center relative z-10 ${inGame ? "gap-1.5 px-2 pt-2 pb-24" : "gap-3 px-3 pt-3 pb-24"}`}>
         {!inGame && (
           <div className="text-center">
             <h1 className="font-display text-4xl sm:text-5xl leading-none bg-gradient-to-b from-yellow-200 via-yellow-400 to-orange-500 bg-clip-text text-transparent" data-testid="text-darts-title">{tr("Phi Tiêu", "Darts", "飛鏢")}</h1>
-            <p className="text-[11px] sm:text-xs font-black tracking-[0.3em] text-yellow-500/80 uppercase mt-1">🎯 {tr("501 · Đấu online · Thử thách mỗi ngày", "501 · Online · Daily challenge", "501 · 線上對戰 · 每日挑戰")} 🎯</p>
+            <p className="text-[11px] sm:text-xs font-black tracking-[0.12em] text-yellow-500/80 uppercase mt-1">🎯 {tr("501 · Đấu online · Thử thách mỗi ngày", "501 · Online · Daily challenge", "501 · 線上對戰 · 每日挑戰")} 🎯</p>
           </div>
         )}
         {!inGame && <GameTabs />}
@@ -623,10 +623,17 @@ function DailyPanel() {
           <span className="text-[11px] text-white/70 font-mono shrink-0">⏱ {left}</span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button type="button" disabled={done} onClick={() => setLocation("/phi-tieu?daily=ranked")}
-            className="rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500 disabled:opacity-50 disabled:from-white/20 disabled:to-white/10 disabled:text-white/70" data-testid="button-darts-daily-ranked">
-            {done ? `✅ ${ranked!.score} ${tr("điểm", "pts", "分")}${v.me.rank ? ` · #${v.me.rank}` : ""}` : ranked && ranked.darts.length ? tr("Ném tiếp lượt tính điểm", "Continue ranked", "繼續排名挑戰") : `🏆 ${tr("Lượt tính điểm", "Ranked attempt", "排名挑戰")}`}
-          </button>
+          {done ? (
+            <div className="rounded-2xl py-1.5 px-2 text-center bg-emerald-500/15 border border-emerald-300/40" data-testid="darts-daily-mine">
+              <p className="text-[10px] font-black uppercase text-emerald-200/80">{tr("Điểm của bạn", "Your score", "你的分數")}</p>
+              <p className="font-black text-white leading-tight"><span className="font-mono text-yellow-300 text-lg">{ranked!.score}</span>{v.me.rank ? ` · #${v.me.rank}` : ""}</p>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setLocation("/phi-tieu?daily=ranked")}
+              className="rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500" data-testid="button-darts-daily-ranked">
+              {ranked && ranked.darts.length ? tr("Ném tiếp lượt tính điểm", "Continue ranked", "繼續排名挑戰") : `🏆 ${tr("Lượt tính điểm", "Ranked attempt", "排名挑戰")}`}
+            </button>
+          )}
           <button type="button" onClick={() => setLocation("/phi-tieu?daily=practice")} className="rounded-2xl py-3 font-black text-white bg-white/10 border border-white/15" data-testid="button-darts-daily-practice">
             🎯 {tr("Ném thử", "Practice run", "練習")}
           </button>

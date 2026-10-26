@@ -48,8 +48,8 @@ export function InviteSheet({ open, onClose, path, game }: { open: boolean; onCl
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-          <motion.div className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-gradient-to-b from-[#2a0f4f] to-[#140726] border-t-2 border-yellow-400/50 p-4 pb-6"
+        <motion.div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm text-left" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+          <motion.div className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl bg-gradient-to-b from-[#2a0f4f] to-[#140726] border-t-2 border-yellow-400/50 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
             initial={{ y: 400 }} animate={{ y: 0 }} exit={{ y: 400 }} transition={{ type: "spring", damping: 26, stiffness: 260 }} onClick={(e) => e.stopPropagation()} data-testid="darts-invite-sheet">
             <div className="flex items-center justify-between mb-3">
               <p className="font-display text-2xl text-yellow-300">{tr("Mời bạn bè", "Invite a friend", "邀請好友")}</p>

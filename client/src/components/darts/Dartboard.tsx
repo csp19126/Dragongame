@@ -140,7 +140,7 @@ function StuckDart({ d }: { d: BoardDart }) {
   if (d.ring === "miss") return null;
   return (
     <g transform={`translate(${d.x} ${d.y})`} opacity={d.faded ? 0.45 : 1} data-testid="dart-stuck">
-      <g ref={ref} transform={`rotate(${base})`}><DartShape color={d.color} /></g>
+      <g ref={ref} transform={`rotate(${base})`}><DartShape color={d.color} scale={1.5} /></g>
     </g>
   );
 }
@@ -159,7 +159,7 @@ function FlyingDart({ f, onLanded, from }: { f: Flying; onLanded: (id: Flying["i
       const e = k * k * (3 - 2 * k);
       const x = from.x + (f.hit.x - from.x) * e;
       const y = from.y + (f.hit.y - from.y) * e - Math.sin(Math.PI * k) * 40; // a little arc
-      const s = 3.2 - 2.2 * e;
+      const s = 4.4 - 2.9 * e;
       ref.current?.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(-25 * (1 - e)).toFixed(1)}) scale(${s.toFixed(3)})`);
       if (k < 1) raf = requestAnimationFrame(loop);
       else done.current(f.id);
@@ -168,7 +168,7 @@ function FlyingDart({ f, onLanded, from }: { f: Flying; onLanded: (id: Flying["i
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f.id]);
-  return <g ref={ref} transform={`translate(${from.x} ${from.y}) scale(3.2)`}><DartShape color={f.color} /></g>;
+  return <g ref={ref} transform={`translate(${from.x} ${from.y}) scale(4.4)`}><DartShape color={f.color} /></g>;
 }
 
 function Crosshair({ color, innerRef }: { color: string; innerRef: React.RefObject<SVGGElement> }) {
