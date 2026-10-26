@@ -417,8 +417,10 @@ export function startFootballScheduler(httpServer?: { on(event: "close", fn: () 
   void run();
   const timer = setInterval(run, 5 * 60_000);
   timer.unref?.();
-  httpServer?.on("close", () => clearInterval(timer));
+  // Stopped together with the table clock (one "close" listener for the whole game)
+  if (httpServer) timers.push(timer);
 }
+const timers: ReturnType<typeof setInterval>[] = [];
 
 // ---------------- HTTP ----------------
 
@@ -607,7 +609,8 @@ export function attachFootballSockets(httpServer: Server, sessionMiddleware: Req
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
   const timer = setInterval(() => { void tick(); }, 500);
   timer.unref?.();
-  httpServer.on("close", () => clearInterval(timer));
+  timers.push(timer);
+  httpServer.on("close", () => { for (const t of timers.splice(0)) clearInterval(t); });
 
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? "/", "http://x");

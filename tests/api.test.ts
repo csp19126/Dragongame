@@ -434,6 +434,242 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
+  describe("penalty shootout (football)", () => {
+    async function connect(p: Player, code: string) {
+      const { WebSocket } = await import("ws");
+      const ws = new WebSocket(base.replace("http", "ws") + `/ws/football?code=${code}`, { headers: { Cookie: p.cookie } });
+      const msgs: any[] = [];
+      const all: any[] = [];
+      ws.on("message", (m) => { const x = JSON.parse(String(m)); msgs.push(x); all.push(x); });
+      await new Promise<void>((resolve, reject) => { ws.on("open", () => resolve()); ws.on("error", reject); });
+      const next = async (pred: (m: any) => boolean, ms = 5000) => {
+        const start = Date.now();
+        while (Date.now() - start < ms) {
+          const i = msgs.findIndex(pred);
+          if (i >= 0) return msgs.splice(0, i + 1)[i];
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        throw new Error("timed out waiting for a message");
+      };
+      return { ws, msgs, all, next };
+    }
+    const fb = () => import("../server/football");
+    const sf = () => import("../shared/football");
+    type Conn = Awaited<ReturnType<typeof connect>>;
+
+    /** Waits for the "choose" phase of kick number `n` and returns that state */
+    const chooseState = (c: Conn, n: number) => c.next((m) => m.t === "state" && m.status === "playing" && m.phase === "choose" && m.shootout.kicks.length === n);
+
+    it("hides both choices until both are in, resolves on the server, and the winner takes the pot once", async () => {
+      const { shooterOf } = await sf();
+      const { expireFootballClockForTest } = await fb();
+      const a = new Player(), b = new Player(), watcher = new Player();
+      await a.register(); await b.register(); await watcher.register();
+      const made = await a.req("POST", "/api/football/tables", { stake: 10000, kit: "br" });
+      expect(made.status).toBe(200);
+      const code = made.body.code;
+      expect((await a.state()).balance).toBe(40000);
+      expect((await a.req("POST", "/api/football/tables", { stake: 0 })).status).toBe(409); // one table at a time
+      expect((await b.req("GET", "/api/football/tables")).body.open.map((t: any) => t.code)).toContain(code);
+      expect((await b.req("POST", `/api/football/tables/${code}/join`, { kit: "br" })).status).toBe(200);
+      expect((await b.state()).balance).toBe(40000);
+      const ca = await connect(a, code), cb = await connect(b, code), cw = await connect(watcher, code);
+      const conns = [ca, cb];
+      let st = await chooseState(ca, 0);
+      expect(st.seat).toBe(0);
+      expect(st.kits[0]).toBe("br");
+      expect(st.kits[1]).not.toBe("br"); // no two teams in the same shirt
+      expect((await chooseState(cw, 0)).seat).toBeNull();
+
+      // Kick 1: the shooter commits first. The keeper and the watcher learn only that a choice is in.
+      const shooter = shooterOf(st.shootout);
+      const keeper = 1 - shooter;
+      const secret = { x: -0.77, y: 0.31, power: 0.64, curve: 0.21 };
+      cw.ws.send(JSON.stringify({ t: "shoot", shot: secret })); // a spectator can't play
+      conns[keeper].ws.send(JSON.stringify({ t: "shoot", shot: secret })); // nor the keeper shoot
+      expect((await conns[keeper].next((m) => m.t === "error")).message).toBe("Not your turn");
+      conns[shooter].ws.send(JSON.stringify({ t: "shoot", shot: secret }));
+      const seen = await conns[keeper].next((m) => m.t === "state" && m.committed[shooter]);
+      expect(seen.committed[keeper]).toBe(false);
+      conns[shooter].ws.send(JSON.stringify({ t: "shoot", shot: { x: 0.5, y: 0.5, power: 0.5, curve: 0 } }));
+      expect((await conns[shooter].next((m) => m.t === "error")).message).toBe("Already chosen");
+      await new Promise((r) => setTimeout(r, 150));
+      for (const c of [conns[keeper], cw]) {
+        const leaked = c.all.filter((m) => JSON.stringify(m).includes("-0.77") || m.t === "kick");
+        expect(leaked).toEqual([]);
+      }
+      conns[keeper].ws.send(JSON.stringify({ t: "dive", zone: 3 }));
+      const k1 = await conns[keeper].next((m) => m.t === "kick");
+      expect(await conns[shooter].next((m) => m.t === "kick")).toEqual(k1);
+      expect(await cw.next((m) => m.t === "kick")).toEqual(k1);
+      expect(k1.kick.shot).toEqual(secret);
+      expect(k1.kick.dive).toBe(3);
+      expect(k1.by).toBe(shooter);
+      // The result is exactly what the shared maths says for the server's seed
+      const { resolveKick } = await sf();
+      expect(resolveKick(secret, 3, k1.kick.seed)).toEqual(k1.kick);
+
+      // Play it out; the keeper always dives bottom right
+      let n = 1;
+      let end: any = null;
+      while (!end && n < 40) {
+        expireFootballClockForTest(code); // skip the replay pause
+        const s = await ca.next((m) => m.t === "state" && (m.status === "finished" || (m.phase === "choose" && m.shootout.kicks.length === n)));
+        if (s.status === "finished") { end = s; break; }
+        const sh = shooterOf(s.shootout);
+        // Seat 0 places it low in the corner; seat 1 leathers it over the bar
+        const shot = sh === 0 ? { x: -0.75, y: 0.2, power: 0.5, curve: 0 } : { x: 0, y: 0.9, power: 1, curve: 0 };
+        conns[sh].ws.send(JSON.stringify({ t: "shoot", shot }));
+        conns[1 - sh].ws.send(JSON.stringify({ t: "dive", zone: 2 }));
+        const k = await ca.next((m) => m.t === "kick");
+        n++;
+        if (k.decisive) end = await ca.next((m) => m.t === "state" && m.status === "finished");
+      }
+      expect(end).toBeTruthy();
+      const w = end.result.winner as 0 | 1;
+      expect(end.result).toMatchObject({ reason: "win", payout: 20000, ladder: { counted: true, delta: 16 } });
+      const [winner, loser] = w === 0 ? [a, b] : [b, a];
+      expect((await winner.state()).balance).toBe(60000);
+      expect((await loser.state()).balance).toBe(40000);
+
+      // Resigning after the end changes nothing
+      conns[1 - w].ws.send(JSON.stringify({ t: "resign" }));
+      await new Promise((r) => setTimeout(r, 200));
+      expect((await winner.state()).balance).toBe(60000);
+      const row = (await pool.query("select status, winner, counted, elo_delta, kicks from football_matches where code = $1", [code])).rows[0];
+      expect(row).toMatchObject({ status: "finished", counted: true, elo_delta: 16 });
+      expect(row.kicks.length).toBe(n);
+      const plays = (await pool.query("select u.username, bet::int, payout::int from game_plays g join users u on u.id = g.user_id where game = 'football' and u.username in ($1, $2) order by payout", [a.username, b.username])).rows;
+      expect(plays).toEqual([{ username: loser.username, bet: 10000, payout: 0 }, { username: winner.username, bet: 10000, payout: 20000 }]);
+      const ratings = (await pool.query("select u.username, rating, played, won from football_ratings r join users u on u.id = r.user_id where u.username in ($1, $2) order by rating", [a.username, b.username])).rows;
+      expect(ratings).toEqual([{ username: loser.username, rating: 984, played: 1, won: 0 }, { username: winner.username, rating: 1016, played: 1, won: 1 }]);
+      const ladder = (await a.req("GET", "/api/football/ladder")).body;
+      expect(ladder.table.find((r: any) => r.username === winner.username)).toMatchObject({ rating: 1016, played: 1, won: 1 });
+
+      // Rematch: both ask, both stakes held again on a new table
+      ca.ws.send(JSON.stringify({ t: "rematch" }));
+      cb.ws.send(JSON.stringify({ t: "rematch" }));
+      const re = await ca.next((m) => m.t === "rematch");
+      expect(re.code).not.toBe(code);
+      expect((await winner.state()).balance).toBe(50000);
+      expect((await loser.state()).balance).toBe(30000);
+      const ra = await connect(a, re.code);
+      expect((await ra.next((m) => m.t === "state")).seat).toBe(1); // the other player hosts the rematch
+      ra.ws.send(JSON.stringify({ t: "resign" }));
+      await ra.next((m) => m.t === "state" && m.status === "finished");
+      expect((await b.state()).balance).toBe(w === 1 ? 70000 : 50000);
+      for (const c of [ca, cb, cw, ra]) c.ws.close();
+    }, 60000);
+
+    it("picks at random when the clock runs out, and too many timeouts lose", async () => {
+      const { shooterOf } = await sf();
+      const { expireFootballClockForTest } = await fb();
+      const a = new Player(), b = new Player();
+      await a.register(); await b.register();
+      const code = (await a.req("POST", "/api/football/tables", { stake: 1000 })).body.code;
+      await b.req("POST", `/api/football/tables/${code}/join`);
+      const ca = await connect(a, code), cb = await connect(b, code);
+      for (let n = 0; n < 4; n++) {
+        const s = await chooseState(ca, n);
+        // A plays; B never does
+        if (shooterOf(s.shootout) === 0) ca.ws.send(JSON.stringify({ t: "shoot", shot: { x: 0, y: 0.3, power: 0.5, curve: 0 } }));
+        else ca.ws.send(JSON.stringify({ t: "dive", zone: 1 }));
+        await ca.next((m) => m.t === "state" && m.committed[0]);
+        expireFootballClockForTest(code);
+        if (n === 3) break; // B's 4th time out in a row: he loses before the kick is taken
+        const k = await cb.next((m) => m.t === "kick");
+        expect(k.by === 1 ? typeof k.kick.shot.x : k.kick.dive).not.toBeUndefined(); // B was given a choice
+        expireFootballClockForTest(code);
+      }
+      const end = await ca.next((m) => m.t === "state" && m.status === "finished");
+      expect(end.result).toMatchObject({ winner: 0, reason: "timeouts", payout: 2000, ladder: { counted: false } });
+      expect((await a.state()).balance).toBe(51000);
+      expect((await b.state()).balance).toBe(49000);
+      ca.ws.close(); cb.ws.close();
+    }, 30000);
+
+    it("refunds a cancelled table, refuses a seat you can't afford, and refunds after a restart", async () => {
+      const a = new Player(), b = new Player();
+      await a.register(); await b.register();
+      expect((await a.req("POST", "/api/football/tables", { stake: 777 })).status).toBe(400);
+      const t1 = (await a.req("POST", "/api/football/tables", { stake: 50000 })).body.code;
+      expect((await a.state()).balance).toBe(0);
+      await setBalance(b.username, 1000);
+      expect((await b.req("POST", `/api/football/tables/${t1}/join`)).status).toBe(400);
+      expect((await b.state()).balance).toBe(1000);
+      expect((await b.req("GET", "/api/football/tables")).body.open.map((t: any) => t.code)).toContain(t1);
+      expect((await b.req("POST", `/api/football/tables/${t1}/cancel`)).status).toBe(404); // not yours
+      expect((await a.req("POST", `/api/football/tables/${t1}/cancel`)).status).toBe(200);
+      expect((await a.state()).balance).toBe(50000);
+
+      // A match in progress when the server restarts: both stakes back
+      await setBalance(b.username, 50000);
+      const t2 = (await a.req("POST", "/api/football/tables", { stake: 10000 })).body.code;
+      await b.req("POST", `/api/football/tables/${t2}/join`);
+      expect((await b.state()).balance).toBe(40000);
+      const { recoverFootballMatches, dropAllFootballRoomsForTest } = await fb();
+      dropAllFootballRoomsForTest();
+      await recoverFootballMatches();
+      await recoverFootballMatches(); // twice is harmless
+      expect((await a.state()).balance).toBe(50000);
+      expect((await b.state()).balance).toBe(50000);
+      expect((await pool.query("select status from football_matches where code = $1", [t2])).rows[0].status).toBe("cancelled");
+    });
+
+    it("practice against the computer never pays (bar the daily first win) and checks every input", async () => {
+      const { shooterOf } = await sf();
+      const p = new Player();
+      await p.register();
+      expect((await p.req("POST", "/api/football/practice/kick", { dive: 1 })).status).toBe(404);
+      let r = await p.req("POST", "/api/football/practice", { level: "easy", kit: "jp" });
+      expect(r.body.practice).toMatchObject({ level: "easy", kit: "jp", winner: null });
+      let practice = r.body.practice;
+      let guard = 0;
+      while (practice.winner === null && guard++ < 60) {
+        const mine = shooterOf(practice.shootout) === 0;
+        if (mine) expect((await p.req("POST", "/api/football/practice/kick", { dive: 2 })).status).toBe(400); // you're shooting
+        r = await p.req("POST", "/api/football/practice/kick", mine ? { shot: { x: 0.6, y: 0.3, power: 0.6, curve: 0 } } : { dive: 1 });
+        expect(r.status).toBe(200);
+        expect(r.body.by).toBe(mine ? 0 : 1);
+        practice = r.body.practice;
+      }
+      expect(practice.winner).not.toBeNull();
+      expect((await p.req("POST", "/api/football/practice/kick", { dive: 1 })).status).toBe(409);
+      expect((await p.state()).balance).toBe(50000); // Easy never pays
+      expect((await pool.query("select count(*)::int n from game_plays g join users u on u.id = g.user_id where u.username = $1", [p.username])).rows[0].n).toBe(0);
+    }, 30000);
+
+    it("pays the weekly Penalty King prizes exactly once, only to players with enough matches", async () => {
+      const { settleFootballWeek, footballTick } = await fb();
+      const { previousWeek, weekOf } = await sf();
+      const ps = [new Player(), new Player(), new Player(), new Player(), new Player()];
+      for (const p of ps) await p.register();
+      const ids = await Promise.all(ps.map(async (p) => (await p.req("GET", "/api/me")).body.id));
+      const week = "2020-01-06";
+      // ratings: p0 1100 (but only 4 games), p1 1080, p2 1050, p3 1020, p4 1010
+      const rows: [number, number, number][] = [[1100, 4, 4], [1080, 6, 5], [1050, 7, 4], [1020, 5, 3], [1010, 9, 5]];
+      for (const [i, [rating, played, won]] of rows.entries()) {
+        await pool.query("insert into football_ratings (user_id, week, rating, played, won) values ($1, $2, $3, $4, $5)", [ids[i], week, rating, played, won]);
+      }
+      const first = await settleFootballWeek(week);
+      expect(first?.paid).toBe(3);
+      expect(first?.summary.map((w: any) => w.username)).toEqual([ps[1].username, ps[2].username, ps[3].username]);
+      expect(await settleFootballWeek(week)).toBeNull(); // never twice
+      const bal = await Promise.all(ps.map(async (p) => (await p.state()).balance));
+      expect(bal).toEqual([50000, 1_050_000, 550_000, 300_000, 50000]);
+      const deps = (await pool.query("select amount from deposits where method = 'football_weekly' and user_id = any($1) order by amount desc", [ids])).rows.map((r) => r.amount);
+      expect(deps).toEqual([1_000_000, 500_000, 250_000]);
+      const chat = (await pool.query("select text from chat_messages where user_id = 'system' and text like $1", [`%${week}%`])).rows;
+      expect(chat.length).toBe(1);
+      expect(chat[0].text).toContain(ps[1].username);
+      // The scheduler settles last week by itself, once
+      const now = new Date();
+      await footballTick(now);
+      await footballTick(now);
+      expect((await pool.query("select count(*)::int n from football_weeks where week = $1", [previousWeek(weekOf(now))])).rows[0].n).toBe(1);
+    });
+  });
+
   describe("blackjack", () => {
     const shoe = (...cards: string[]) => [...cards, ...Array(30).fill("2C")].reverse();
 
