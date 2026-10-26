@@ -35,8 +35,8 @@ const u = (t: number) => (1 - s(t)) / (1 - SCALE_G);
 
 interface Geo { W: number; H: number; cx: number; gw: number; gh: number; gy: number; spotY: number; rb: number }
 function geo(W: number, H: number): Geo {
-  const gw = 0.76 * W;
-  return { W, H, cx: W / 2, gw, gh: gw / 3, gy: 0.5 * H, spotY: 0.86 * H, rb: 0.048 * W };
+  const gw = 0.8 * W;
+  return { W, H, cx: W / 2, gw, gh: gw / 3, gy: 0.55 * H, spotY: 0.88 * H, rb: 0.048 * W };
 }
 const groundY = (g: Geo, t: number) => g.spotY + (g.gy - g.spotY) * u(t);
 /** A point at goal units (x, y) and depth t (0 = the spot, 1 = the goal line) on screen */
@@ -120,7 +120,7 @@ export function Pitch({ mode, shooterKit, keeperKit, locked, onShoot, onDive, pl
     if (!el) return;
     const fit = () => {
       const W = Math.round(el.clientWidth);
-      const H = Math.round(Math.min(W * 1.2, Math.max(360, window.innerHeight - 250)));
+      const H = Math.round(Math.min(W * 1.08, Math.max(340, window.innerHeight - 300)));
       setSize({ W, H });
     };
     fit();
@@ -323,7 +323,16 @@ export function Pitch({ mode, shooterKit, keeperKit, locked, onShoot, onDive, pl
       }
       return q;
     };
-    ctx.strokeStyle = "rgba(255,255,255,0.32)";
+    // The shade inside the goal, so the net reads clearly against the crowd
+    {
+      const a = proj(g, -1, 0, 1), b = proj(g, -1, 1, 1), c = proj(g, 1, 1, 1), d = proj(g, 1, 0, 1);
+      const shade = ctx.createLinearGradient(0, b.y, 0, a.y);
+      shade.addColorStop(0, "rgba(6,10,24,0.78)");
+      shade.addColorStop(1, "rgba(6,24,14,0.6)");
+      ctx.fillStyle = shade;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.closePath(); ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.38)";
     ctx.lineWidth = 1;
     const backTop = 0.82;
     // Back panel
@@ -385,8 +394,8 @@ export function Pitch({ mode, shooterKit, keeperKit, locked, onShoot, onDive, pl
         const x0 = proj(g, c.x - 1 / 3 + 0.02, 0, 1).x, x1 = proj(g, c.x + 1 / 3 - 0.02, 0, 1).x;
         const yTop = proj(g, 0, z >= 3 ? 0.98 : 0.48, 1).y, yBot = proj(g, 0, z >= 3 ? 0.52 : 0.02, 1).y;
         const sel = L.chosen === z;
-        ctx.fillStyle = sel ? "rgba(250,204,21,0.45)" : L.locked ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.10)";
-        ctx.strokeStyle = sel ? "rgba(250,204,21,0.95)" : "rgba(255,255,255,0.35)";
+        ctx.fillStyle = sel ? "rgba(250,204,21,0.45)" : L.locked ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.16)";
+        ctx.strokeStyle = sel ? "rgba(250,204,21,0.95)" : "rgba(255,255,255,0.6)";
         ctx.lineWidth = sel ? 2.5 : 1;
         ctx.setLineDash(sel ? [] : [5, 4]);
         roundRect(ctx, x0, yTop, x1 - x0, yBot - yTop, 6);
@@ -499,8 +508,8 @@ export function Pitch({ mode, shooterKit, keeperKit, locked, onShoot, onDive, pl
             initial={{ scale: 0.3, opacity: 0, rotate: -6 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} exit={{ opacity: 0, scale: 1.3 }}
             transition={{ type: "spring", stiffness: 380, damping: 16 }} data-testid="football-banner">
             {banner.slow && <span className="mb-1 px-2 py-0.5 rounded bg-red-600 text-white text-[10px] font-black tracking-widest">● {labels.replay}</span>}
-            <span className={`font-display text-5xl sm:text-6xl tracking-wide drop-shadow-[0_4px_0_rgba(0,0,0,0.6)] ${good ? "text-yellow-300" : banner.outcome === "save" ? "text-sky-300" : "text-rose-300"}`}
-              style={{ WebkitTextStroke: "2px rgba(0,0,0,0.55)" }}>{outcomeText}</span>
+            <span className={`font-sans font-black italic text-[2.6rem] sm:text-6xl leading-none tracking-tight px-4 py-1.5 rounded-2xl whitespace-nowrap ${good ? "text-yellow-300 bg-gradient-to-r from-red-700/80 via-red-600/90 to-red-700/80" : banner.outcome === "save" ? "text-white bg-gradient-to-r from-sky-800/80 via-sky-600/90 to-sky-800/80" : "text-white bg-gradient-to-r from-zinc-800/80 via-zinc-600/90 to-zinc-800/80"}`}
+              style={{ textShadow: "0 3px 0 rgba(0,0,0,0.55), 0 0 18px rgba(0,0,0,0.35)" }}>{outcomeText}</span>
           </motion.div>
         )}
       </AnimatePresence>

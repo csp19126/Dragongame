@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Check, Copy, Crown, Loader2, Send, Share2, X } from "lucide-react";
@@ -124,8 +125,8 @@ export function InviteSheet({ path, onClose }: { path: string; onClose: () => vo
     },
   });
   const list = [...(friends.data?.friends ?? [])].sort((a, b) => Number(b.online) - Number(a.online) || a.username.localeCompare(b.username));
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose} data-testid="football-invite-sheet">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm text-left" onClick={onClose} data-testid="football-invite-sheet">
       <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md max-h-[80vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-gradient-to-b from-[#24123f] to-[#120822] border-t-2 sm:border-2 border-yellow-400/40 p-4 pb-6">
         <div className="flex items-center justify-between mb-3">
@@ -154,7 +155,8 @@ export function InviteSheet({ path, onClose }: { path: string; onClose: () => vo
         </div>
         <p className="mt-2 text-center font-mono text-[11px] text-white/40 truncate">{url}</p>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

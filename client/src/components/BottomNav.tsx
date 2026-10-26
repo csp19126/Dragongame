@@ -16,7 +16,7 @@ export function BottomNav() {
   const album = useQuery<AlbumView>({ queryKey: ["/api/stickers"], enabled: !!user, refetchInterval: 120_000 });
   const unread = useDmUnread();
   const params = new URLSearchParams(search);
-  const atTable = location === "/pool" && (params.has("table") || params.get("practice") === "1");
+  const atTable = (location === "/pool" && (params.has("table") || params.get("practice") === "1")) || (location === "/da-bong" && (params.has("table") || params.has("practice")));
   const show = !!user && location !== "/auth" && !atTable;
 
   // Leave room at the bottom of every page for the bar

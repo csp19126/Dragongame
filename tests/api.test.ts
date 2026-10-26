@@ -662,6 +662,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       const chat = (await pool.query("select text from chat_messages where user_id = 'system' and text like $1", [`%${week}%`])).rows;
       expect(chat.length).toBe(1);
       expect(chat[0].text).toContain(ps[1].username);
+      await pool.query("delete from chat_messages where user_id = 'system' and text like $1", [`%${week}%`]); // keep the chat tests' room clean
       // The scheduler settles last week by itself, once
       const now = new Date();
       await footballTick(now);

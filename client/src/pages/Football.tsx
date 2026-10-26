@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Redirect, useLocation, useSearch } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bot, Eye, Flag, Loader2, Plus, RotateCcw, UserPlus, Users, Wifi, WifiOff, X } from "lucide-react";
@@ -223,11 +224,11 @@ function TimerBar({ ms, total }: { ms: number | null; total: number }) {
   );
 }
 
-function EndBanner({ title, sub, actions, children }: { title: string; sub?: string; actions: { label: string; onClick: () => void; testid?: string; disabled?: boolean }[]; children?: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6" data-testid="football-end">
+function EndBanner({ title, sub, won, actions, children }: { title: string; sub?: string; won: boolean; actions: { label: string; onClick: () => void; testid?: string; disabled?: boolean }[]; children?: React.ReactNode }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6" data-testid="football-end">
       <div className="w-full max-w-xs rounded-3xl p-6 text-center bg-gradient-to-b from-[#2a0f4f] to-[#140726] border-2 border-yellow-400/60 shadow-[0_0_50px_rgba(250,204,21,0.35)]">
-        <p className="text-5xl mb-2">🏆</p>
+        <p className="text-5xl mb-2">{won ? "🏆" : "🧤"}</p>
         <p className="font-display text-4xl text-yellow-300 leading-tight">{title}</p>
         {sub && <p className="mt-2 text-white/80 font-bold whitespace-pre-line">{sub}</p>}
         {children}
@@ -235,7 +236,8 @@ function EndBanner({ title, sub, actions, children }: { title: string; sub?: str
           {actions.map((a) => <button key={a.label} type="button" disabled={a.disabled} onClick={a.onClick} className="flex-1 py-2.5 rounded-xl font-black text-black bg-gradient-to-b from-yellow-300 to-orange-500 disabled:opacity-50" data-testid={a.testid}>{a.label}</button>)}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -360,7 +362,7 @@ function PracticeMatch({ level, kit, name, onExit, onAgain }: { level: Level; ki
         <button type="button" onClick={onAgain} className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 font-black text-sm flex items-center justify-center gap-1.5"><RotateCcw className="w-4 h-4" />{tr("Đá lại", "Restart", "重新開始")}</button>
       </div>
       {over && (
-        <EndBanner title={view.winner === 0 ? tr("BẠN THẮNG!", "YOU WIN!", "你贏了！") : tr("BẠN THUA", "YOU LOSE", "你輸了")}
+        <EndBanner won={view.winner === 0} title={view.winner === 0 ? tr("BẠN THẮNG!", "YOU WIN!", "你贏了！") : tr("BẠN THUA", "YOU LOSE", "你輸了")}
           sub={`${t.goals[0]} – ${t.goals[1]}${view.bonus ? `\n🎁 ${tr("Thắng đầu ngày", "First win today", "今日首勝")} +${fmtCoins(view.bonus)} 🪙` : ""}`}
           actions={[{ label: tr("Đá lại", "Play again", "再玩一局"), onClick: onAgain, testid: "button-football-again" }, { label: tr("Sảnh", "Lobby", "大廳"), onClick: onExit }]} />
       )}
@@ -543,6 +545,7 @@ function OnlineMatch({ code, kit, userId, onExit, onJoined, onGo }: { code: stri
 
       {ended && r && !animating && (
         <EndBanner
+          won={seat === null || !!iWon}
           title={seat === null ? `${names[r.winner]} ${tr("thắng", "wins", "獲勝")}` : iWon ? tr("BẠN THẮNG!", "YOU WIN!", "你贏了！") : tr("BẠN THUA", "YOU LOSE", "你輸了")}
           sub={`${t.goals[0]} – ${t.goals[1]} ${reason[r.reason] ?? ""}${r.payout ? `\n${iWon ? "+" : ""}${fmtCoins(r.payout)} 🪙` : ""}${seat !== null && r.ladder ? `\n👑 ${r.ladder.counted ? `${iWon ? "+" : "−"}${r.ladder.delta} Elo` : tr("Trận này không tính Elo", "This match doesn't count for Elo", "本場不計入 Elo")}` : ""}`}
           actions={seat !== null ? [
