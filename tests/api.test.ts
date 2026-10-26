@@ -1149,8 +1149,8 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await mine(c)).find((i: any) => i.kind === "big_win")).toMatchObject({ game: "slot", amount: 80000, bet: 1000 });
       await a.req("PUT", "/api/social/privacy", { showInFeed: false });
       expect(await mine(c)).toEqual([]);
-      expect((await c.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "everyone", requestsFrom: "everyone", showPresence: true, showInFeed: true });
-      expect((await a.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "friends", requestsFrom: "everyone", showPresence: false, showInFeed: false });
+      expect((await c.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "everyone", requestsFrom: "everyone", showPresence: true, showInFeed: true, hideCountry: false, showPhotos: false });
+      expect((await a.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "friends", requestsFrom: "everyone", showPresence: false, showInFeed: false, hideCountry: false, showPhotos: false });
     });
 
     it("reactions: one of each emoji per player, toggled, counted, grouped in one notification, rate limited", async () => {
