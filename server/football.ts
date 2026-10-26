@@ -272,8 +272,9 @@ async function tick() {
         room.timeouts[s]++;
         room.pending[s] = s === shooter ? { kind: "shot", shot: randomShot(cryptoRand) } : { kind: "dive", zone: randomInt(6) as Zone };
       }
-      const afk = ([0, 1] as Side[]).find((s) => room.timeouts[s] >= MAX_TIMEOUTS);
-      if (afk !== undefined) { await finish(room, (1 - afk) as Side, "timeouts"); continue; }
+      const afk = ([0, 1] as Side[]).filter((s) => room.timeouts[s] >= MAX_TIMEOUTS);
+      if (afk.length === 2) { await cancel(room, "abandoned"); continue; } // nobody is playing: refund both
+      if (afk.length === 1) { await finish(room, (1 - afk[0]) as Side, "timeouts"); continue; }
       await resolve(room);
     } catch (e) {
       console.error("[football] tick", e);

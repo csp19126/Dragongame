@@ -399,7 +399,7 @@ function OnlineMatch({ code, kit, userId, onExit, onJoined, onGo }: { code: stri
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: STATE_KEY }); queryClient.invalidateQueries({ queryKey: ME_KEY }); onExit(); },
   });
 
-  const { connected, send } = useFootballSocket(code, (m) => {
+  const { connected, failed, send } = useFootballSocket(code, (m) => {
     if (m.t === "state") {
       const first = !latest.current;
       latest.current = m;
@@ -450,6 +450,16 @@ function OnlineMatch({ code, kit, userId, onExit, onJoined, onGo }: { code: stri
     else soundManager.lossComfort();
   }, [ended]);
 
+  if (!table && failed) {
+    return (
+      <div className="w-full max-w-md flex flex-col items-center gap-4 py-12 text-center" data-testid="football-gone">
+        <div className="text-6xl">🥅</div>
+        <p className="font-display text-2xl text-yellow-300">{tr("Không tìm thấy bàn này", "Table not found", "找不到這張球桌")}</p>
+        <p className="text-sm text-white/60">{tr("Có thể trận đã kết thúc hoặc bàn đã đóng.", "The match may be over or the table was closed.", "比賽可能已結束或球桌已關閉。")}</p>
+        <button type="button" onClick={onExit} className="w-full rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500">{tr("Về sảnh", "Back to the lobby", "回到大廳")}</button>
+      </div>
+    );
+  }
   if (!table) return <div className="py-20"><Loader2 className="w-10 h-10 animate-spin text-yellow-400" /></div>;
   const seat = table.seat;
   const path = `/da-bong?table=${code}`;
