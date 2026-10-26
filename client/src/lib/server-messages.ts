@@ -158,7 +158,7 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "This Lì Xì can't be opened": { vi: "Không mở được Lì Xì này (đã mở hoặc đã hết hạn)", zh: "無法打開這個紅包（已領取或已過期）" },
   "You haven't earned that badge": { vi: "Bạn chưa đạt thành tích này", zh: "你還沒獲得這個成就" },
 
-  // Social 3: invites, clubs, quests, Moments
+  // Social 3: invites, clubs, quests, Talk, photos, find a match
   "Bad invite link": { vi: "Link mời không hợp lệ", zh: "邀請連結無效" },
   "You can't invite yourself": { vi: "Bạn không thể tự mời chính mình", zh: "你不能邀請自己" },
   "Can't invite this player": { vi: "Không thể mời người chơi này", zh: "無法邀請這位玩家" },
@@ -190,10 +190,6 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "No such quest": { vi: "Không có nhiệm vụ này", zh: "沒有這個任務" },
   "Quest not finished yet": { vi: "Nhiệm vụ chưa hoàn thành", zh: "任務尚未完成" },
   "Finish all three quests first": { vi: "Hoàn thành cả ba nhiệm vụ trước đã", zh: "請先完成三個任務" },
-  "That win can't be shared": { vi: "Không chia sẻ được ván thắng này", zh: "無法分享這次贏局" },
-  "You've posted enough Moments for today": { vi: "Hôm nay bạn đã đăng đủ Khoảnh khắc rồi", zh: "你今天發布的動態已達上限" },
-  "You already shared this win": { vi: "Bạn đã chia sẻ ván thắng này rồi", zh: "你已經分享過這次贏局了" },
-  "This Moment has too many comments": { vi: "Khoảnh khắc này có quá nhiều bình luận", zh: "這則動態的留言太多了" },
   "Bad photo": { vi: "Ảnh không hợp lệ", zh: "照片無效" },
   "Photo is too big": { vi: "Ảnh quá lớn", zh: "照片太大了" },
   "Too many photos, try again later": { vi: "Bạn gửi nhiều ảnh quá, thử lại sau nhé", zh: "照片傳太多了，請稍後再試" },
