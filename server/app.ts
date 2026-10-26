@@ -6,6 +6,7 @@ import { registerRoutes } from "./routes";
 import { getSessionMiddleware } from "./session";
 import { db } from "./db";
 import { attachPoolSockets, recoverPoolMatches } from "./pool";
+import { attachDartsSockets, recoverDartsMatches, startDartsScheduler } from "./darts";
 import { startTournamentScheduler } from "./tournament";
 import { startLeagueScheduler } from "./league";
 import { startLotoScheduler } from "./loto";
@@ -76,6 +77,8 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   await registerRoutes(httpServer, app);
   await recoverPoolMatches();
   attachPoolSockets(httpServer, sessionMiddleware);
+  await recoverDartsMatches();
+  attachDartsSockets(httpServer, sessionMiddleware);
   await recoverTableEscrows();
   attachCardTableSockets(httpServer, sessionMiddleware);
   attachSocialSockets(httpServer, sessionMiddleware);
@@ -85,6 +88,7 @@ export async function createApp(sessionSecret: string): Promise<{ app: express.E
   startLotoScheduler(httpServer);
   startHorseScheduler(httpServer);
   startBancaLogger(httpServer);
+  startDartsScheduler(httpServer);
 
   // Errors always come back as JSON, never an HTML stack trace
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

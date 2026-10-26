@@ -2318,4 +2318,226 @@ describe.skipIf(!TEST_DB)("API", () => {
       for (const w of sockets) w.close();
     }, 30000);
   });
+  describe("darts", () => {
+    async function connect(p: Player, code: string) {
+      const { WebSocket } = await import("ws");
+      const ws = new WebSocket(base.replace("http", "ws") + `/ws/darts?code=${code}`, { headers: { Cookie: p.cookie } });
+      const msgs: any[] = [];
+      ws.on("message", (m) => msgs.push(JSON.parse(String(m))));
+      await new Promise<void>((resolve, reject) => { ws.on("open", () => resolve()); ws.on("error", reject); });
+      const next = async (pred: (m: any) => boolean, ms = 4000) => {
+        const start = Date.now();
+        while (Date.now() - start < ms) {
+          const i = msgs.findIndex(pred);
+          if (i >= 0) return msgs.splice(0, i + 1)[i];
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        throw new Error("timed out waiting for a message");
+      };
+      return { ws, msgs, next };
+    }
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const plays = async (username: string) => (await pool.query("select bet, payout from game_plays g join users u on u.id = g.user_id where u.username = $1 and g.game = 'darts' order by g.id", [username])).rows.map((r: any) => [Number(r.bet), Number(r.payout)]);
+
+    it("online: both stakes held, the server throws the darts, the winner takes the pot exactly once, rematch", async () => {
+      const a = new Player(), b = new Player(), watcher = new Player();
+      await a.register(); await b.register(); await watcher.register();
+      const made = await a.req("POST", "/api/darts/tables", { stake: 10000, legs: 3 });
+      expect(made.status).toBe(200);
+      const code = made.body.code;
+      expect((await a.state()).balance).toBe(40000);
+      expect((await a.req("POST", "/api/darts/tables", { stake: 0 })).status).toBe(409);
+      expect((await b.req("GET", "/api/darts/tables")).body.open.map((t: any) => t.code)).toContain(code);
+      const ca = await connect(a, code);
+      expect((await ca.next((m) => m.t === "state")).status).toBe("waiting");
+      expect((await b.req("POST", `/api/darts/tables/${code}/join`)).status).toBe(200);
+      expect((await b.state()).balance).toBe(40000);
+      expect((await watcher.req("POST", `/api/darts/tables/${code}/join`)).status).toBe(409); // seat taken
+      const cb = await connect(b, code);
+      const cw = await connect(watcher, code);
+      const sb = await cb.next((m) => m.t === "state" && m.status === "playing");
+      expect(sb.seat).toBe(1);
+      expect(sb.legs).toBe(3);
+      expect((await cw.next((m) => m.t === "state")).seat).toBeNull();
+
+      // Whoever's turn it is throws; a spectator's throw and an out-of-turn throw do nothing
+      const first = sb.game.turn as 0 | 1;
+      const thrower = first === 0 ? ca : cb, other = first === 0 ? cb : ca;
+      cw.ws.send(JSON.stringify({ t: "throw", x: 0, y: -103, power: 1, drift: 0, holdMs: 1000 }));
+      other.ws.send(JSON.stringify({ t: "throw", x: 0, y: -103, power: 1, drift: 0, holdMs: 1000 }));
+      expect((await other.next((m) => m.t === "error")).message).toBe("Not your turn");
+      // The client can't choose where it lands: it only sends the aim
+      thrower.ws.send(JSON.stringify({ t: "throw", x: 0, y: -103, power: 1, drift: 0, holdMs: 1000, hit: { x: 0, y: 0, score: 60 }, score: 180 }));
+      const seen = await cw.next((m) => m.t === "dart");
+      expect(seen.by).toBe(first);
+      expect(Number.isFinite(seen.hit.x) && Number.isFinite(seen.hit.y)).toBe(true);
+      expect(seen.game.scores[first]).toBe(501 - seen.hit.score);
+      expect(seen.game.visit).toHaveLength(1);
+
+      // Live aim reaches the opponent
+      thrower.ws.send(JSON.stringify({ t: "aim", x: 10, y: -100, hold: 300 }));
+      expect((await other.next((m) => m.t === "aim")).x).toBe(10);
+
+      // A resigns: B gets both stakes; a second resign changes nothing
+      ca.ws.send(JSON.stringify({ t: "resign" }));
+      const end = await cb.next((m) => m.t === "state" && m.status === "finished");
+      expect(end.result).toMatchObject({ winner: 1, reason: "resign", payout: 20000 });
+      cb.ws.send(JSON.stringify({ t: "resign" }));
+      ca.ws.send(JSON.stringify({ t: "resign" }));
+      await sleep(200);
+      expect((await a.state()).balance).toBe(40000);
+      expect((await b.state()).balance).toBe(60000);
+      expect(await plays(a.username)).toEqual([[10000, 0]]);
+      expect(await plays(b.username)).toEqual([[10000, 20000]]);
+      expect((await pool.query("select status, winner from darts_matches where code = $1", [code])).rows[0].status).toBe("finished");
+
+      // Rematch: B opens a table for the same stake, saved for A
+      cb.ws.send(JSON.stringify({ t: "rematch" }));
+      const rm = await ca.next((m) => m.t === "state" && m.rematch);
+      expect(rm.rematch.by).toBe(1);
+      expect((await b.state()).balance).toBe(50000);
+      expect((await watcher.req("POST", `/api/darts/tables/${rm.rematch.code}/join`)).status).toBe(409); // saved for A
+      expect((await watcher.req("GET", "/api/darts/tables")).body.open.map((t: any) => t.code)).not.toContain(rm.rematch.code);
+      expect((await a.req("POST", `/api/darts/tables/${rm.rematch.code}/join`)).status).toBe(200);
+      expect((await a.state()).balance).toBe(30000);
+      const cr = await connect(a, rm.rematch.code);
+      expect((await cr.next((m) => m.t === "state")).status).toBe("playing");
+      cr.ws.send(JSON.stringify({ t: "resign" }));
+      await sleep(300);
+      expect((await b.state()).balance).toBe(70000);
+      for (const c of [ca, cb, cw, cr]) c.ws.close();
+    });
+
+    it("online: refunds a cancelled table, refuses what you can't afford, refunds after a restart", async () => {
+      const a = new Player(), b = new Player();
+      await a.register(); await b.register();
+      const t1 = (await a.req("POST", "/api/darts/tables", { stake: 50000 })).body.code;
+      expect((await a.state()).balance).toBe(0);
+      await setBalance(b.username, 1000);
+      expect((await b.req("POST", `/api/darts/tables/${t1}/join`)).status).toBe(400);
+      expect((await b.state()).balance).toBe(1000);
+      expect((await b.req("GET", "/api/darts/tables")).body.open.map((t: any) => t.code)).toContain(t1);
+      expect((await a.req("POST", `/api/darts/tables/${t1}/cancel`)).status).toBe(200);
+      expect((await a.state()).balance).toBe(50000);
+      expect((await a.req("POST", "/api/darts/tables", { stake: 777 })).status).toBe(400);
+      expect((await a.req("POST", "/api/darts/tables", { stake: 0, legs: 2 })).status).toBe(400);
+
+      // Mid-game restart: both stakes go back, once
+      await setBalance(b.username, 50000);
+      const t2 = (await a.req("POST", "/api/darts/tables", { stake: 10000 })).body.code;
+      expect((await b.req("POST", `/api/darts/tables/${t2}/join`)).status).toBe(200);
+      const { recoverDartsMatches, dropAllDartsRoomsForTest } = await import("../server/darts");
+      dropAllDartsRoomsForTest();
+      await recoverDartsMatches();
+      await recoverDartsMatches();
+      expect((await a.state()).balance).toBe(50000);
+      expect((await b.state()).balance).toBe(50000);
+      expect((await pool.query("select status from darts_matches where code = $1", [t2])).rows[0].status).toBe("cancelled");
+    });
+
+    it("practice against the computer never takes coins; the first win of the day pays once", async () => {
+      const { setDartsScatterForTest } = await import("../server/darts");
+      const { targetPoint } = await import("../shared/darts");
+      const a = new Player();
+      await a.register();
+      expect((await a.req("POST", "/api/darts/practice/start", { level: "silly" })).status).toBe(400);
+      const st = await a.req("POST", "/api/darts/practice/start", { level: "hard", legs: 1 });
+      expect(st.body.practice.bot.name).toBe("Big Jock");
+      // Three darts: then the computer throws its visit back
+      let r: any;
+      for (let i = 0; i < 3; i++) {
+        r = await a.req("POST", "/api/darts/practice/throw", { ...targetPoint("T20"), power: 1, drift: 0, holdMs: 1000 });
+        expect(r.status).toBe(200);
+        await sleep(260);
+      }
+      expect(r.body.bot.length).toBeGreaterThanOrEqual(1);
+      expect(r.body.game.turn).toBe(0);
+      expect((await a.state()).balance).toBe(50000);
+
+      // Play a perfect leg (no scatter): 3×180, then T20 T19 D12
+      setDartsScatterForTest(() => [0, 0]);
+      try {
+        await a.req("POST", "/api/darts/practice/start", { level: "hard", legs: 1 });
+        const aims = ["T20", "T20", "T20", "T20", "T20", "T20", "T20", "T19", "D12"];
+        for (const t of aims) {
+          await sleep(260);
+          r = await a.req("POST", "/api/darts/practice/throw", { ...targetPoint(t), power: 1, drift: 0, holdMs: 1000 });
+          if (r.body.game?.winner !== null) break;
+        }
+        expect(r.body.game.winner).toBe(0);
+        expect(r.body.reward).toBe(10000);
+        expect((await a.state()).balance).toBe(60000);
+        // Again the same day: no more reward
+        await a.req("POST", "/api/darts/practice/start", { level: "medium", legs: 1 });
+        for (const t of aims) {
+          await sleep(260);
+          r = await a.req("POST", "/api/darts/practice/throw", { ...targetPoint(t), power: 1, drift: 0, holdMs: 1000 });
+          if (r.body.game?.winner !== null) break;
+        }
+        expect(r.body.game.winner).toBe(0);
+        expect(r.body.reward).toBe(0);
+        expect((await a.state()).balance).toBe(60000);
+        expect((await a.req("POST", "/api/darts/practice/throw", { x: 0, y: 0 })).status).toBe(409); // game over
+      } finally {
+        setDartsScatterForTest();
+      }
+      expect(await plays(a.username)).toEqual([]);
+    });
+
+    it("daily challenge: one ranked attempt a day, a leaderboard, prizes paid once", async () => {
+      const { settleDaily } = await import("../server/darts");
+      const { vnDay } = await import("../shared/league");
+      const day = vnDay(new Date());
+      // Leave only our players on today's board
+      await pool.query("delete from darts_daily where day = $1", [day]);
+      await pool.query("delete from darts_daily_results where day = $1", [day]);
+      const ps = [new Player(), new Player(), new Player(), new Player()];
+      for (const p of ps) await p.register();
+
+      const [a] = ps;
+      expect((await a.req("POST", "/api/darts/daily/throw", { ranked: true, x: 0, y: 0 })).status).toBe(409); // not started
+      await sleep(260);
+      expect((await a.req("POST", "/api/darts/daily/start", { ranked: true })).status).toBe(200);
+      let last: any;
+      for (let i = 0; i < 9; i++) {
+        last = await a.req("POST", "/api/darts/daily/throw", { ranked: true, x: 0, y: -103, power: 1, drift: 0, holdMs: 1000 });
+        expect(last.status).toBe(200);
+        await sleep(260);
+      }
+      expect(last.body.done).toBe(true);
+      expect(last.body.darts).toHaveLength(9);
+      expect(last.body.score).toBe(last.body.darts.reduce((s: number, h: any) => s + h.score, 0));
+      expect((await a.req("POST", "/api/darts/daily/throw", { ranked: true, x: 0, y: -103 })).status).toBe(409);
+      expect((await a.req("POST", "/api/darts/daily/start", { ranked: true })).status).toBe(409); // only one a day
+      // Practice runs are still allowed, and aren't ranked
+      expect((await a.req("POST", "/api/darts/daily/start", { ranked: false })).status).toBe(200);
+      await sleep(260);
+      expect((await a.req("POST", "/api/darts/daily/throw", { ranked: false, x: 0, y: 0 })).status).toBe(200);
+
+      // Fixed scores for the others (written straight in), then the board
+      const scores = [300, 250, 200];
+      for (const [i, p] of ps.slice(1).entries()) {
+        const id = (await pool.query("select id from users where username = $1", [p.username])).rows[0].id;
+        await pool.query("insert into darts_daily (user_id, day, darts, score) values ($1, $2, '[]'::jsonb, $3)", [id, day, scores[i]]);
+      }
+      await pool.query("update darts_daily set score = 100 where user_id = (select id from users where username = $1) and day = $2", [a.username, day]);
+      const view = (await a.req("GET", "/api/darts/daily")).body;
+      expect(view.top.map((t: any) => t.score)).toEqual([300, 250, 200, 100]);
+      expect(view.me.rank).toBe(4);
+      expect(view.me.ranked.done).toBe(true);
+      expect(view.me.practice.darts).toHaveLength(1);
+      expect(view.prizes).toEqual([500000, 200000, 100000]);
+
+      const before = await Promise.all(ps.map(async (p) => (await p.state()).balance));
+      const paid = await settleDaily(day);
+      expect(paid?.map((w) => w.prize)).toEqual([500000, 200000, 100000]);
+      expect(await settleDaily(day)).toBeNull(); // only once
+      const after = await Promise.all(ps.map(async (p) => (await p.state()).balance));
+      expect(after.map((v, i) => v - before[i])).toEqual([0, 500000, 200000, 100000]);
+      const dep = await pool.query("select count(*)::int as n from deposits where method = 'darts_daily'");
+      expect(dep.rows[0].n).toBe(3);
+      const chat = await pool.query("select text from chat_messages where user_id = 'system' and text like $1", [`%${ps[1].username}%`]);
+      expect(chat.rows).toHaveLength(1);
+    });
+  });
 });

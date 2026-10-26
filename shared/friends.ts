@@ -97,6 +97,7 @@ export const PLAYABLE: { id: string; route: string; icon: string; vi: string; en
   { id: "slot", route: "/slot", icon: "🐉", vi: "Slot Rồng Vàng", en: "Dragon slot", zh: "神龍老虎機" },
   { id: "slot777", route: "/slot-777", icon: "7️⃣", vi: "Slot 777", en: "Classic 777", zh: "經典777" },
   { id: "pool", route: "/pool", icon: "🎱", vi: "Bi-a", en: "Pool", zh: "撞球" },
+  { id: "darts", route: "/phi-tieu", icon: "🎯", vi: "Phi Tiêu", en: "Darts", zh: "飛鏢" },
   { id: "cards", route: "/ban-bai", icon: "🀄", vi: "Xì Dách Online", en: "Live Xì Dách", zh: "線上 21點" },
   { id: "blackjack", route: "/blackjack", icon: "🃏", vi: "Xì Dách", en: "Blackjack", zh: "21點" },
   { id: "loto", route: "/loto", icon: "🎟️", vi: "Lô Tô", en: "Lô Tô", zh: "賓果" },
@@ -119,7 +120,7 @@ export function gameOfRoute(route: unknown): string | null {
 /** The game names in the admin's numbers (game_plays.game) mapped to what players see */
 export const PLAY_GAME_TO_PLAYABLE: Record<string, string> = {
   slot: "slot", xocdia: "slot", slot777: "slot777", pool: "pool", bj_table: "cards", xidach: "cards", blackjack: "blackjack",
-  loto: "loto", horse: "horse", tienlen: "tienlen", banca: "banca", roulette: "roulette", baucua: "baucua",
+  loto: "loto", horse: "horse", tienlen: "tienlen", banca: "banca", roulette: "roulette", baucua: "baucua", darts: "darts",
 };
 
 // ---------------- Reactions ----------------
@@ -224,7 +225,7 @@ export interface FriendView {
   /** The game they're on now (only if they share it) */
   playing: string | null;
   /** A table with a free seat they're sitting at */
-  join: { kind: "cards" | "pool"; href: string } | null;
+  join: { kind: "cards" | "pool" | "darts"; href: string } | null;
   since: string;
   /** Why a Lì Xì can't be sent today, or null when it can */
   gift: GiftBlock | null;
