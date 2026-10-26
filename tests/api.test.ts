@@ -882,7 +882,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       await a.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
       const prof = await b.req("GET", `/api/players/${a.username.toUpperCase()}/profile`);
       expect(prof.status).toBe(200);
-      expect(Object.keys(prof.body).sort()).toEqual(["acceptsRequests", "admin", "avatarUrl", "biggestWin", "bio", "blockedByYou", "club", "favGame", "friendsCount", "friendsOnlyDm", "gamesPlayed", "league", "level", "memberSince", "online", "playing", "relation", "showcase", "stickers", "username", "you"]);
+      expect(Object.keys(prof.body).sort()).toEqual(["acceptsRequests", "admin", "avatarUrl", "biggestWin", "bio", "blockedByYou", "club", "country", "favGame", "favGames", "friendsCount", "friendsOnlyDm", "gamesPlayed", "languages", "league", "level", "memberSince", "online", "playStyle", "playing", "relation", "showcase", "stickers", "username", "you"]);
       expect(prof.body).toMatchObject({ username: a.username, gamesPlayed: 5, online: true, you: false, blockedByYou: false, league: null });
       expect(prof.body.avatarUrl).toMatch(/^\/api\/avatar\//);
       for (const k of ["balance", "email", "password", "firstName", "id", "mutedUntil"]) expect(prof.body).not.toHaveProperty(k);
@@ -1291,7 +1291,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await a.req("PUT", "/api/social/profile", { showcase: ["no_hu"] })).body.message).toBe("You haven't earned that badge");
       await pool.query("insert into achievements (user_id, badge_id, badge_name, description, icon) values ($1, 'first_win', 'First Win', 'x', 'star')", [aid]);
       const ok = await a.req("PUT", "/api/social/profile", { bio: "  Thích   quay hũ 🐉 ", favGame: "slot", showcase: ["first_win"] });
-      expect(ok.body).toEqual({ bio: "Thích quay hũ 🐉", favGame: "slot", showcase: ["first_win"] });
+      expect(ok.body).toMatchObject({ bio: "Thích quay hũ 🐉", favGame: "slot", showcase: ["first_win"] });
       const prof = (await b.req("GET", `/api/players/${a.username}/profile`)).body;
       expect(prof).toMatchObject({ bio: "Thích quay hũ 🐉", favGame: "slot", showcase: ["first_win"], friendsCount: 1 });
       for (const k of ["balance", "email", "firstName", "lastName", "password", "id"]) expect(prof).not.toHaveProperty(k);
@@ -1404,7 +1404,7 @@ describe.skipIf(!TEST_DB)("API", () => {
     });
   });
 
-  describe("Social 3: invites, clubs, quests, Moments", () => {
+  describe("Social 3: invites, clubs, quests, Talk, matches, photos, lounge, profiles", () => {
     const games = (username: string, n: number) => pool.query("update users set games_played = $1 where username = $2", [n, username]);
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const idOf = async (p: Player) => (await p.req("GET", "/api/me")).body.id as string;
@@ -1459,7 +1459,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await send(newbie, { to: b.username, game: "pool", path: "/pool" })).body.message).toBe("play_first");
     });
 
-    it("clubs: the fee is a sink, one club each, names filtered, 30 members, roles", async () => {
+    it("clubs: the fee is a sink, one club each, names checked, 30 members, roles", async () => {
       const [owner, m1, m2, m3, rich] = await players(5);
       await setBalance(owner.username, 60_000);
       const make = (p: Player, body: any) => p.req("POST", "/api/clubs", { emblem: "🐉", color: "#f59e0b", tag: "RONG", open: true, ...body });
@@ -1540,7 +1540,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await m2.req("GET", "/api/clubs")).body.mine).toBeNull();
     });
 
-    it("club chat: members only, same filters and pace as the public chat, reports reach the admin", async () => {
+    it("club chat: members only, same pace limits as the public chat, reports reach the admin", async () => {
       const [owner, a, b, c, out] = await players(5);
       await setBalance(owner.username, 100_000);
       const id = (await owner.req("POST", "/api/clubs", { name: `Chat ${Date.now() % 100000}`, tag: "CHAT", emblem: "🔥", color: "#ef4444" })).body.id;
@@ -1625,12 +1625,12 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await p.req("GET", "/api/quests")).body.quests.map((q: any) => q.id)).toEqual(first.quests.map((q: any) => q.id));
       // Pin today's quests so the test knows what to do
       await pool.query("delete from daily_quests where user_id = $1", [uid]);
-      await pool.query("insert into daily_quests (user_id, day, slot, quest_id) values ($1, $2, 0, 'spins20'), ($1, $2, 1, 'plays30'), ($1, $2, 2, 'moment1')", [uid, day]);
+      await pool.query("insert into daily_quests (user_id, day, slot, quest_id) values ($1, $2, 0, 'spins20'), ($1, $2, 1, 'plays30'), ($1, $2, 2, 'talk1')", [uid, day]);
       expect((await p.req("POST", "/api/quests/0/claim")).status).toBe(409); // not done yet
       for (let i = 0; i < 30; i++) expect((await p.play(1000)).status).toBe(200);
       const mid = (await p.req("GET", "/api/quests")).body;
       expect(mid.quests.map((q: any) => q.progress)).toEqual([20, 30, 0]);
-      expect((await p.req("POST", "/api/moments", { text: "Hôm nay đẹp trời!" })).status).toBe(200);
+      expect((await p.req("POST", "/api/talk/threads", { board: "misc", title: "Chào mọi người", body: "Hôm nay đẹp trời!" })).status).toBe(200);
       expect((await p.req("GET", "/api/quests")).body.quests[2].progress).toBe(1);
       // Two taps at once: one payout
       const before = await balanceOf(p);
@@ -1662,7 +1662,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await pool.query("select count(*)::int as n from quest_events where user_id = $1 and kind = 'chat'", [uid])).rows[0].n).toBe(1);
     });
 
-    it("quests: finishing one rings the bell; play-a-friend counts real matches between friends", async () => {
+    it("quests are quiet: play-a-friend counts real matches between friends, no notifications", async () => {
       const [a, b] = await players(2);
       const [ua, ub] = await Promise.all([idOf(a), idOf(b)]);
       const { vnDay } = await import("../shared/league");
@@ -1675,78 +1675,190 @@ describe.skipIf(!TEST_DB)("API", () => {
       await questFriendMatch([ua, ub], "test:2");
       await questFriendMatch([ua, ub], "test:2");
       expect((await a.req("GET", "/api/quests")).body.quests[0].progress).toBe(1);
-      expect((await notifs(b)).filter((n) => n.kind === "quest" && n.data.questId === "friendmatch").length).toBe(1);
+      expect((await notifs(b)).some((n) => n.kind === ("quest" as string))).toBe(false);
     });
 
-    it("Moments: win cards come from the player's own plays only, likes, comments, limits", async () => {
+    it("Talk: boards, threads with replies, newest activity first, paging, no content filter, live push", async () => {
       const [a, b, c] = await players(3);
-      const [ua, ub] = await Promise.all([idOf(a), idOf(b)]);
-      const big = await play(ua, "slot", 10_000, 120_000);
-      const small = await play(ua, "slot", 10_000, 12_000);
-      const old = await play(ua, "slot", 10_000, 500_000, "now() - interval '9 days'");
-      const theirs = await play(ub, "slot", 10_000, 900_000);
-      const wins = (await a.req("GET", "/api/moments/wins")).body.wins;
-      expect(wins.map((w: any) => w.playId)).toEqual([big]);
-      for (const playId of [small, old, theirs, 999_999_999]) expect((await a.req("POST", "/api/moments", { playId })).status).toBe(400);
-      const forged = await a.req("POST", "/api/moments", { text: "Nổ to!", playId: big, win: { payout: 99_999_999 }, likes: 500 });
-      expect(forged.status).toBe(200);
-      expect(forged.body).toMatchObject({ text: "Nổ to!", likes: 0, win: { playId: big, game: "slot", bet: 10_000, payout: 120_000 } });
-      await sleep(100);
-      expect((await a.req("POST", "/api/moments", { text: "lại" })).body.message).toBe("slow_down");
-      // Filters and the 3-games gate
-      const newbie = new Player(); await newbie.register();
-      expect((await newbie.req("POST", "/api/moments", { text: "hi" })).body.message).toBe("play_first");
-      expect((await b.req("POST", "/api/moments", { text: "xem www.abc.com" })).body.message).toBe("link");
-      expect((await b.req("POST", "/api/moments", {})).status).toBe(400);
-      expect((await b.req("POST", "/api/moments", { text: "x".repeat(201) })).status).toBe(400);
-      expect((await b.req("POST", "/api/moments", { playId: big })).status).toBe(400); // someone else's win
-      // Likes toggle and are counted from the likes themselves
-      const id = forged.body.id;
-      expect((await b.req("POST", `/api/moments/${id}/like`)).body).toEqual({ on: true, likes: 1 });
-      expect((await c.req("POST", `/api/moments/${id}/like`)).body).toEqual({ on: true, likes: 2 });
-      expect((await c.req("POST", `/api/moments/${id}/like`)).body).toEqual({ on: false, likes: 1 });
-      expect((await notifs(a)).some((n) => n.kind === "moment" && n.data.action === "like")).toBe(true);
-      // Comments: filtered and paced; mentions ring the bell
-      expect((await b.req("POST", `/api/moments/${id}/comments`, { text: "gọi 0912345678" })).body.message).toBe("phone");
-      const cm = await b.req("POST", `/api/moments/${id}/comments`, { text: `Đỉnh quá @${c.username}`, mentions: [c.username] });
-      expect(cm.status).toBe(200);
-      expect((await b.req("POST", `/api/moments/${id}/comments`, { text: "nữa" })).body.message).toBe("slow_down");
-      expect((await c.req("GET", `/api/moments/${id}/comments`)).body.comments.map((x: any) => x.text)).toEqual([`Đỉnh quá @${c.username}`]);
+      const boards = (await a.req("GET", "/api/talk/boards")).body.boards.map((x: any) => x.id);
+      expect(boards).toEqual(["intro", "lfg", "pool", "darts", "cards", "abroad", "zh", "misc"]);
+      const post = (p: Player, body: any) => p.req("POST", "/api/talk/threads", body);
+      expect((await post(a, { board: "nope", title: "x", body: "y" })).status).toBe(400);
+      expect((await post(a, { board: "misc", title: "", body: "y" })).status).toBe(400);
+      expect((await post(a, { board: "misc", title: "t", body: "x".repeat(2001) })).body.message).toBe("long");
+      const t1 = await post(a, { board: "misc", title: "Xin chào, mình ở Leeds", body: "Đm trời lạnh quá, ai ở UK không? zalo 0912345678" });
+      expect(t1.status).toBe(200);
+      expect(t1.body).toMatchObject({ board: "misc", title: "Xin chào, mình ở Leeds", body: "Đm trời lạnh quá, ai ở UK không? zalo 0912345678", replies: 0, mine: true });
+      expect((await post(a, { board: "misc", title: "again", body: "too soon" })).body.message).toBe("slow_down");
+      // A socket sees new replies live
+      const { WebSocket } = await import("ws");
+      const ws = new WebSocket(base.replace("http", "ws") + "/ws/social", { headers: { Cookie: c.cookie } });
+      const got: any[] = [];
+      ws.on("message", (m) => got.push(JSON.parse(String(m))));
+      await new Promise<void>((r) => ws.on("open", () => r()));
+      const r1 = await b.req("POST", `/api/talk/threads/${t1.body.id}/replies`, { text: "Mình ở Manchester nè!" });
+      expect(r1.status).toBe(200);
       await sleep(200);
-      expect((await notifs(c)).some((n) => n.kind === "mention" && n.data.scope === "moment")).toBe(true);
-      expect((await notifs(a)).some((n) => n.kind === "moment" && n.data.action === "comment")).toBe(true);
-      const wall = (await c.req("GET", "/api/moments")).body.items.find((m: any) => m.id === id);
-      expect(wall).toMatchObject({ likes: 1, comments: 1, liked: false, author: { username: a.username } });
-      // The same win can't be shared twice
-      await sleep(20_100 - 300);
-      expect((await a.req("POST", "/api/moments", { playId: big })).status).toBe(409);
-      // Friends and club tabs
-      expect((await c.req("GET", "/api/moments?scope=friends")).body.items.some((m: any) => m.id === id)).toBe(false);
-      await befriend(a, c);
-      expect((await c.req("GET", "/api/moments?scope=friends")).body.items.some((m: any) => m.id === id)).toBe(true);
-      expect((await c.req("GET", "/api/moments?scope=club")).body.items).toEqual([]);
-      // A block hides it both ways
-      await b.req("POST", `/api/players/${a.username}/block`, { block: true });
-      expect((await b.req("GET", "/api/moments")).body.items.some((m: any) => m.id === id)).toBe(false);
-      expect((await b.req("POST", `/api/moments/${id}/like`)).status).toBe(404);
-      // Top of the day
-      expect((await c.req("GET", "/api/moments/top")).body.item).not.toBeNull();
+      expect(got.some((m) => m.t === "talk_reply" && m.threadId === t1.body.id && m.reply.text === "Mình ở Manchester nè!")).toBe(true);
+      ws.close();
+      expect((await notifs(a)).some((n) => n.kind === "talk" && n.data.threadId === t1.body.id)).toBe(true);
+      const th = (await c.req("GET", `/api/talk/threads/${t1.body.id}`)).body;
+      expect(th.thread.replies).toBe(1);
+      expect(th.replies.items.map((x: any) => x.text)).toEqual(["Mình ở Manchester nè!"]);
+      expect((await c.req("POST", `/api/talk/threads/${t1.body.id}/thumb`)).body).toEqual({ on: true, thumbs: 1 });
+      // Paging: 25 threads (made directly), newest activity first, 20 a page
+      const uc = await idOf(c);
+      for (let i = 0; i < 25; i++) await pool.query("insert into talk_threads (board, user_id, title, body, last_at) values ('pool', $1, $2, 'b', now() - ($3 || ' minutes')::interval)", [uc, `T${i}`, String(i + 1)]);
+      const p1 = (await a.req("GET", "/api/talk/threads?board=pool")).body;
+      expect(p1.items.length).toBe(20);
+      expect(p1.items.slice(0, 3).map((x: any) => x.title)).toEqual(["T0", "T1", "T2"]);
+      expect(p1.more).toBe(true);
+      const p2 = (await a.req("GET", `/api/talk/threads?board=pool&before=${encodeURIComponent(p1.next)}`)).body;
+      expect(p2.items.map((x: any) => x.title)).toEqual(["T20", "T21", "T22", "T23", "T24"]);
+      expect(p2.more).toBe(false);
+      // A reply brings a thread back to the top of "all"
+      const all = (await a.req("GET", "/api/talk/threads")).body.items;
+      expect(all[0].id).toBe(t1.body.id);
+      // Blocking hides it both ways
+      await c.req("POST", `/api/players/${a.username}/block`, { block: true });
+      expect((await c.req("GET", `/api/talk/threads/${t1.body.id}`)).status).toBe(404);
+    });
+
+    it("find a match: post, one active each, join leads to the table flow, expiry, close", async () => {
+      const [a, b] = await players(2);
+      const mk = (p: Player, body: any) => p.req("POST", "/api/matches", body);
+      expect((await mk(a, { game: "chess", stake: 0, minutes: 30 })).status).toBe(400);
+      expect((await mk(a, { game: "pool", stake: 12345, minutes: 30 })).status).toBe(400);
+      expect((await mk(a, { game: "pool", stake: 0, minutes: 5 })).status).toBe(400);
+      await setBalance(a.username, 5_000);
+      expect((await mk(a, { game: "pool", stake: 10_000, minutes: 30 })).body.message).toBe("Not enough coins");
+      await setBalance(a.username, 500_000);
+      const p1 = await mk(a, { game: "pool", stake: 10_000, minutes: 30, note: "Ai làm vài ván không?" });
+      expect(p1.status).toBe(200);
+      await sleep(10_100);
+      const p2 = await mk(a, { game: "cards", stake: 1_000, minutes: 15 });
+      const mine = (await b.req("GET", "/api/matches")).body.posts.filter((x: any) => x.author.username === a.username);
+      expect(mine.map((x: any) => x.id)).toEqual([p2.body.id]); // the new one replaced the old
+      expect((await a.req("POST", `/api/matches/${p2.body.id}/join`)).status).toBe(400);
+      const j = await b.req("POST", `/api/matches/${p2.body.id}/join`);
+      expect(j.body.href).toBe(`/ban-bai?challenge=${encodeURIComponent(a.username)}&stake=1000`);
+      expect((await notifs(a)).some((n) => n.kind === "match" && n.data.postId === p2.body.id)).toBe(true);
+      // Expiry
+      await pool.query("update match_posts set expires_at = now() - interval '1 second' where id = $1", [p2.body.id]);
+      expect((await b.req("GET", "/api/matches")).body.posts.some((x: any) => x.id === p2.body.id)).toBe(false);
+      expect((await b.req("POST", `/api/matches/${p2.body.id}/join`)).status).toBe(404);
+      // Close
+      await sleep(10_100);
+      const p3 = await mk(a, { game: "darts", stake: 0, minutes: 60 });
+      expect((await b.req("DELETE", `/api/matches/${p3.body.id}`)).status).toBe(404);
+      expect((await a.req("DELETE", `/api/matches/${p3.body.id}`)).status).toBe(200);
+      expect((await b.req("GET", "/api/matches")).body.posts.some((x: any) => x.id === p3.body.id)).toBe(false);
     }, 40_000);
 
-    it("Moments reports: three hide a post until an admin looks", async () => {
+    it("photos in messages: metadata stripped, size and rate limits, who can see them, blur setting", async () => {
+      const [a, b, c] = await players(3);
+      const seg = (marker: number, payload: Buffer) => Buffer.concat([Buffer.from([0xff, marker, (payload.length + 2) >> 8, (payload.length + 2) & 0xff]), payload]);
+      const jpeg = Buffer.concat([
+        Buffer.from([0xff, 0xd8]),
+        seg(0xe0, Buffer.from("JFIF\0\x01\x01\0\0\x01\0\x01\0\0", "binary")),
+        seg(0xe1, Buffer.from("Exif\0\0GPS-SECRET-LOCATION 51.5,-0.1", "binary")),
+        seg(0xfe, Buffer.from("taken at home", "binary")),
+        seg(0xdb, Buffer.from([0, 1])),
+        seg(0xda, Buffer.from([0, 0])), Buffer.from("PIXELS"), Buffer.from([0xff, 0xd9]),
+      ]);
+      const up = (p: Player, body: any) => p.req("POST", "/api/photos", body);
+      expect((await up(a, { scope: "dm", to: b.username, photo: Buffer.from("not an image").toString("base64") })).status).toBe(400);
+      expect((await up(a, { scope: "dm", to: b.username, photo: Buffer.alloc(700_000, 1).toString("base64") })).status).toBe(413);
+      const ph = await up(a, { scope: "dm", to: b.username, photo: jpeg.toString("base64") });
+      expect(ph.status).toBe(200);
+      const stored: Buffer = (await pool.query("select data from message_photos where id = $1", [ph.body.id])).rows[0].data;
+      expect(stored.includes(Buffer.from("GPS-SECRET"))).toBe(false);
+      expect(stored.includes(Buffer.from("taken at home"))).toBe(false);
+      expect(stored.includes(Buffer.from("JFIF"))).toBe(true);
+      expect(stored.includes(Buffer.from("PIXELS"))).toBe(true);
+      // Sent in the DM; only the two of them can fetch it
+      const m = await a.req("POST", "/api/dm/send", { to: b.username, photoId: ph.body.id });
+      expect(m.body).toMatchObject({ photo: ph.body.id, text: null });
+      const get = async (p: Player, id: number) => (await fetch(`${base}/api/photos/${id}`, { headers: { Cookie: p.cookie } })).status;
+      expect(await get(b, ph.body.id)).toBe(200);
+      expect(await get(a, ph.body.id)).toBe(200);
+      expect(await get(c, ph.body.id)).toBe(404);
+      // A photo made for one place can't be used in another
+      expect((await c.req("POST", "/api/dm/send", { to: b.username, photoId: ph.body.id })).status).toBe(400);
+      // Blur: off for non-friends unless the viewer turns "always show photos" on
+      expect((await b.req("GET", "/api/social/settings")).body.privacy.showPhotos).toBe(false);
+      expect((await b.req("GET", `/api/dm/thread/${a.username}`)).body.peer.friend).toBe(false);
+      expect((await b.req("PUT", "/api/social/privacy", { showPhotos: true })).body.showPhotos).toBe(true);
+      // Reported photos reach the admin queue, and only then can the admin see them
+      const adm = (await players(1))[0];
+      await pool.query("update users set is_admin = true where username = $1", [adm.username]);
+      expect(await get(adm, ph.body.id)).toBe(404);
+      expect((await b.req("POST", `/api/photos/${ph.body.id}/report`, { reason: "nude" })).status).toBe(200);
+      expect(await get(adm, ph.body.id)).toBe(200);
+      const q = (await adm.req("GET", "/api/admin/social3/reports")).body.items.find((x: any) => x.kind === "photo" && x.id === ph.body.id);
+      expect(q).toMatchObject({ reports: 1, reasons: ["nude"], username: a.username, photo: ph.body.id });
+      expect((await adm.req("POST", `/api/admin/ugc/photo/${ph.body.id}`, { action: "delete" })).status).toBe(200);
+      expect(await get(b, ph.body.id)).toBe(404);
+      // Rate limit: 20 an hour
+      await pool.query("insert into message_photos (user_id, scope, mime, data, bytes) select $1, 'lounge', 'image/jpeg', '\\x00', 1 from generate_series(1, 20)", [await idOf(c)]);
+      expect((await up(c, { scope: "lounge", photo: jpeg.toString("base64") })).status).toBe(429);
+      // Lounge photos: any signed-in player can see them
+      const lp = await up(b, { scope: "lounge", photo: jpeg.toString("base64") });
+      expect((await b.req("POST", "/api/chat", { photoId: lp.body.id, room: "eu" })).body).toMatchObject({ photo: lp.body.id, room: "eu" });
+      expect(await get(c, lp.body.id)).toBe(200);
+    });
+
+    it("lounge rooms keep their own messages; the main lounge is the old chat", async () => {
+      const [a, b] = await players(2);
+      const m1 = await a.req("POST", "/api/chat", { text: "chào sảnh", room: "main" });
+      const m2 = await b.req("POST", "/api/chat", { text: "大家好", room: "zh" });
+      expect(m2.body.room).toBe("zh");
+      const main = (await a.req("GET", "/api/chat")).body.messages.map((x: any) => x.id);
+      expect(main).toContain(m1.body.id);
+      expect(main).not.toContain(m2.body.id);
+      expect((await a.req("GET", "/api/chat?room=zh")).body.messages.map((x: any) => x.id)).toEqual([m2.body.id]);
+      expect((await a.req("GET", "/api/chat?room=nowhere")).body.messages.map((x: any) => x.id)).toContain(m1.body.id);
+    });
+
+    it("richer profiles: about me, country (can be hidden), games, languages, play style", async () => {
+      const [a, b] = await players(2);
+      const r = await a.req("PUT", "/api/social/profile", { bio: "Mình mê bi-a, hay chơi tối thứ Sáu. ".repeat(5).trim(), country: "GB", favGames: ["pool", "cards"], languages: ["vi", "en"], playStyle: "competitive" });
+      expect(r.status).toBe(200);
+      expect((await a.req("PUT", "/api/social/profile", { country: "XX" })).status).toBe(400);
+      expect((await a.req("PUT", "/api/social/profile", { favGames: ["chess"] })).status).toBe(400);
+      expect((await a.req("PUT", "/api/social/profile", { languages: ["fr"] })).status).toBe(400);
+      const prof = (await b.req("GET", `/api/players/${a.username}/profile`)).body;
+      expect(prof).toMatchObject({ country: "GB", favGames: ["pool", "cards"], languages: ["vi", "en"], playStyle: "competitive" });
+      expect(prof.bio.length).toBeGreaterThan(80);
+      await a.req("PUT", "/api/social/privacy", { hideCountry: true });
+      expect((await b.req("GET", `/api/players/${a.username}/profile`)).body.country).toBeNull();
+      await befriend(a, b);
+      expect((await b.req("GET", "/api/friends")).body.friends[0].facts).toMatchObject({ country: null, languages: ["vi", "en"], playStyle: "competitive" });
+    });
+
+    it("reports: threads and replies hide after three, the queue shows only reported items, admin deletes and dismisses", async () => {
       const [a, r1, r2, r3, adm] = await players(5);
       await pool.query("update users set is_admin = true where username = $1", [adm.username]);
-      const id = (await a.req("POST", "/api/moments", { text: "bài đăng" })).body.id;
-      expect((await a.req("POST", `/api/moments/${id}/report`)).status).toBe(400);
-      for (const p of [r1, r1, r2]) await p.req("POST", `/api/moments/${id}/report`, { reason: "spam" });
-      expect((await r3.req("GET", `/api/moments/${id}`)).status).toBe(200);
-      await r3.req("POST", `/api/moments/${id}/report`);
-      expect((await r3.req("GET", `/api/moments/${id}`)).status).toBe(404);
-      const rep = (await adm.req("GET", "/api/admin/social3/reports")).body.moments.find((x: any) => x.kind === "moment" && x.id === id);
-      expect(rep).toMatchObject({ reports: 3, hidden: true, username: a.username, reasons: ["spam", "spam"] });
-      expect((await adm.req("POST", `/api/admin/moments/${id}`, { hidden: false })).status).toBe(200);
-      expect((await r3.req("GET", `/api/moments/${id}`)).status).toBe(200);
-      expect((await adm.req("GET", "/api/admin/social3/reports")).body.moments.some((x: any) => x.id === id && x.kind === "moment")).toBe(false);
+      const t = (await a.req("POST", "/api/talk/threads", { board: "misc", title: "Bài đăng", body: "nội dung" })).body.id;
+      const unreported = (await r1.req("POST", "/api/talk/threads", { board: "misc", title: "Không ai báo", body: "ok" })).body.id;
+      expect((await a.req("POST", `/api/talk/threads/${t}/report`)).status).toBe(400);
+      for (const p of [r1, r2]) await p.req("POST", `/api/talk/threads/${t}/report`, { reason: "spam" });
+      expect((await r3.req("GET", `/api/talk/threads/${t}`)).status).toBe(200);
+      await r3.req("POST", `/api/talk/threads/${t}/report`);
+      expect((await r3.req("GET", `/api/talk/threads/${t}`)).status).toBe(404);
+      const items = (await adm.req("GET", "/api/admin/social3/reports")).body.items;
+      expect(items.find((x: any) => x.kind === "thread" && x.id === t)).toMatchObject({ reports: 3, hidden: true, title: "Bài đăng", username: a.username, reasons: ["spam", "spam"] });
+      expect(items.some((x: any) => x.kind === "thread" && x.id === unreported)).toBe(false);
+      expect((await adm.req("POST", `/api/admin/ugc/thread/${t}`, { action: "restore" })).status).toBe(200);
+      expect((await r3.req("GET", `/api/talk/threads/${t}`)).status).toBe(200);
+      // Clubs can be reported too
+      await setBalance(a.username, 100_000);
+      const club = (await a.req("POST", "/api/clubs", { name: `Báo ${Date.now() % 100000}`, tag: "BAO", emblem: "🔥", color: "#ef4444" })).body.id;
+      expect((await r1.req("POST", `/api/clubs/${club}/report`, { reason: "offensive name" })).status).toBe(200);
+      expect((await adm.req("GET", "/api/admin/social3/reports")).body.items.find((x: any) => x.kind === "club" && x.id === club)).toMatchObject({ reports: 1 });
+      expect((await adm.req("POST", `/api/admin/ugc/club/${club}`, { action: "dismiss" })).status).toBe(200);
+      expect((await adm.req("GET", "/api/admin/social3/reports")).body.items.some((x: any) => x.kind === "club" && x.id === club)).toBe(false);
+      expect((await r1.req("GET", "/api/admin/social3/reports")).status).toBe(403);
     });
 
     it("online now: friends first, then others who share their presence", async () => {
@@ -1768,7 +1880,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       for (const s of socks) s.close();
     });
 
-    it("deleting an account removes clubs data, Moments, likes, comments, reports and quests", async () => {
+    it("deleting an account removes clubs data, Talk, match posts, photos, reports and quests", async () => {
       const [gone, keep, other] = await players(3);
       await setBalance(gone.username, 100_000);
       const gid = await idOf(gone);
@@ -1776,29 +1888,35 @@ describe.skipIf(!TEST_DB)("API", () => {
       await keep.req("POST", `/api/clubs/${club}/join`);
       const msg = (await gone.req("POST", `/api/clubs/${club}/chat`, { text: "tạm biệt hội" })).body;
       await keep.req("POST", `/api/clubs/chat/${msg.id}/report`);
-      const mine = (await gone.req("POST", "/api/moments", { text: "của tôi" })).body.id;
-      await keep.req("POST", `/api/moments/${mine}/like`);
-      const theirs = (await keep.req("POST", "/api/moments", { text: "của bạn" })).body.id;
-      await gone.req("POST", `/api/moments/${theirs}/like`);
-      await gone.req("POST", `/api/moments/${theirs}/comments`, { text: "hay đấy" });
-      await other.req("POST", `/api/moments/${mine}/report`);
+      const mine = (await gone.req("POST", "/api/talk/threads", { board: "misc", title: "của tôi", body: "x" })).body.id;
+      await keep.req("POST", `/api/talk/threads/${mine}/replies`, { text: "trả lời" });
+      const theirs = (await keep.req("POST", "/api/talk/threads", { board: "misc", title: "của bạn", body: "y" })).body.id;
+      await gone.req("POST", `/api/talk/threads/${theirs}/thumb`);
+      await gone.req("POST", `/api/talk/threads/${theirs}/replies`, { text: "hay đấy" });
+      await other.req("POST", `/api/talk/threads/${mine}/report`);
+      await gone.req("POST", `/api/talk/threads/${theirs}/report`).catch(() => {});
+      await gone.req("POST", "/api/matches", { game: "pool", stake: 0, minutes: 30 });
+      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0, 3, 0, 0xff, 0xda, 0, 2, 1, 2, 0xff, 0xd9]);
+      const ph = (await gone.req("POST", "/api/photos", { scope: "lounge", photo: jpeg.toString("base64") })).body.id;
+      await other.req("POST", `/api/photos/${ph}/report`);
       await gone.req("GET", "/api/quests");
       await (await import("../server/quests")).questEvent(gid, "chat", "x:1");
       await gone.req("POST", "/api/invites", { to: keep.username, game: "pool", path: "/pool" });
       const count = async () => Number((await pool.query(`select
         (select count(*) from club_members where user_id = $1) + (select count(*) from club_messages where user_id = $1) +
-        (select count(*) from club_chat_reports where reporter_id = $1 or message_id = $2) + (select count(*) from moments where user_id = $1) +
-        (select count(*) from moment_likes where user_id = $1 or moment_id = $3) + (select count(*) from moment_comments where user_id = $1) +
-        (select count(*) from moment_reports where reporter_id = $1 or (kind = 'moment' and target_id = $3)) +
+        (select count(*) from club_chat_reports where reporter_id = $1 or message_id = $2) + (select count(*) from talk_threads where user_id = $1) +
+        (select count(*) from talk_replies where user_id = $1 or thread_id = $3) + (select count(*) from talk_thumbs where user_id = $1) +
+        (select count(*) from ugc_reports where reporter_id = $1 or (kind = 'thread' and target_id = $3) or (kind = 'photo' and target_id = $4)) +
+        (select count(*) from match_posts where user_id = $1) + (select count(*) from message_photos where user_id = $1) +
         (select count(*) from daily_quests where user_id = $1) + (select count(*) from quest_events where user_id = $1) +
-        (select count(*) from direct_messages where from_id = $1 or to_id = $1) as n`, [gid, msg.id, mine])).rows[0].n);
-      expect(await count()).toBeGreaterThan(10);
+        (select count(*) from direct_messages where from_id = $1 or to_id = $1) as n`, [gid, msg.id, mine, ph])).rows[0].n);
+      expect(await count()).toBeGreaterThan(12);
       expect((await gone.req("POST", "/api/user/delete", { password: gone.password })).status).toBe(200);
       expect(await count()).toBe(0);
-      // The club passed to the remaining member; their like/comment counts are right
+      // The club passed to the remaining member; the other thread's counts are right
       const v = (await keep.req("GET", `/api/clubs/${club}`)).body;
       expect(v.members.map((m: any) => [m.username, m.role])).toEqual([[keep.username, "owner"]]);
-      expect((await keep.req("GET", `/api/moments/${theirs}`)).body).toMatchObject({ likes: 0, comments: 0 });
+      expect((await keep.req("GET", `/api/talk/threads/${theirs}`)).body.thread).toMatchObject({ replies: 0, thumbs: 0 });
     });
   });
 

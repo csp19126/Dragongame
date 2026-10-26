@@ -91,7 +91,7 @@ export interface PlayerProfile {
   favGames: string[];
 }
 
-export interface DmPeer { username: string; avatarUrl: string | null; online: boolean; level?: number; club?: ClubTag | null }
+export interface DmPeer { username: string; avatarUrl: string | null; online: boolean; level?: number; club?: ClubTag | null; friend?: boolean }
 
 export interface DmConversation extends DmPeer {
   last: { text: string | null; sticker: string | null; card?: InviteCard | null; photo?: boolean; mine: boolean; at: string };

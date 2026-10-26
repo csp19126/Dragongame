@@ -18,7 +18,7 @@ import {
 import { LEAGUE_WIN, LEAGUE_LOSS, seasonOf, tierOf } from "@shared/league";
 import { speakerRefusal, paceLimiter, readMessage } from "./speech";
 import { isReaction, REACTIONS_PER_MINUTE, quote, type ReactionCount, type ReplyRef } from "@shared/friends";
-import { socialProfile, visibleOnline, unfriend, dmRefusal, pushUnread, notifyReaction } from "./friends";
+import { socialProfile, visibleOnline, unfriend, dmRefusal, pushUnread, notifyReaction, areFriends } from "./friends";
 import { push } from "./hub";
 import { clubTagOf } from "./clubs";
 import { questEvent } from "./quests";
@@ -370,7 +370,7 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     const [lvl] = await db.select({ level: userSocial.level }).from(userSocial).where(eq(userSocial.userId, u.id));
     const extras = await dmExtras(rows, me.id);
     const thread: DmThread & { readUpTo: number } = {
-      peer: { username: u.username, avatarUrl: u.profileImageUrl, online: visibleOnline(u.id, u.lastSeenAt), level: lvl?.level ?? 1, club: clubTagOf(u.id) },
+      peer: { username: u.username, avatarUrl: u.profileImageUrl, online: visibleOnline(u.id, u.lastSeenAt), level: lvl?.level ?? 1, club: clubTagOf(u.id), friend: await areFriends(me.id, u.id) },
       messages: rows.map((m) => toDm(m, me.id, extras)),
       more,
       cantMessage: !!refusal,

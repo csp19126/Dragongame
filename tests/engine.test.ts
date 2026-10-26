@@ -868,16 +868,36 @@ describe("Social 3 rules", async () => {
     expect(s3.checkClubName("  Rồng   Vàng ")).toEqual({ ok: true, name: "Rồng Vàng" });
     expect(s3.checkClubName("ab").ok).toBe(false);
     expect(s3.checkClubName("x".repeat(21)).ok).toBe(false);
-    expect(s3.checkClubName("bit.ly/abc").ok).toBe(false);
+    expect(s3.checkClubName("bit.ly/abc").ok).toBe(false); // "/" isn't allowed in names
     expect(s3.checkClubTag("rong")).toEqual({ ok: true, tag: "RONG" });
     expect(s3.checkClubTag("r").ok).toBe(false);
   });
-  it("streaks and brag-worthy wins", () => {
+  it("streaks", () => {
     expect(s3.streakOf(["2026-10-24", "2026-10-25", "2026-10-26", "2026-10-20"], "2026-10-26")).toBe(3);
     expect(s3.streakOf(["2026-10-25"], "2026-10-26")).toBe(0);
-    expect(s3.isBragWorthy(10_000, 60_000)).toBe(true);
-    expect(s3.isBragWorthy(10_000, 40_000)).toBe(false);
-    expect(s3.isBragWorthy(1_000, 6_000)).toBe(false);
-    expect(s3.isBragWorthy(500_000, 700_000)).toBe(true);
+  });
+  it("lounge rooms fall back to the main lounge", () => {
+    expect(s3.loungeRoom("zh")).toBe("zh");
+    expect(s3.loungeRoom("../x")).toBe("main");
+  });
+  it("photo metadata is stripped from JPEG, PNG and WebP, the picture kept", async () => {
+    const { stripImageMetadata } = await import("../shared/imagemeta");
+    const has = (b: Uint8Array, t: string) => Buffer.from(b).includes(Buffer.from(t, "binary"));
+    // PNG: IHDR, an eXIf and a tEXt chunk, IDAT, IEND (CRCs aren't checked here)
+    const chunk = (type: string, data: string) => { const d = Buffer.from(data, "binary"); const h = Buffer.alloc(8); h.writeUInt32BE(d.length, 0); h.write(type, 4, "binary"); return Buffer.concat([h, d, Buffer.alloc(4)]); };
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", "x".repeat(13)), chunk("eXIf", "GPS-HOME"), chunk("tEXt", "Author\0me"), chunk("IDAT", "PIXELS"), chunk("IEND", "")]);
+    const p = stripImageMetadata(png, "image/png")!;
+    expect(has(p, "GPS-HOME")).toBe(false); expect(has(p, "Author")).toBe(false); expect(has(p, "PIXELS")).toBe(true); expect(has(p, "IEND")).toBe(true);
+    // WebP: VP8X with the EXIF flag, VP8, EXIF, XMP
+    const wchunk = (type: string, data: Buffer) => { const h = Buffer.alloc(8); h.write(type, 0, "binary"); h.writeUInt32LE(data.length, 4); return Buffer.concat([h, data, data.length % 2 ? Buffer.alloc(1) : Buffer.alloc(0)]); };
+    const body = Buffer.concat([wchunk("VP8X", Buffer.from([0x0c, 0, 0, 0, 0, 0, 0, 0, 0, 0])), wchunk("VP8 ", Buffer.from("PIXELS")), wchunk("EXIF", Buffer.from("GPS-HOME")), wchunk("XMP ", Buffer.from("<xmp/>"))]);
+    const head = Buffer.alloc(12); head.write("RIFF", 0); head.writeUInt32LE(body.length + 4, 4); head.write("WEBP", 8);
+    const w = Buffer.from(stripImageMetadata(Buffer.concat([head, body]), "image/webp")!);
+    expect(has(w, "GPS-HOME")).toBe(false); expect(has(w, "<xmp")).toBe(false); expect(has(w, "PIXELS")).toBe(true);
+    expect(w.readUInt32LE(4)).toBe(w.length - 8);
+    expect(w[20] & 0x0c).toBe(0);
+    // Broken files are refused
+    expect(stripImageMetadata(Buffer.from([0xff, 0xd8, 0x00]), "image/jpeg")).toBeNull();
+    expect(stripImageMetadata(png.subarray(0, 30), "image/png")).toBeNull();
   });
 });
