@@ -890,3 +890,22 @@ export const STARTING_BALANCE = 100000;
 
 /** Public contact address (privacy questions, account deletion help) */
 export const CONTACT_EMAIL = "support@vnslot888.online";
+
+// Meeting people (opt-in): who is open to it, what they're looking for, and 💛 between players
+export const datingProfiles = pgTable("dating_profiles", {
+  userId: varchar("user_id").primaryKey(),
+  open: boolean("open").default(false).notNull(),
+  lookingFor: text("looking_for").default("chat").notNull(),
+  birthYear: integer("birth_year"),
+  gender: text("gender"),
+  seeking: text("seeking").array().default(sql`'{}'::text[]`).notNull(),
+  ageMin: integer("age_min").default(18).notNull(),
+  ageMax: integer("age_max").default(99).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [index("dating_profiles_open").on(t.open, t.updatedAt)]);
+
+export const datingLikes = pgTable("dating_likes", {
+  fromId: varchar("from_id").notNull(),
+  toId: varchar("to_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [primaryKey({ columns: [t.fromId, t.toId] }), index("dating_likes_to").on(t.toId)]);

@@ -18,6 +18,7 @@ import { deleteFriendData } from "./friends";
 import { deleteClubData, afterClubDataDeleted } from "./clubs";
 import { deleteTalkData } from "./talk";
 import { deleteMatchData } from "./matches";
+import { deleteDatingData } from "./dating";
 import { deletePhotoData } from "./photos";
 import { deleteReportData } from "./reports3";
 import { deleteQuestData } from "./quests";
@@ -573,6 +574,7 @@ export class DatabaseStorage {
       await deleteReportData(tx, userId);
       await deleteTalkData(tx, userId);
       await deleteMatchData(tx, userId);
+      await deleteDatingData(tx, userId);
       await deletePhotoData(tx, userId);
       await deleteQuestData(tx, userId);
       // Friends, notifications, reactions, feed, gifts and settings (first: it needs their messages to find reactions)

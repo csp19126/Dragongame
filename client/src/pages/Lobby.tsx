@@ -121,6 +121,15 @@ export default function Lobby() {
 
         <TournamentPromo />
 
+        <Link href="/meet" className="rounded-2xl p-3 flex items-center gap-3 bg-gradient-to-r from-pink-600/30 to-purple-900/40 border border-pink-300/30 active:scale-[0.98] transition" data-testid="lobby-meet">
+          <span className="text-3xl">💛</span>
+          <span className="flex-1 min-w-0">
+            <span className="block font-black text-white">{tr("Làm quen", "Meet people", "交友")}</span>
+            <span className="block text-[11px] text-white/65">{tr("Gặp gỡ, trò chuyện, cùng chơi · 18+", "Meet, chat and play together · 18+", "認識新朋友、聊天、一起玩 · 18+")}</span>
+          </span>
+          <span className="px-3 py-1.5 rounded-xl bg-pink-500 text-white font-black text-xs">{tr("Xem", "Open", "查看")}</span>
+        </Link>
+
         {/* All games */}
         <div className="flex items-center justify-between px-1 mt-1">
           <h2 className="text-sm font-black uppercase tracking-[0.2em] text-white/70 font-sans drop-shadow-none">{tr("Trò chơi", "Games", "遊戲")}</h2>

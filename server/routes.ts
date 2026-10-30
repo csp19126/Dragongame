@@ -22,6 +22,7 @@ import { registerFriendRoutes, onJoined, forgetUser } from "./friends";
 import { registerClubRoutes, clubTagOf } from "./clubs";
 import { registerTalkRoutes } from "./talk";
 import { registerMatchRoutes } from "./matches";
+import { registerDatingRoutes } from "./dating";
 import { registerPhotoRoutes } from "./photos";
 import { registerReportRoutes } from "./reports3";
 import { registerQuestRoutes } from "./quests";
@@ -287,6 +288,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerClubRoutes(app, requireUser, requireAdmin);
   registerTalkRoutes(app, requireUser);
   registerMatchRoutes(app, requireUser);
+  registerDatingRoutes(app, requireUser);
   registerPhotoRoutes(app, requireUser);
   registerReportRoutes(app, requireUser, requireAdmin);
   registerQuestRoutes(app, requireUser);

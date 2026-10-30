@@ -3294,4 +3294,68 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(chat.rows).toHaveLength(1);
     });
   });
+  describe("Meet (opt-in dating)", () => {
+    async function ready(n: number) {
+      const ps = Array.from({ length: n }, () => new Player());
+      for (const p of ps) {
+        await p.register();
+        await pool.query("update users set games_played = 25, created_at = now() - interval '5 days', profile_image_url = '/api/avatar/x.jpg' where username = $1", [p.username]);
+      }
+      return ps;
+    }
+    const born = new Date().getUTCFullYear() - 30;
+    const on = (p: Player, over: Record<string, unknown> = {}) => p.req("PUT", "/api/dating/me", { open: true, lookingFor: "dating", birthYear: born, gender: "man", seeking: [], ageMin: 18, ageMax: 99, ...over });
+
+    it("needs a photo, some games and a few days before switching on, and 18+", async () => {
+      const fresh = new Player();
+      await fresh.register();
+      const me = (await fresh.req("GET", "/api/dating/me")).body;
+      expect(me.eligible).toBe(false);
+      expect(me.needs.photo).toBe(true);
+      expect((await on(fresh)).status).toBe(403);
+      const [a] = await ready(1);
+      expect((await on(a, { birthYear: new Date().getUTCFullYear() - 17 })).status).toBe(400);
+      expect((await on(a, { ageMin: 50, ageMax: 30 })).status).toBe(400);
+      const r = await on(a);
+      expect(r.status).toBe(200);
+      expect(r.body.open).toBe(true);
+    });
+
+    it("shows people whose settings fit both ways; 💛 is private until both tap it, then DMs open", async () => {
+      const [a, b, c] = await ready(3);
+      await on(a, { gender: "man", seeking: ["woman"] });
+      await on(b, { gender: "woman", seeking: ["man"] });
+      await on(c, { gender: "man", seeking: ["man"] });
+      const seen = async (p: Player) => ((await p.req("GET", "/api/dating/people")).body.people as any[]).map((x) => x.username);
+      expect(await seen(a)).toContain(b.username);
+      expect(await seen(a)).not.toContain(c.username);
+      expect(await seen(b)).not.toContain(c.username);
+      // b only takes messages from friends
+      await b.req("PUT", "/api/social/privacy", { dmFrom: "friends" });
+      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "hi" })).status).toBe(403);
+      const l1 = await a.req("POST", `/api/dating/like/${b.username}`);
+      expect(l1.body).toEqual({ liked: true, matched: false });
+      expect((await b.req("GET", "/api/notifications")).body.items.some((n: any) => n.kind === "dating")).toBe(false);
+      const l2 = await b.req("POST", `/api/dating/like/${a.username}`);
+      expect(l2.body.matched).toBe(true);
+      expect((await a.req("GET", "/api/notifications")).body.items.some((n: any) => n.kind === "dating" && n.actor?.username === b.username)).toBe(true);
+      expect((await a.req("GET", "/api/dating/matches")).body.matches.map((m: any) => m.username)).toEqual([b.username]);
+      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "hello 💛" })).status).toBe(200);
+      // A block hides them and closes the chat
+      await b.req("POST", `/api/players/${a.username}/block`, { block: true });
+      expect(await seen(b)).not.toContain(a.username);
+      expect((await a.req("GET", "/api/dating/matches")).body.matches).toEqual([]);
+    });
+
+    it("deleting an account removes its Meet data", async () => {
+      const [a, b] = await ready(2);
+      await on(a); await on(b);
+      await a.req("POST", `/api/dating/like/${b.username}`);
+      await b.req("POST", `/api/dating/like/${a.username}`);
+      const id = (await a.req("GET", "/api/me")).body.id;
+      expect((await a.req("POST", "/api/user/delete", { password: a.password })).status).toBe(200);
+      expect((await pool.query("select count(*)::int as n from dating_likes where from_id = $1 or to_id = $1", [id])).rows[0].n).toBe(0);
+      expect((await pool.query("select count(*)::int as n from dating_profiles where user_id = $1", [id])).rows[0].n).toBe(0);
+    });
+  });
 });

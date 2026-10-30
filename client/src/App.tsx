@@ -57,6 +57,7 @@ const Blackjack = lazyPage(() => import("@/pages/Blackjack"));
 const Pool = lazyPage(() => import("@/pages/Pool"));
 const Darts = lazyPage(() => import("@/pages/Darts"));
 const Football = lazyPage(() => import("@/pages/Football"));
+const Meet = lazyPage(() => import("@/pages/Meet"));
 const Community = lazyPage(() => import("@/pages/Community"));
 const Tournament = lazyPage(() => import("@/pages/Tournament"));
 const Loto = lazyPage(() => import("@/pages/Loto"));
@@ -123,6 +124,7 @@ function Router() {
         <Route path="/phi-tieu" component={Darts} />
         <Route path="/da-bong" component={Football} />
         <Route path="/community" component={Community} />
+        <Route path="/meet" component={Meet} />
         <Route path="/tournament" component={Tournament} />
         <Route path="/loto" component={Loto} />
         <Route path="/dua-ngua" component={HorseRacing} />
