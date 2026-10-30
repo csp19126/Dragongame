@@ -86,6 +86,7 @@ function NotificationSheet({ onClose }: { onClose: () => void }) {
     else if (n.kind === "invite" && n.actor) { onClose(); setLocation(`/community?tab=dm&dm=${encodeURIComponent(n.actor.username)}`); }
     else if (n.kind === "talk") { onClose(); setLocation(`/community?tab=talk&thread=${n.data.threadId}`); }
     else if (n.kind === "match") { onClose(); setLocation("/community?tab=matches"); }
+    else if (n.kind === "dating" && n.actor) { onClose(); setLocation(`/community?tab=dm&dm=${encodeURIComponent(n.actor.username)}`); }
     else if (n.kind === "club" && n.data.clubId && n.data.action !== "disbanded") { onClose(); setLocation(`/community?tab=clubs&club=${n.data.clubId}`); }
     else if (n.actor) showPlayer(n.actor.username);
   };
@@ -100,6 +101,7 @@ function NotificationSheet({ onClose }: { onClose: () => void }) {
       case "invite": return <>{who} {tr("thách bạn một ván", "challenged you to", "邀請你來一場")} <b className="text-yellow-200">{inviteGame(n.data.game)}</b> ⚔️</>;
       case "talk": return <>{who} {tr("trả lời chủ đề của bạn", "replied to your thread", "回覆了你的話題")} <b className="text-white">“{n.data.title}”</b>{quote}</>;
       case "match": return <>{who} {tr("muốn chơi", "wants to play your", "想跟你玩")} <b className="text-yellow-200">{inviteGame(n.data.game)}</b>{n.data.stake ? <> · {fmtCoins(n.data.stake)} 🪙</> : null} {tr("theo bài tìm trận của bạn. Lời mời vào bàn sẽ tới ngay.", "post. Their table invite is on its way.", "（找對手貼文）。對方的入座邀請馬上就到。")}</>;
+      case "dating": return <>💛 {tr("Hai bạn đã thích nhau:", "It's a match with", "你們互相喜歡：")} {who}! {tr("Nhắn tin chào nhé. Đừng bao giờ gửi tiền cho người quen trên mạng.", "Say hello. Never send money to someone you met online.", "打個招呼吧。千萬不要匯錢給網上認識的人。")}</>;
       case "club": {
         const club = <b className="text-white">{n.data.club}</b>;
         switch (n.data.action) {
@@ -130,7 +132,7 @@ function NotificationSheet({ onClose }: { onClose: () => void }) {
       default: return who;
     }
   };
-  const icon = (n: NotificationView) => ({ friend_request: "👋", friend_accepted: "🤝", mention: "💬", reply: "↩️", reaction: "❤️", gift: "🧧", big_win: "🎉", invite: "⚔️", club: "🏯", talk: "💬", match: "🎯" } as Record<string, string>)[n.kind] ?? "🔔";
+  const icon = (n: NotificationView) => ({ friend_request: "👋", friend_accepted: "🤝", mention: "💬", reply: "↩️", reaction: "❤️", gift: "🧧", big_win: "🎉", invite: "⚔️", club: "🏯", talk: "💬", match: "🎯", dating: "💛" } as Record<string, string>)[n.kind] ?? "🔔";
 
   return (
     <motion.div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>

@@ -9,7 +9,7 @@ import { and, desc, eq, gt, inArray, isNull, lt, or, sql, count } from "drizzle-
 import { db } from "./db";
 import {
   users, deposits, friendships, friendRequests, notifications, messageReactions, feedItems, friendGifts, userSocial,
-  userBlocks, achievements, chatMessages, directMessages, profileReports, type User,
+  userBlocks, achievements, chatMessages, directMessages, profileReports, datingLikes, type User,
 } from "@shared/schema";
 import {
   MAX_FRIENDS, MAX_PENDING_SENT, FRIEND_GIFT_AMOUNT, FRIEND_GIFT_MIN_GAMES, FRIEND_GIFT_MAX_RECEIVED, FRIEND_GIFT_CLAIM_MS,
@@ -121,12 +121,19 @@ async function ensureSocial(userId: string, q: Db = db) {
   await q.insert(userSocial).values({ userId }).onConflictDoNothing();
 }
 
+/** Both tapped 💛 on Meet: they may always message each other */
+async function likedBothWays(a: string, b: string) {
+  const rows = await db.select({ f: datingLikes.fromId }).from(datingLikes)
+    .where(or(and(eq(datingLikes.fromId, a), eq(datingLikes.toId, b)), and(eq(datingLikes.fromId, b), eq(datingLikes.toId, a))));
+  return rows.length === 2;
+}
+
 /** Why `me` may not send a private message to `them` (or null if they may) */
 export async function dmRefusal(me: User, them: User): Promise<string | null> {
   if (await blockedEither(me.id, them.id)) return "Can't message this player";
   if (me.isAdmin) return null;
   const p = privacyFrom(await socialOf(them.id));
-  if (p.dmFrom === "friends" && !(await areFriends(me.id, them.id))) return "This player only accepts messages from friends";
+  if (p.dmFrom === "friends" && !(await areFriends(me.id, them.id)) && !(await likedBothWays(me.id, them.id))) return "This player only accepts messages from friends";
   return null;
 }
 

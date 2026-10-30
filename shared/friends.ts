@@ -207,7 +207,9 @@ export interface FeedItem {
 
 export type NotifKind = "friend_request" | "friend_accepted" | "mention" | "reply" | "reaction" | "gift" | "big_win"
   // Social 3: a game invite/challenge, a finished daily quest, club news, likes and comments on a Moment
-  | "invite" | "club" | "talk" | "match";
+  | "invite" | "club" | "talk" | "match"
+  // Meet: both tapped 💛
+  | "dating";
 /** Kept per player, and for how long */
 export const NOTIF_KEEP = 200;
 export const NOTIF_DAYS = 30;

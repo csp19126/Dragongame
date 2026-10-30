@@ -13,6 +13,9 @@ export const SERVER_MESSAGES: Record<string, { vi: string; zh: string }> = {
   "Slow down a little!": { vi: "Chậm lại một chút!", zh: "請放慢一點！" },
   "Not enough coins": { vi: "Không đủ xu", zh: "金幣不足" },
   "Insufficient balance": { vi: "Không đủ xu", zh: "餘額不足" },
+  "Switch on Meet first": { vi: "Hãy bật Làm quen trước", zh: "請先開啟交友" },
+  "You must be 18 or over": { vi: "Bạn phải từ 18 tuổi trở lên", zh: "你必須年滿18歲" },
+  "That's enough 💛 for today": { vi: "Hôm nay bạn đã thả đủ 💛 rồi", zh: "今天的 💛 已經用完了" },
   "Player not found": { vi: "Không tìm thấy người chơi", zh: "找不到玩家" },
   "No such player": { vi: "Không có người chơi này", zh: "沒有這位玩家" },
 
