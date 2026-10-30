@@ -11,7 +11,7 @@ type Text = { vi: string; en: string; zh: string };
 export const INVITE_GAMES = {
   pool: { route: "/pool", icon: "🎱", vi: "Bi-a", en: "Pool", zh: "撞球" },
   darts: { route: "/phi-tieu", icon: "🎯", vi: "Phi Tiêu", en: "Darts", zh: "飛鏢" },
-  football: { route: "/da-bong", icon: "⚽", vi: "Sút Penalty", en: "Penalty shootout", zh: "PK 大戰" },
+  football: { route: "/da-bong", icon: "⚽", vi: "Sút Phạt Đền", en: "Penalty shootout", zh: "點球大戰" },
   cards: { route: "/ban-bai", icon: "🀄", vi: "Bàn Bài", en: "Card table", zh: "牌桌" },
 } as const;
 export type InviteGame = keyof typeof INVITE_GAMES;

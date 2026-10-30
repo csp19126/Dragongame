@@ -7,6 +7,7 @@ export const GAME_NAMES: Record<string, { label: string; icon: string }> = {
   roulette: { label: "Roulette", icon: "🎡" },
   baucua: { label: "Bầu Cua", icon: "🦀" },
   pool: { label: "8-ball pool", icon: "🎱" },
+  football: { label: "Penalty shootout", icon: "⚽" },
   loto: { label: "Lô Tô", icon: "🎱" },
   horse: { label: "Horse racing", icon: "🏇" },
   tienlen: { label: "Tiến Lên", icon: "🂡" },
@@ -14,6 +15,7 @@ export const GAME_NAMES: Record<string, { label: string; icon: string }> = {
   slot777: { label: "Classic 777", icon: "7️⃣" },
   bj_table: { label: "Blackjack table", icon: "🃏" },
   xidach: { label: "Xì Dách (banker)", icon: "🀄" },
+  darts: { label: "Darts", icon: "🎯" },
 };
 
 export const BONUS_NAMES: Record<string, string> = {
@@ -23,6 +25,8 @@ export const BONUS_NAMES: Record<string, string> = {
   league_prize: "Pool league prizes",
   tournament_prize: "Tournament prizes",
   pool_daily_win: "Pool first-win bonus",
+  football_weekly: "Penalty King weekly prizes",
+  football_daily_win: "Penalty practice first-win bonus",
   referral: "Invite rewards",
   referral_welcome: "Invite welcome bonus",
   sticker_set: "Sticker set rewards",
@@ -31,6 +35,8 @@ export const BONUS_NAMES: Record<string, string> = {
   daily_quest: "Daily quests, chests and streaks",
   club_weekly: "Weekly top-3 club rewards",
   club_fee: "Club creation fees (coins removed, negative)",
+  darts_daily: "Darts Daily Challenge prizes",
+  darts_practice_win: "Darts first win vs computer",
 };
 
 export interface AdminAnalytics {

@@ -23,7 +23,9 @@ import { tierOf, type LeagueView } from "@shared/league";
 const short = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`);
 
 const GAMES = [
+  { href: "/da-bong", icon: "⚽", vi: "Sút Phạt Đền", en: "Penalty Kings", tagVi: "Vuốt để sút · đấu online", tagEn: "Flick to shoot · online 1v1", zh: "點球大戰", tagZh: "滑動射門 · 線上對戰", from: "from-green-500", to: "to-emerald-950", isNew: true },
   { href: "/slot-777", icon: "7️⃣", vi: "Slot 777 Cổ Điển", en: "Classic 777", tagVi: "Quay là ăn · ⭐⭐⭐ ×1500", tagEn: "Spin, win, repeat · ⭐⭐⭐ ×1500", zh: "經典777", tagZh: "轉就對了 · ⭐⭐⭐ ×1500", from: "from-fuchsia-500", to: "to-purple-950", isNew: true },
+  { href: "/phi-tieu", icon: "🎯", vi: "Phi Tiêu", en: "Darts", tagVi: "501 online · Thử thách 9 phi tiêu", tagEn: "501 online · 9-dart challenge", zh: "飛鏢", tagZh: "501 線上對戰 · 9 鏢挑戰", from: "from-orange-500", to: "to-red-950", isNew: true },
   { href: "/pool", icon: "🎱", vi: "Bi-a 8 bóng", en: "8-Ball Pool", tagVi: "Trực tuyến · League", tagEn: "Online · League", zh: "8號球撞球", tagZh: "線上對戰 · 聯賽", from: "from-emerald-500", to: "to-teal-900", live: true },
   { href: "/loto", icon: "🎟️", vi: "Lô Tô", en: "Lô Tô bingo", tagVi: "Gọi số trực tiếp · ×50", tagEn: "Live calls · up to ×50", zh: "賓果 (Lô Tô)", tagZh: "即時開號 · 最高 ×50", from: "from-red-500", to: "to-rose-950", live: true },
   { href: "/dua-ngua", icon: "🏇", vi: "Đua Ngựa", en: "Horse Racing", tagVi: "8 chiến mã · mỗi phút một cuộc đua", tagEn: "8 horses · a race every minute", zh: "賽馬", tagZh: "8 匹駿馬 · 每分鐘一場", from: "from-lime-500", to: "to-green-950", live: true },

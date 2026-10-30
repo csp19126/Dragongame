@@ -29,6 +29,8 @@ import { cardSeatOf } from "./cardtables";
 import { poolRoomOf } from "./pool";
 import { clubProfileOf, clubTagOf } from "./clubs";
 import { questEvent } from "./quests";
+import { dartsRoomOf } from "./darts";
+import { footballRoomOf } from "./football";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -257,6 +259,10 @@ export function joinOf(userId: string): FriendView["join"] {
   if (card?.free) return { kind: "cards", href: `/ban-bai?table=${card.code}` };
   const room = poolRoomOf(userId);
   if (room?.open) return { kind: "pool", href: `/pool?table=${room.code}` };
+  const darts = dartsRoomOf(userId);
+  if (darts?.open) return { kind: "darts", href: `/phi-tieu?table=${darts.code}` };
+  const kick = footballRoomOf(userId);
+  if (kick?.open) return { kind: "football", href: `/da-bong?table=${kick.code}` };
   return null;
 }
 
