@@ -18,8 +18,10 @@ import {
 import { LEAGUE_WIN, LEAGUE_LOSS, seasonOf, tierOf } from "@shared/league";
 import { speakerRefusal, paceLimiter, readMessage } from "./speech";
 import { isReaction, REACTIONS_PER_MINUTE, quote, type ReactionCount, type ReplyRef } from "@shared/friends";
-import { socialProfile, visibleOnline, unfriend, dmRefusal, pushUnread, notifyReaction } from "./friends";
+import { socialProfile, visibleOnline, unfriend, dmRefusal, pushUnread, notifyReaction, areFriends } from "./friends";
 import { push } from "./hub";
+import { clubTagOf } from "./clubs";
+import { questEvent } from "./quests";
 
 type Mw = (req: Request, res: Response, next: NextFunction) => unknown;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -125,14 +127,16 @@ const dmPace = paceLimiter(DM_COOLDOWN_MS);
 const CANT_MESSAGE = "Can't message this player";
 
 type DmRow = typeof directMessages.$inferSelect;
-function toDm(m: DmRow, me: string, extra?: { replies: Map<number, DmRow>; reactions: Map<number, ReactionCount[]> }): DmMessage {
+export function toDm(m: DmRow, me: string, extra?: { replies: Map<number, DmRow>; reactions: Map<number, ReactionCount[]> }): DmMessage {
   const r = m.replyTo ? extra?.replies.get(m.replyTo) : undefined;
   const reply: ReplyRef | null = m.replyTo ? (r && !r.deleted
-    ? { id: r.id, username: null, mine: r.fromId === me, text: quote(r.text), sticker: r.sticker }
+    ? { id: r.id, username: null, mine: r.fromId === me, text: quote(r.text ?? (r.card ? "⚔️" : r.photoId ? "📷" : null)), sticker: r.sticker }
     : { id: m.replyTo, username: null, mine: false, text: null, sticker: null }) : null;
   return {
     id: m.id, mine: m.fromId === me, text: m.text, sticker: m.sticker, createdAt: m.createdAt.toISOString(), read: !!m.readAt,
     reply, reactions: extra?.reactions.get(m.id) ?? [],
+    card: m.card && m.card.kind === "invite" ? (m.card as DmMessage["card"]) : null,
+    photo: m.photoId ?? null,
   };
 }
 
@@ -192,7 +196,7 @@ async function conversations(me: string): Promise<DmConversation[]> {
       from ${directMessages} d where (d.from_id = ${me} or d.to_id = ${me}) and not d.deleted
     ),
     latest as (select distinct on (other) * from mine order by other, id desc)
-    select l.id, l.from_id, l.text, l.sticker, l.created_at, l.other, u.username, u.profile_image_url, u.last_seen_at,
+    select l.id, l.from_id, l.text, l.sticker, l.card, l.photo_id, l.created_at, l.other, u.username, u.profile_image_url, u.last_seen_at,
       (select level from ${userSocial} s where s.user_id = l.other) as level,
       (select count(*)::int from ${directMessages} x where x.to_id = ${me} and x.from_id = l.other and x.read_at is null and not x.deleted) as unread
     from latest l join ${users} u on u.id = l.other
@@ -200,8 +204,8 @@ async function conversations(me: string): Promise<DmConversation[]> {
     order by l.id desc limit 100
   `)).rows as Record<string, any>[];
   return rows.map((r) => ({
-    username: r.username, avatarUrl: r.profile_image_url ?? null, online: visibleOnline(r.other, r.last_seen_at), level: r.level ?? 1,
-    last: { text: r.text, sticker: r.sticker, mine: r.from_id === me, at: new Date(r.created_at).toISOString() },
+    username: r.username, avatarUrl: r.profile_image_url ?? null, online: visibleOnline(r.other, r.last_seen_at), level: r.level ?? 1, club: clubTagOf(r.other),
+    last: { text: r.text, sticker: r.sticker, card: r.card ?? null, photo: !!r.photo_id, mine: r.from_id === me, at: new Date(r.created_at).toISOString() },
     unread: r.unread,
   }));
 }
@@ -366,7 +370,7 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     const [lvl] = await db.select({ level: userSocial.level }).from(userSocial).where(eq(userSocial.userId, u.id));
     const extras = await dmExtras(rows, me.id);
     const thread: DmThread & { readUpTo: number } = {
-      peer: { username: u.username, avatarUrl: u.profileImageUrl, online: visibleOnline(u.id, u.lastSeenAt), level: lvl?.level ?? 1 },
+      peer: { username: u.username, avatarUrl: u.profileImageUrl, online: visibleOnline(u.id, u.lastSeenAt), level: lvl?.level ?? 1, club: clubTagOf(u.id), friend: await areFriends(me.id, u.id) },
       messages: rows.map((m) => toDm(m, me.id, extras)),
       more,
       cantMessage: !!refusal,
@@ -388,7 +392,7 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     if (refusal) return res.status(403).json({ message: refusal });
     const early = dmPace.check(me, null);
     if (early) return res.status(early.status).json({ message: early.message });
-    const msg = await readMessage(me, req.body, DM_MAX_LEN);
+    const msg = await readMessage(me, req.body, DM_MAX_LEN, { scope: "dm", ref: to.id });
     if ("status" in msg) return res.status(msg.status).json({ message: msg.message });
     // A reply must answer a message in this same conversation that's still there
     let replyTo: number | null = null;
@@ -401,7 +405,7 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     const again = msg.text ? dmPace.check(me, msg.text) : null;
     if (again) return res.status(again.status).json({ message: again.message });
     dmPace.record(me, msg.text);
-    const [m] = await db.insert(directMessages).values({ fromId: me.id, toId: to.id, text: msg.text, sticker: msg.sticker, replyTo }).returning();
+    const [m] = await db.insert(directMessages).values({ fromId: me.id, toId: to.id, text: msg.text, sticker: msg.sticker, photoId: msg.photoId, replyTo }).returning();
     const extras = await dmExtras([m], me.id);
     // Straight to the other player's open tabs (and my other tabs); the id lets screens skip repeats
     push(to.id, { t: "dm", with: me.username, m: toDm(m, to.id, extras) });
@@ -425,6 +429,8 @@ export function registerSocialRoutes(app: Express, requireUser: Mw, requireAdmin
     push(other, { t: "react", scope: "dm", id, e: emoji, by: me.username, on, with: me.username });
     push(me.id, { t: "react", scope: "dm", id, e: emoji, by: me.username, on, with: o?.username });
     if (on && m.fromId !== me.id) await notifyReaction(m.fromId, me.id, "dm", id, quote(m.text), emoji);
+    // Quests count reactions to other players' messages, once per message
+    if (on && m.fromId !== me.id) await questEvent(me.id, "react", `dm:${id}`);
     res.json({ on, reactions: (await reactionsFor("dm", [id], me.id)).get(id) ?? [] });
   });
 

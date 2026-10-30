@@ -18,6 +18,7 @@ import {
   type Card, type TableMode, type TableView, type SeatView, type SeatStatus, type TableSummary,
 } from "@shared/cardtable";
 import { logPlay } from "./storage";
+import { questFriendMatch } from "./quests";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const GONE_MS = 60_000; // a seat whose player has been away this long is freed between rounds
@@ -313,6 +314,9 @@ async function settle(t: Table) {
     }
     await tx.delete(tableEscrows).where(eq(tableEscrows.code, t.code));
   });
+  // Daily quests: friends who played this round together
+  const humans = [...t.hands.keys()].map((i) => (isBot(t.seats[i]) ? null : t.seats[i]?.userId ?? null)).filter((x): x is string => !!x);
+  if (humans.length > 1) void questFriendMatch(humans, `cards:${t.code}:${Date.now()}`);
   t.phase = "settled";
   t.nextRoundAt = Date.now() + BETWEEN_ROUNDS_MS;
   if (t.banker !== null) t.nextBanker = (t.banker + 1) % TABLE_SEATS;

@@ -6,9 +6,12 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { ALL_ACHIEVEMENTS } from "@/components/slot/achievements";
 import { BIO_MAX, SHOWCASE_MAX, PLAYABLE, type PrivacySettings } from "@shared/friends";
+import { COUNTRIES, PROFILE_LANGUAGES, PLAY_STYLES } from "@shared/social3";
+import { useLangName, usePlayStyleName } from "@/components/Social3Bits";
 
 interface Settings {
   bio: string | null; favGame: string | null; showcase: string[]; privacy: PrivacySettings; badges: string[];
+  country: string | null; favGames: string[]; languages: string[]; playStyle: string | null;
   level: { level: number; xp: number; from: number; to: number; progress: number };
 }
 const KEY = ["/api/social/settings"];
@@ -18,9 +21,6 @@ function useErr() {
   const { tr, srv } = useLang();
   const { toast } = useToast();
   const codes: Record<string, string> = {
-    trade: tr("Không được nói chuyện mua bán xu.", "No coin trading talk.", "禁止談論買賣金幣。"),
-    link: tr("Không được ghi đường link.", "Links aren't allowed.", "不能包含連結。"),
-    phone: tr("Không được ghi số điện thoại.", "Phone numbers aren't allowed.", "不能包含電話號碼。"),
     long: tr(`Tối đa ${BIO_MAX} ký tự.`, `${BIO_MAX} characters at most.`, `最多 ${BIO_MAX} 個字。`),
     muted: tr("Bạn đang bị tạm khóa chat.", "You're muted for now.", "你目前被暫時禁言。"),
     play_first: tr("Chơi vài ván trước đã nhé.", "Play a few games first.", "先玩幾局再來吧。"),
@@ -36,12 +36,22 @@ export function SocialProfileCard() {
   const fail = useErr();
   const q = useQuery<Settings>({ queryKey: KEY });
   const [bio, setBio] = useState("");
-  const [fav, setFav] = useState<string | null>(null);
+  const [favs, setFavs] = useState<string[]>([]);
   const [show, setShow] = useState<string[]>([]);
-  useEffect(() => { if (q.data) { setBio(q.data.bio ?? ""); setFav(q.data.favGame); setShow(q.data.showcase); } }, [q.data]);
+  const [country, setCountry] = useState<string | null>(null);
+  const [langs, setLangs] = useState<string[]>([]);
+  const [style, setStyle] = useState<string | null>(null);
+  const langName = useLangName();
+  const styleName = usePlayStyleName();
+  useEffect(() => {
+    if (!q.data) return;
+    setBio(q.data.bio ?? ""); setShow(q.data.showcase); setCountry(q.data.country); setLangs(q.data.languages); setStyle(q.data.playStyle);
+    setFavs(q.data.favGames.length ? q.data.favGames : q.data.favGame ? [q.data.favGame] : []);
+  }, [q.data]);
+  const flip = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
   const save = useMutation({
-    mutationFn: async () => (await apiRequest("PUT", "/api/social/profile", { bio, favGame: fav, showcase: show })).json(),
+    mutationFn: async () => (await apiRequest("PUT", "/api/social/profile", { bio, favGame: favs[0] ?? null, favGames: favs, showcase: show, country, languages: langs, playStyle: style })).json(),
     onSuccess: () => {
       toast({ title: tr("Đã lưu hồ sơ", "Profile saved", "個人檔案已儲存") });
       queryClient.invalidateQueries({ queryKey: KEY });
@@ -68,20 +78,46 @@ export function SocialProfileCard() {
       </div>
 
       <label className="block space-y-1.5">
-        <span className="text-xs font-black text-white/70">{tr("Giới thiệu ngắn", "Bio / status", "自我介紹")}</span>
-        <input value={bio} onChange={(e) => setBio(e.target.value)} maxLength={BIO_MAX} placeholder={tr("Ví dụ: Săn hũ mỗi tối 🐉", "e.g. Jackpot hunting every night 🐉", "例如：每晚都在拚彩金 🐉")}
-          className="w-full h-11 rounded-xl bg-black/40 border border-white/15 px-3 text-white placeholder:text-white/30" data-testid="input-bio" />
+        <span className="text-xs font-black text-white/70">{tr("Giới thiệu bản thân", "About me", "關於我")}</span>
+        <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={BIO_MAX} rows={3} placeholder={tr("Ví dụ: Dân Hà Nội ở Leeds, mê bi-a, hay chơi tối thứ Sáu 🎱", "e.g. From Hanoi, living in Leeds. Pool most Friday nights 🎱", "例如：河內人，住在利茲，週五晚上常打撞球 🎱")}
+          className="w-full rounded-xl bg-black/40 border border-white/15 px-3 py-2 text-white placeholder:text-white/30 resize-none" data-testid="input-bio" />
         <span className="block text-right text-[10px] text-white/40">{bio.length}/{BIO_MAX}</span>
       </label>
 
       <div className="space-y-1.5">
-        <span className="text-xs font-black text-white/70">{tr("Trò chơi yêu thích", "Favourite game", "最愛的遊戲")}</span>
+        <span className="text-xs font-black text-white/70">{tr("Trò chơi yêu thích (chọn nhiều)", "Favourite games (pick any)", "最愛的遊戲（可複選）")}</span>
         <div className="flex flex-wrap gap-1.5" data-testid="fav-picker">
           {PLAYABLE.map((g) => (
-            <button key={g.id} type="button" onClick={() => setFav(fav === g.id ? null : g.id)}
-              className={`h-8 px-2.5 rounded-full text-xs font-bold border ${fav === g.id ? "bg-yellow-400 text-black border-yellow-300" : "bg-white/5 text-white/75 border-white/10"}`} data-testid={`fav-${g.id}`}>
+            <button key={g.id} type="button" onClick={() => setFavs(flip(favs, g.id))}
+              className={`h-8 px-2.5 rounded-full text-xs font-bold border ${favs.includes(g.id) ? "bg-yellow-400 text-black border-yellow-300" : "bg-white/5 text-white/75 border-white/10"}`} data-testid={`fav-${g.id}`}>
               {g.icon} {loc(g)}
             </button>
+          ))}
+        </div>
+      </div>
+
+      <label className="block space-y-1.5">
+        <span className="text-xs font-black text-white/70">{tr("Đang sống ở", "Country I live in", "居住地")}</span>
+        <select value={country ?? ""} onChange={(e) => setCountry(e.target.value || null)} className="w-full h-11 rounded-xl bg-black/40 border border-white/15 px-3 text-white" data-testid="select-country">
+          <option value="">{tr("Không nói", "Prefer not to say", "不透露")}</option>
+          {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.flag} {loc(c)}</option>)}
+        </select>
+      </label>
+
+      <div className="space-y-1.5">
+        <span className="text-xs font-black text-white/70">{tr("Ngôn ngữ tôi nói", "Languages I speak", "我會說的語言")}</span>
+        <div className="flex flex-wrap gap-1.5">
+          {PROFILE_LANGUAGES.map((l) => (
+            <button key={l} type="button" onClick={() => setLangs(flip(langs, l))} className={`h-8 px-3 rounded-full text-xs font-bold border ${langs.includes(l) ? "bg-sky-400 text-black border-sky-300" : "bg-white/5 text-white/75 border-white/10"}`} data-testid={`lang-${l}`}>{langName(l)}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <span className="text-xs font-black text-white/70">{tr("Cách chơi", "Play style", "遊戲風格")}</span>
+        <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-black/40">
+          {[null, ...PLAY_STYLES].map((v) => (
+            <button key={v ?? "none"} type="button" onClick={() => setStyle(v)} className={`h-9 rounded-lg text-xs font-black ${style === v ? "bg-yellow-400 text-black" : "text-white/60"}`} data-testid={`style-${v ?? "none"}`}>{v ? styleName(v) : tr("Không nói", "Not set", "未設定")}</button>
           ))}
         </div>
       </div>
@@ -147,6 +183,8 @@ export function PrivacyCard() {
       {choice("dm", tr("Ai được nhắn tin riêng cho tôi", "Who can message me", "誰可以傳私訊給我"), p.dmFrom, [{ v: "everyone", label: tr("Mọi người", "Everyone", "所有人") }, { v: "friends", label: tr("Chỉ bạn bè", "Friends only", "僅限好友") }], (v) => set.mutate({ dmFrom: v }))}
       {choice("requests", tr("Ai được gửi lời mời kết bạn", "Who can send friend requests", "誰可以送出好友邀請"), p.requestsFrom, [{ v: "everyone", label: tr("Mọi người", "Everyone", "所有人") }, { v: "nobody", label: tr("Không ai", "Nobody", "沒有人") }], (v) => set.mutate({ requestsFrom: v }))}
       {toggle("presence", tr("Hiện trạng thái online và trò đang chơi", "Show when I'm online and what I'm playing", "顯示我的在線狀態和正在玩的遊戲"), tr("Tắt thì mọi người thấy bạn ngoại tuyến", "When off, everyone sees you as offline", "關閉後，其他人會看到你離線"), p.showPresence, () => set.mutate({ showPresence: !p.showPresence }))}
+      {toggle("country", tr("Ẩn nơi tôi sống", "Hide my country", "隱藏我的居住地"), tr("Hồ sơ và danh sách sẽ không hiện quốc gia của bạn", "Your profile and lists won't show where you live", "個人檔案和名單不會顯示你的居住地"), p.hideCountry, () => set.mutate({ hideCountry: !p.hideCountry }))}
+      {toggle("photos", tr("Luôn hiện ảnh", "Always show photos", "一律顯示照片"), tr("Mặc định ảnh từ người không phải bạn bè bị làm mờ, chạm để xem", "By default, photos from people who aren't your friends are blurred until you tap", "預設會模糊非好友傳來的照片，點一下才顯示"), p.showPhotos, () => set.mutate({ showPhotos: !p.showPhotos }))}
       {toggle("feed", tr("Hiện tôi trong mục Hoạt động", "Show me in the Activity feed", "在動態中顯示我"), tr("Thắng lớn, lên cấp, kết bạn mới", "Big wins, level-ups, new friends", "大獎、升級、新朋友"), p.showInFeed, () => set.mutate({ showInFeed: !p.showInFeed }))}
       <p className="text-[10px] text-white/40 flex items-start gap-1.5"><Eye className="w-3 h-3 shrink-0 mt-0.5" />{tr("Số dư, email và tên thật của bạn không bao giờ được hiển thị cho người khác.", "Your balance, email and real name are never shown to anyone.", "你的餘額、電子郵件和真實姓名永遠不會顯示給其他人。")}</p>
     </div>

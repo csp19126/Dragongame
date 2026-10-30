@@ -19,6 +19,13 @@ import { registerBancaRoutes } from "./banca";
 import { registerCardTableRoutes } from "./cardtables";
 import { registerSocialRoutes, markActive } from "./social";
 import { registerFriendRoutes, onJoined, forgetUser } from "./friends";
+import { registerClubRoutes, clubTagOf } from "./clubs";
+import { registerTalkRoutes } from "./talk";
+import { registerMatchRoutes } from "./matches";
+import { registerPhotoRoutes } from "./photos";
+import { registerReportRoutes } from "./reports3";
+import { registerQuestRoutes } from "./quests";
+import { registerInviteRoutes } from "./invites";
 import { play777, spin777Schema } from "./slot777";
 import { GAMBLE_PICKS, GAMBLE_PAYS } from "@shared/gamble";
 import { GRADE_BLESSING } from "@shared/oracle";
@@ -277,6 +284,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerCardTableRoutes(app, requireUser);
   registerSocialRoutes(app, requireUser, requireAdmin);
   registerFriendRoutes(app, requireUser, requireAdmin);
+  registerClubRoutes(app, requireUser, requireAdmin);
+  registerTalkRoutes(app, requireUser);
+  registerMatchRoutes(app, requireUser);
+  registerPhotoRoutes(app, requireUser);
+  registerReportRoutes(app, requireUser, requireAdmin);
+  registerQuestRoutes(app, requireUser);
+  registerInviteRoutes(app, requireUser);
 
   // Blackjack: the hand lives on the server; the browser only ever sees publicView()
   const BJ_MAX_BET = 1_000_000;
@@ -348,6 +362,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       maxWin: u.maxWin,
       maxStreak: u.maxStreak,
       avatarUrl: u.profileImageUrl,
+      club: clubTagOf(u.id),
     })));
   });
 

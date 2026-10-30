@@ -886,7 +886,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       const r = await new Player().req("GET", "/api/game/leaderboard");
       expect(r.status).toBe(200);
       expect(r.body.length).toBeGreaterThan(0);
-      for (const e of r.body) expect(Object.keys(e).sort()).toEqual(["avatarUrl", "balance", "maxStreak", "maxWin", "rank", "totalWins", "username"]);
+      for (const e of r.body) expect(Object.keys(e).sort()).toEqual(["avatarUrl", "balance", "club", "maxStreak", "maxWin", "rank", "totalWins", "username"]);
     });
 
     it("health check reports the database and unknown API routes return JSON 404", async () => {
@@ -900,7 +900,7 @@ describe.skipIf(!TEST_DB)("API", () => {
   describe("community", () => {
     const games = (username: string, n: number) => pool.query("update users set games_played = $1 where username = $2", [n, username]);
 
-    it("chat: needs a few games, filters money talk and links, masks swearing, rate limits, reports hide", async () => {
+    it("chat: needs a few games, no content filter (owner policy), rate limits, reports hide", async () => {
       const a = new Player(), b = new Player(), c = new Player(), d = new Player();
       for (const p of [a, b, c, d]) await p.register();
       expect((await a.req("POST", "/api/chat", { text: "xin chào" })).body.message).toBe("play_first");
@@ -908,12 +908,11 @@ describe.skipIf(!TEST_DB)("API", () => {
       const hi = await a.req("POST", "/api/chat", { text: "  xin   chào các bạn  " });
       expect(hi.status).toBe(200);
       expect(hi.body.text).toBe("xin chào các bạn");
-      expect((await b.req("POST", "/api/chat", { text: "bán xu giá rẻ, ib zalo" })).body.message).toBe("trade");
-      expect((await b.req("POST", "/api/chat", { text: "vào vnslot888.online" })).body.message).toBe("link");
-      expect((await b.req("POST", "/api/chat", { text: "gọi 0912 345 678" })).body.message).toBe("phone");
       expect((await b.req("POST", "/api/chat", { text: "x".repeat(201) })).body.message).toBe("long");
-      const sw = await b.req("POST", "/api/chat", { text: "đm thua rồi" });
-      expect(sw.body.text).toBe("** thua rồi");
+      // Nothing is filtered or masked: words, links and numbers go through as typed
+      const sw = await b.req("POST", "/api/chat", { text: "đm thua rồi, xem vnslot888.online 0912 345 678" });
+      expect(sw.status).toBe(200);
+      expect(sw.body.text).toBe("đm thua rồi, xem vnslot888.online 0912 345 678");
       expect((await b.req("POST", "/api/chat", { text: "again" })).status).toBe(429); // 3 s between messages
       expect((await d.req("POST", "/api/chat", { sticker: "legend_rong" })).body.message).toBe("not_owned");
 
@@ -937,8 +936,12 @@ describe.skipIf(!TEST_DB)("API", () => {
       await games(bad.username, 5);
       const m = await bad.req("POST", "/api/chat", { text: "hello" });
       expect((await bad.req("GET", "/api/admin/community/chat")).status).toBe(403);
+      // No monitoring: unreported messages aren't in the admin's view; a reported one is
+      expect((await admin.req("GET", "/api/admin/community/chat")).body.messages.some((x: any) => x.id === m.body.id)).toBe(false);
+      const witness = new Player(); await witness.register(); await games(witness.username, 5);
+      await witness.req("POST", `/api/chat/${m.body.id}/report`);
       const view = await admin.req("GET", "/api/admin/community/chat");
-      expect(view.body.messages.find((x: any) => x.id === m.body.id)).toMatchObject({ username: bad.username, reports: 0, deleted: false });
+      expect(view.body.messages.find((x: any) => x.id === m.body.id)).toMatchObject({ username: bad.username, reports: 1, deleted: false });
 
       expect((await admin.req("POST", `/api/admin/community/users/${bUser.id}`, { minutes: 60 })).status).toBe(200);
       expect((await bad.req("POST", "/api/chat", { text: "still here" })).body.message).toBe("muted");
@@ -1116,7 +1119,7 @@ describe.skipIf(!TEST_DB)("API", () => {
       await a.req("POST", "/api/profile/photo", { photo: jpeg().toString("base64") });
       const prof = await b.req("GET", `/api/players/${a.username.toUpperCase()}/profile`);
       expect(prof.status).toBe(200);
-      expect(Object.keys(prof.body).sort()).toEqual(["acceptsRequests", "admin", "avatarUrl", "biggestWin", "bio", "blockedByYou", "favGame", "friendsCount", "friendsOnlyDm", "gamesPlayed", "league", "level", "memberSince", "online", "playing", "relation", "showcase", "stickers", "username", "you"]);
+      expect(Object.keys(prof.body).sort()).toEqual(["acceptsRequests", "admin", "avatarUrl", "biggestWin", "bio", "blockedByYou", "club", "country", "favGame", "favGames", "friendsCount", "friendsOnlyDm", "gamesPlayed", "languages", "league", "level", "memberSince", "online", "playStyle", "playing", "relation", "showcase", "stickers", "username", "you"]);
       expect(prof.body).toMatchObject({ username: a.username, gamesPlayed: 5, online: true, you: false, blockedByYou: false, league: null });
       expect(prof.body.avatarUrl).toMatch(/^\/api\/avatar\//);
       for (const k of ["balance", "email", "password", "firstName", "id", "mutedUntil"]) expect(prof.body).not.toHaveProperty(k);
@@ -1141,13 +1144,12 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(m1.body).toMatchObject({ mine: true, text: "chào bạn", read: false });
       expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "again" })).status).toBe(429);
       await sleep(1600);
-      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "zalo 0912345678" })).body.message).toBe("phone");
-      expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "bán xu giá rẻ" })).body.message).toBe("trade");
       expect((await a.req("POST", "/api/dm/send", { to: b.username, text: "x".repeat(501) })).body.message).toBe("long");
       expect((await a.req("POST", "/api/dm/send", { to: b.username, sticker: "legend_rong" })).body.message).toBe("not_owned");
       const m2 = await a.req("POST", "/api/dm/send", { to: b.username, text: "y".repeat(500) });
       expect(m2.status).toBe(200);
-      await c.req("POST", "/api/dm/send", { to: b.username, text: "hello from c" });
+      const raw = await c.req("POST", "/api/dm/send", { to: b.username, text: "zalo 0912345678, fuck" });
+      expect(raw.body.text).toBe("zalo 0912345678, fuck"); // no content filter
 
       expect((await b.req("GET", "/api/dm/unread")).body.total).toBe(3);
       const convs = (await b.req("GET", "/api/dm/conversations")).body.conversations;
@@ -1384,8 +1386,8 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect((await mine(c)).find((i: any) => i.kind === "big_win")).toMatchObject({ game: "slot", amount: 80000, bet: 1000 });
       await a.req("PUT", "/api/social/privacy", { showInFeed: false });
       expect(await mine(c)).toEqual([]);
-      expect((await c.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "everyone", requestsFrom: "everyone", showPresence: true, showInFeed: true });
-      expect((await a.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "friends", requestsFrom: "everyone", showPresence: false, showInFeed: false });
+      expect((await c.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "everyone", requestsFrom: "everyone", showPresence: true, showInFeed: true, hideCountry: false, showPhotos: false });
+      expect((await a.req("GET", "/api/social/settings")).body.privacy).toEqual({ dmFrom: "friends", requestsFrom: "everyone", showPresence: false, showInFeed: false, hideCountry: false, showPhotos: false });
     });
 
     it("reactions: one of each emoji per player, toggled, counted, grouped in one notification, rate limited", async () => {
@@ -1520,14 +1522,13 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(feed.some((i: any) => i.kind === "joined" && i.user.username === a.username)).toBe(true);
       expect((await b.req("GET", "/api/chat")).body.messages).toBeDefined();
 
-      // Bio is filtered like chat, 80 characters at most
-      expect((await a.req("PUT", "/api/social/profile", { bio: "zalo 0912345678" })).body.message).toBe("phone");
-      expect((await a.req("PUT", "/api/social/profile", { bio: "x".repeat(81) })).body.message).toBe("long");
+      // About me: not filtered, 300 characters at most
+      expect((await a.req("PUT", "/api/social/profile", { bio: "x".repeat(301) })).body.message).toBe("long");
       expect((await a.req("PUT", "/api/social/profile", { favGame: "poker" })).status).toBe(400);
       expect((await a.req("PUT", "/api/social/profile", { showcase: ["no_hu"] })).body.message).toBe("You haven't earned that badge");
       await pool.query("insert into achievements (user_id, badge_id, badge_name, description, icon) values ($1, 'first_win', 'First Win', 'x', 'star')", [aid]);
       const ok = await a.req("PUT", "/api/social/profile", { bio: "  Thích   quay hũ 🐉 ", favGame: "slot", showcase: ["first_win"] });
-      expect(ok.body).toEqual({ bio: "Thích quay hũ 🐉", favGame: "slot", showcase: ["first_win"] });
+      expect(ok.body).toMatchObject({ bio: "Thích quay hũ 🐉", favGame: "slot", showcase: ["first_win"] });
       const prof = (await b.req("GET", `/api/players/${a.username}/profile`)).body;
       expect(prof).toMatchObject({ bio: "Thích quay hũ 🐉", favGame: "slot", showcase: ["first_win"], friendsCount: 1 });
       for (const k of ["balance", "email", "firstName", "lastName", "password", "id"]) expect(prof).not.toHaveProperty(k);
@@ -1637,6 +1638,522 @@ describe.skipIf(!TEST_DB)("API", () => {
       expect(await count()).toBe(0);
       expect((await f1.req("GET", "/api/friends")).body.friends).toEqual([]);
       expect((await f1.req("GET", "/api/notifications")).body.items.some((n: any) => n.actor === null && n.kind !== "reaction")).toBe(false);
+    });
+  });
+
+  describe("Social 3: invites, clubs, quests, Talk, matches, photos, lounge, profiles", () => {
+    const games = (username: string, n: number) => pool.query("update users set games_played = $1 where username = $2", [n, username]);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const idOf = async (p: Player) => (await p.req("GET", "/api/me")).body.id as string;
+    async function players(n: number, played = 12) {
+      const ps = Array.from({ length: n }, () => new Player());
+      for (const p of ps) { await p.register(); await games(p.username, played); }
+      return ps;
+    }
+    async function befriend(a: Player, b: Player) {
+      expect((await a.req("POST", "/api/friends/request", { username: b.username })).body.relation).toBe("sent");
+      expect((await b.req("POST", "/api/friends/accept", { username: a.username })).body.relation).toBe("friends");
+    }
+    const notifs = async (p: Player) => (await p.req("GET", "/api/notifications")).body.items as any[];
+    const balanceOf = async (p: Player) => Number((await pool.query("select balance from users where username = $1", [p.username])).rows[0].balance);
+    const play = (uid: string, game: string, bet: number, payout: number, at = "now()") =>
+      pool.query(`insert into game_plays (user_id, game, bet, payout, created_at) values ($1, $2, $3, $4, ${at}) returning id`, [uid, game, bet, payout]).then((r) => r.rows[0].id as number);
+
+    it("invites: the contract, a bell with Join and a challenge card in the DM thread", async () => {
+      const [a, b, c] = await players(3);
+      const send = (p: Player, body: any) => p.req("POST", "/api/invites", body);
+      expect((await send(a, { to: b.username, game: "chess", path: "/pool" })).status).toBe(400);
+      for (const path of ["//evil.com", "/\\evil", "https://evil.com", "/phi-tieu?table=AB12", "/poolx", "/pool/../admin", "pool"]) {
+        expect((await send(a, { to: b.username, game: "pool", path })).status).toBe(400);
+      }
+      expect((await send(a, { to: "no_such_player_zz", game: "pool", path: "/pool" })).status).toBe(404);
+      expect((await send(a, { to: a.username, game: "pool", path: "/pool" })).status).toBe(400);
+      const ok = await send(a, { to: b.username, game: "pool", path: "/pool?table=AB12" });
+      expect(ok).toMatchObject({ status: 200, body: { ok: true } });
+      const n = (await notifs(b)).find((x) => x.kind === "invite");
+      expect(n).toMatchObject({ actor: { username: a.username }, data: { game: "pool", path: "/pool?table=AB12" } });
+      const thread = (await b.req("GET", `/api/dm/thread/${a.username}`)).body;
+      expect(thread.messages.at(-1)).toMatchObject({ mine: false, text: null, card: { kind: "invite", game: "pool", path: "/pool?table=AB12" } });
+      const conv = (await b.req("GET", "/api/dm/conversations")).body.conversations.find((x: any) => x.username === a.username);
+      expect(conv.last.card).toMatchObject({ game: "pool" });
+      // Rate limited: straight away again, and the same player again soon
+      expect((await send(a, { to: c.username, game: "cards", path: "/ban-bai?table=XY99" })).status).toBe(429);
+      await sleep(3100);
+      expect((await send(a, { to: b.username, game: "darts", path: "/phi-tieu?table=AB12" })).status).toBe(429);
+      expect((await send(a, { to: c.username, game: "football", path: "/da-bong" })).status).toBe(200);
+      // Blocks
+      await c.req("POST", `/api/players/${a.username}/block`, { block: true });
+      await sleep(3100);
+      expect((await send(a, { to: c.username, game: "cards", path: "/ban-bai" })).status).toBe(403);
+      // Friends-only messages: strangers can't invite; friends can, even with friend requests off
+      const [d, e] = await players(2);
+      await befriend(d, b);
+      await b.req("PUT", "/api/social/privacy", { dmFrom: "friends", requestsFrom: "nobody" });
+      expect((await send(e, { to: b.username, game: "pool", path: "/pool" })).status).toBe(403);
+      expect((await send(d, { to: b.username, game: "pool", path: "/pool" })).status).toBe(200);
+      // Brand-new accounts can't send invites
+      const newbie = new Player(); await newbie.register();
+      expect((await send(newbie, { to: b.username, game: "pool", path: "/pool" })).body.message).toBe("play_first");
+    });
+
+    it("clubs: the fee is a sink, one club each, names checked, 30 members, roles", async () => {
+      const [owner, m1, m2, m3, rich] = await players(5);
+      await setBalance(owner.username, 60_000);
+      const make = (p: Player, body: any) => p.req("POST", "/api/clubs", { emblem: "🐉", color: "#f59e0b", tag: "RONG", open: true, ...body });
+      const n = `Rồng ${Date.now() % 100000}`;
+      expect((await make(owner, { name: "ab" })).status).toBe(400);
+      expect((await make(owner, { name: "<b>club</b>" })).status).toBe(400);
+      expect((await make(owner, { name: n, emblem: "💩" })).status).toBe(400);
+      expect((await make(owner, { name: n, color: "red" })).status).toBe(400);
+      const ok = await make(owner, { name: n, description: "Chào mừng!" });
+      expect(ok.status).toBe(200);
+      expect(ok.body.balance).toBe(10_000);
+      expect(await balanceOf(owner)).toBe(10_000);
+      const oid = await idOf(owner);
+      expect((await pool.query("select amount from deposits where user_id = $1 and method = 'club_fee'", [oid])).rows.map((r) => Number(r.amount))).toEqual([-50_000]);
+      const id = ok.body.id;
+      await setBalance(owner.username, 200_000);
+      expect((await make(owner, { name: `${n}x` })).status).toBe(409); // one club each
+      await setBalance(rich.username, 200_000);
+      expect((await make(rich, { name: n.toUpperCase() })).status).toBe(409); // name taken (any case)
+      await setBalance(m1.username, 1000);
+      expect((await make(m1, { name: "Nghèo quá" })).status).toBe(400); // not enough coins
+      expect(await balanceOf(m1)).toBe(1000);
+      // Join, roles
+      for (const p of [m1, m2, m3]) expect((await p.req("POST", `/api/clubs/${id}/join`)).body.joined).toBe(true);
+      expect((await m1.req("POST", `/api/clubs/${id}/join`)).status).toBe(409);
+      const act = (p: Player, action: string, who: Player) => p.req("POST", `/api/clubs/${id}/members`, { action, username: who.username });
+      expect((await act(m1, "kick", m2)).status).toBe(403);
+      expect((await act(m1, "promote", m2)).status).toBe(403);
+      expect((await act(owner, "promote", m1)).status).toBe(200);
+      expect((await act(m1, "kick", owner)).status).toBe(403);
+      expect((await act(m1, "promote", m2)).status).toBe(403); // officers can't promote
+      expect((await act(m1, "kick", m3)).status).toBe(200);    // officers remove members
+      expect((await m3.req("POST", `/api/clubs/${id}/join`)).status).toBe(403); // kicked: not straight back
+      expect((await notifs(m3)).some((x) => x.kind === "club" && x.data.action === "kicked")).toBe(true);
+      const view = (await m2.req("GET", `/api/clubs/${id}`)).body;
+      expect(view.members.map((x: any) => [x.username, x.role])).toEqual([[owner.username, "owner"], [m1.username, "officer"], [m2.username, "member"]]);
+      expect(view.me.role).toBe("member");
+      // The tag shows on the profile, the rich list and in chat
+      expect((await rich.req("GET", `/api/players/${m2.username}/profile`)).body.club).toMatchObject({ id, tag: "RONG", name: n, role: "member" });
+      // The owner can't just walk out; hands over first
+      expect((await owner.req("POST", `/api/clubs/${id}/leave`)).status).toBe(409);
+      expect((await act(owner, "transfer", m2)).status).toBe(200);
+      const v2 = (await owner.req("GET", `/api/clubs/${id}`)).body;
+      expect(v2.members.find((x: any) => x.username === m2.username).role).toBe("owner");
+      expect(v2.me.role).toBe("officer");
+      expect((await owner.req("POST", `/api/clubs/${id}/leave`)).status).toBe(200);
+      // Full at 30
+      for (let i = 0; i < 27; i++) {
+        const u = (await pool.query("insert into users (username, password) values ($1, 'x') returning id", [`fill${Date.now() % 1e6}_${i}`])).rows[0].id;
+        await pool.query("insert into club_members (user_id, club_id, role) values ($1, $2, 'member')", [u, id]);
+      }
+      await (await import("../server/clubs")).loadClubs();
+      const count = Number((await pool.query("select count(*) from club_members where club_id = $1", [id])).rows[0].count);
+      expect(count).toBe(29);
+      const [x1, x2] = await players(2);
+      expect((await x1.req("POST", `/api/clubs/${id}/join`)).status).toBe(200);
+      expect((await x2.req("POST", `/api/clubs/${id}/join`)).body.message).toBe("This club is full");
+      // Approval clubs: a request, then the leader decides
+      await setBalance(rich.username, 200_000);
+      const c2 = (await make(rich, { name: `Kín ${Date.now() % 100000}`, tag: "KIN", open: false })).body.id;
+      expect((await x2.req("POST", `/api/clubs/${c2}/join`)).body).toMatchObject({ joined: false, requested: true });
+      expect((await notifs(rich)).some((x) => x.kind === "club" && x.data.action === "request")).toBe(true);
+      expect((await rich.req("GET", `/api/clubs/${c2}`)).body.requests.map((r: any) => r.username)).toEqual([x2.username]);
+      expect((await rich.req("POST", `/api/clubs/${c2}/requests`, { username: x2.username, accept: true })).status).toBe(200);
+      expect((await x2.req("GET", `/api/clubs/${c2}`)).body.me.role).toBe("member");
+      // Disband: only the owner
+      expect((await x2.req("POST", `/api/clubs/${c2}/disband`)).status).toBe(403);
+      expect((await rich.req("POST", `/api/clubs/${c2}/disband`)).status).toBe(200);
+      expect((await x2.req("GET", `/api/clubs/${c2}`)).status).toBe(404);
+      expect((await rich.req("GET", `/api/players/${x2.username}/profile`)).body.club).toBeNull();
+      // Admin can rename and disband
+      const adm = (await players(1))[0];
+      await pool.query("update users set is_admin = true where username = $1", [adm.username]);
+      expect((await adm.req("POST", `/api/admin/clubs/${id}/rename`, { name: "Đã đổi tên" })).status).toBe(200);
+      expect((await adm.req("GET", "/api/admin/clubs")).body.clubs.find((c: any) => c.id === id).name).toBe("Đã đổi tên");
+      expect((await m2.req("GET", "/api/admin/clubs")).status).toBe(403);
+      expect((await adm.req("POST", `/api/admin/clubs/${id}/disband`)).status).toBe(200);
+      expect((await m2.req("GET", "/api/clubs")).body.mine).toBeNull();
+    });
+
+    it("club chat: members only, same pace limits as the public chat, reports reach the admin", async () => {
+      const [owner, a, b, c, out] = await players(5);
+      await setBalance(owner.username, 100_000);
+      const id = (await owner.req("POST", "/api/clubs", { name: `Chat ${Date.now() % 100000}`, tag: "CHAT", emblem: "🔥", color: "#ef4444" })).body.id;
+      for (const p of [a, b, c]) await p.req("POST", `/api/clubs/${id}/join`);
+      const say = (p: Player, body: any) => p.req("POST", `/api/clubs/${id}/chat`, body);
+      expect((await say(out, { text: "chào" })).status).toBe(403);
+      expect((await out.req("GET", `/api/clubs/${id}/chat`)).status).toBe(403);
+      expect((await say(owner, { text: "x".repeat(201) })).body.message).toBe("long");
+      expect((await say(owner, { text: "" })).body.message).toBe("empty");
+      const m = await say(owner, { text: "Chào cả hội!" });
+      expect(m.status).toBe(200);
+      expect((await say(owner, { text: "nữa nè" })).body.message).toBe("slow_down");
+      const list = (await a.req("GET", `/api/clubs/${id}/chat`)).body.messages;
+      expect(list.map((x: any) => x.text)).toEqual(["Chào cả hội!"]);
+      expect((await out.req("POST", `/api/clubs/chat/${m.body.id}/report`)).status).toBe(404);
+      for (const p of [a, b, c]) expect((await p.req("POST", `/api/clubs/chat/${m.body.id}/report`)).status).toBe(200);
+      expect((await a.req("GET", `/api/clubs/${id}/chat`)).body.messages).toEqual([]);
+      const adm = (await players(1))[0];
+      await pool.query("update users set is_admin = true where username = $1", [adm.username]);
+      const rep = (await adm.req("GET", "/api/admin/social3/reports")).body.clubMessages.find((x: any) => x.id === m.body.id);
+      expect(rep).toMatchObject({ reports: 3, deleted: true, username: owner.username });
+      expect((await adm.req("POST", `/api/admin/clubs/messages/${m.body.id}`, { hidden: false })).status).toBe(200);
+      expect((await a.req("GET", `/api/clubs/${id}/chat`)).body.messages.length).toBe(1);
+      // Chat messages carry the club tag
+      await sleep(3100);
+      const pub = (await owner.req("POST", "/api/chat", { text: "xin chào mọi người" })).body;
+      expect(pub.club).toMatchObject({ id, tag: "CHAT", emblem: "🔥" });
+    });
+
+    it("the weekly club reward: top three clubs' active members, paid exactly once", async () => {
+      const ps = await players(4);
+      const ids = await Promise.all(ps.map(idOf));
+      const clubsMod = await import("../server/clubs");
+      const { vnWeekStart } = await import("../shared/friends");
+      // Two weeks back, so the startup scheduler (which pays last week) hasn't touched it
+      const week = new Date(vnWeekStart(new Date()).getTime() - 14 * 86_400_000);
+      const inWeek = `'${new Date(week.getTime() + 3 * 86_400_000).toISOString()}'::timestamp`;
+      const mk = async (p: Player, uid: string, name: string) => {
+        await setBalance(p.username, 100_000);
+        const id = (await p.req("POST", "/api/clubs", { name, tag: "WK", emblem: "⭐", color: "#3b82f6" })).body.id;
+        await pool.query("update club_members set joined_at = $2 where user_id = $1", [uid, new Date(week.getTime() - 86_400_000)]);
+        return id;
+      };
+      const s = Date.now() % 100000;
+      const c1 = await mk(ps[0], ids[0], `Tuần A ${s}`);
+      await ps[1].req("POST", `/api/clubs/${c1}/join`);
+      await pool.query("update club_members set joined_at = $2 where user_id = $1", [ids[1], new Date(week.getTime() - 86_400_000)]);
+      const c2 = await mk(ps[2], ids[2], `Tuần B ${s}`);
+      await mk(ps[3], ids[3], `Tuần C ${s}`);
+      // Club 1: 900K staked (900 XP) by one member, the other did nothing; club 2: 500 XP; club 3: nothing
+      await play(ids[0], "slot", 900_000, 0, inWeek);
+      await play(ids[2], "slot", 500_000, 0, inWeek);
+      const before = await Promise.all(ps.map(balanceOf));
+      expect(await clubsMod.payClubWeek(week)).toBe(true);
+      expect(await clubsMod.payClubWeek(week)).toBe(false);
+      await Promise.all([clubsMod.payClubWeek(week), clubsMod.payClubWeek(week)]);
+      const after = await Promise.all(ps.map(balanceOf));
+      expect(after.map((x, i) => x - before[i])).toEqual([100_000, 0, 50_000, 0]);
+      const rows = (await pool.query("select user_id, amount from deposits where method = 'club_weekly' and user_id = any($1)", [ids])).rows;
+      expect(rows.length).toBe(2);
+      const w = (await pool.query("select winners from club_weeks where week = $1", [(await import("../shared/league")).vnDay(week)])).rows[0].winners;
+      expect(w.slice(0, 2).map((x: any) => [x.clubId, x.rank])).toEqual([[c1, 1], [c2, 2]]);
+      expect((await notifs(ps[0])).some((n) => n.kind === "club" && n.data.action === "reward" && n.data.amount === 100_000)).toBe(true);
+      // The live board: this week's XP
+      await play(ids[1], "slot", 7_000, 0);
+      const board = (await ps[1].req("GET", "/api/clubs")).body;
+      expect(board.clubs.find((c: any) => c.id === c1).weeklyXp).toBe(7);
+      expect((await ps[1].req("GET", `/api/clubs/${c1}`)).body.members.find((m: any) => m.username === ps[1].username).weeklyXp).toBe(7);
+    });
+
+    it("daily quests: progress from real plays and posts, each claim paid once, the chest and the 7-day streak", async () => {
+      const [p] = await players(1);
+      await setBalance(p.username, 1_000_000);
+      const uid = await idOf(p);
+      const { vnDay } = await import("../shared/league");
+      const day = vnDay(new Date());
+      const first = (await p.req("GET", "/api/quests")).body;
+      expect(first.quests.length).toBe(3);
+      expect(first.quests.some((q: any) => q.social)).toBe(true);
+      expect(new Set(first.quests.map((q: any) => q.kind)).size).toBe(3);
+      // Same quests on a second look
+      expect((await p.req("GET", "/api/quests")).body.quests.map((q: any) => q.id)).toEqual(first.quests.map((q: any) => q.id));
+      // Pin today's quests so the test knows what to do
+      await pool.query("delete from daily_quests where user_id = $1", [uid]);
+      await pool.query("insert into daily_quests (user_id, day, slot, quest_id) values ($1, $2, 0, 'spins20'), ($1, $2, 1, 'plays30'), ($1, $2, 2, 'talk1')", [uid, day]);
+      expect((await p.req("POST", "/api/quests/0/claim")).status).toBe(409); // not done yet
+      for (let i = 0; i < 30; i++) expect((await p.play(1000)).status).toBe(200);
+      const mid = (await p.req("GET", "/api/quests")).body;
+      expect(mid.quests.map((q: any) => q.progress)).toEqual([20, 30, 0]);
+      expect((await p.req("POST", "/api/talk/threads", { board: "misc", title: "Chào mọi người", body: "Hôm nay đẹp trời!" })).status).toBe(200);
+      expect((await p.req("GET", "/api/quests")).body.quests[2].progress).toBe(1);
+      // Two taps at once: one payout
+      const before = await balanceOf(p);
+      const claims = await Promise.all([p.req("POST", "/api/quests/0/claim"), p.req("POST", "/api/quests/0/claim")]);
+      expect(claims.map((c) => c.status).sort()).toEqual([200, 409]);
+      expect(await balanceOf(p)).toBe(before + 20_000);
+      expect((await p.req("POST", "/api/quests/chest")).status).toBe(409); // not all claimed
+      expect((await p.req("POST", "/api/quests/1/claim")).body.reward).toBe(15_000);
+      expect((await p.req("POST", "/api/quests/2/claim")).body.reward).toBe(15_000);
+      // Six chests in the days before: today's makes seven in a row
+      for (let i = 1; i <= 6; i++) {
+        const d = new Date(new Date(`${day}T00:00:00Z`).getTime() - i * 86_400_000).toISOString().slice(0, 10);
+        await pool.query("insert into quest_chests (user_id, day, amount) values ($1, $2, 50000)", [uid, d]);
+      }
+      const b2 = await balanceOf(p);
+      const chest = await Promise.all([p.req("POST", "/api/quests/chest"), p.req("POST", "/api/quests/chest")]);
+      expect(chest.map((c) => c.status).sort()).toEqual([200, 409]);
+      expect(chest.find((c) => c.status === 200)!.body).toMatchObject({ amount: 50_000, streakBonus: 250_000, streak: 7 });
+      expect(await balanceOf(p)).toBe(b2 + 300_000);
+      const v = (await p.req("GET", "/api/quests")).body;
+      expect(v.chest).toMatchObject({ claimed: true, ready: false });
+      expect(v.streak.days).toBe(7);
+      const paid = (await pool.query("select coalesce(sum(amount), 0)::int as s from deposits where user_id = $1 and method = 'daily_quest'", [uid])).rows[0].s;
+      expect(paid).toBe(20_000 + 15_000 + 15_000 + 50_000 + 250_000);
+      // Social quests count each thing once and only from real events
+      const { questEvent } = await import("../server/quests");
+      await questEvent(uid, "chat", "chat:1");
+      await questEvent(uid, "chat", "chat:1");
+      expect((await pool.query("select count(*)::int as n from quest_events where user_id = $1 and kind = 'chat'", [uid])).rows[0].n).toBe(1);
+    });
+
+    it("quests are quiet: play-a-friend counts real matches between friends, no notifications", async () => {
+      const [a, b] = await players(2);
+      const [ua, ub] = await Promise.all([idOf(a), idOf(b)]);
+      const { vnDay } = await import("../shared/league");
+      const day = vnDay(new Date());
+      for (const u of [ua, ub]) await pool.query("insert into daily_quests (user_id, day, slot, quest_id) values ($1, $2, 0, 'friendmatch'), ($1, $2, 1, 'chat3'), ($1, $2, 2, 'gift1')", [u, day]);
+      const { questFriendMatch } = await import("../server/quests");
+      await questFriendMatch([ua, ub], "test:1");
+      expect((await a.req("GET", "/api/quests")).body.quests[0].progress).toBe(0); // not friends
+      await befriend(a, b);
+      await questFriendMatch([ua, ub], "test:2");
+      await questFriendMatch([ua, ub], "test:2");
+      expect((await a.req("GET", "/api/quests")).body.quests[0].progress).toBe(1);
+      expect((await notifs(b)).some((n) => n.kind === ("quest" as string))).toBe(false);
+    });
+
+    it("Talk: boards, threads with replies, newest activity first, paging, no content filter, live push", async () => {
+      const [a, b, c] = await players(3);
+      const boards = (await a.req("GET", "/api/talk/boards")).body.boards.map((x: any) => x.id);
+      expect(boards).toEqual(["intro", "lfg", "pool", "darts", "cards", "abroad", "zh", "misc"]);
+      const post = (p: Player, body: any) => p.req("POST", "/api/talk/threads", body);
+      expect((await post(a, { board: "nope", title: "x", body: "y" })).status).toBe(400);
+      expect((await post(a, { board: "misc", title: "", body: "y" })).status).toBe(400);
+      expect((await post(a, { board: "misc", title: "t", body: "x".repeat(2001) })).body.message).toBe("long");
+      const t1 = await post(a, { board: "misc", title: "Xin chào, mình ở Leeds", body: "Đm trời lạnh quá, ai ở UK không? zalo 0912345678" });
+      expect(t1.status).toBe(200);
+      expect(t1.body).toMatchObject({ board: "misc", title: "Xin chào, mình ở Leeds", body: "Đm trời lạnh quá, ai ở UK không? zalo 0912345678", replies: 0, mine: true });
+      expect((await post(a, { board: "misc", title: "again", body: "too soon" })).body.message).toBe("slow_down");
+      // A socket sees new replies live
+      const { WebSocket } = await import("ws");
+      const ws = new WebSocket(base.replace("http", "ws") + "/ws/social", { headers: { Cookie: c.cookie } });
+      const got: any[] = [];
+      ws.on("message", (m) => got.push(JSON.parse(String(m))));
+      await new Promise<void>((r) => ws.on("open", () => r()));
+      const r1 = await b.req("POST", `/api/talk/threads/${t1.body.id}/replies`, { text: "Mình ở Manchester nè!" });
+      expect(r1.status).toBe(200);
+      await sleep(200);
+      expect(got.some((m) => m.t === "talk_reply" && m.threadId === t1.body.id && m.reply.text === "Mình ở Manchester nè!")).toBe(true);
+      ws.close();
+      expect((await notifs(a)).some((n) => n.kind === "talk" && n.data.threadId === t1.body.id)).toBe(true);
+      const th = (await c.req("GET", `/api/talk/threads/${t1.body.id}`)).body;
+      expect(th.thread.replies).toBe(1);
+      expect(th.replies.items.map((x: any) => x.text)).toEqual(["Mình ở Manchester nè!"]);
+      expect((await c.req("POST", `/api/talk/threads/${t1.body.id}/thumb`)).body).toEqual({ on: true, thumbs: 1 });
+      // Paging: 25 threads (made directly), newest activity first, 20 a page
+      const uc = await idOf(c);
+      for (let i = 0; i < 25; i++) await pool.query("insert into talk_threads (board, user_id, title, body, last_at) values ('pool', $1, $2, 'b', now() - ($3 || ' minutes')::interval)", [uc, `T${i}`, String(i + 1)]);
+      const p1 = (await a.req("GET", "/api/talk/threads?board=pool")).body;
+      expect(p1.items.length).toBe(20);
+      expect(p1.items.slice(0, 3).map((x: any) => x.title)).toEqual(["T0", "T1", "T2"]);
+      expect(p1.more).toBe(true);
+      const p2 = (await a.req("GET", `/api/talk/threads?board=pool&before=${encodeURIComponent(p1.next)}`)).body;
+      expect(p2.items.map((x: any) => x.title)).toEqual(["T20", "T21", "T22", "T23", "T24"]);
+      expect(p2.more).toBe(false);
+      // A reply brings a thread back to the top of "all"
+      const all = (await a.req("GET", "/api/talk/threads")).body.items;
+      expect(all[0].id).toBe(t1.body.id);
+      // Blocking hides it both ways
+      await c.req("POST", `/api/players/${a.username}/block`, { block: true });
+      expect((await c.req("GET", `/api/talk/threads/${t1.body.id}`)).status).toBe(404);
+    });
+
+    it("find a match: post, one active each, join leads to the table flow, expiry, close", async () => {
+      const [a, b] = await players(2);
+      const mk = (p: Player, body: any) => p.req("POST", "/api/matches", body);
+      expect((await mk(a, { game: "chess", stake: 0, minutes: 30 })).status).toBe(400);
+      expect((await mk(a, { game: "pool", stake: 12345, minutes: 30 })).status).toBe(400);
+      expect((await mk(a, { game: "pool", stake: 0, minutes: 5 })).status).toBe(400);
+      await setBalance(a.username, 5_000);
+      expect((await mk(a, { game: "pool", stake: 10_000, minutes: 30 })).body.message).toBe("Not enough coins");
+      await setBalance(a.username, 500_000);
+      const p1 = await mk(a, { game: "pool", stake: 10_000, minutes: 30, note: "Ai làm vài ván không?" });
+      expect(p1.status).toBe(200);
+      await sleep(10_100);
+      const p2 = await mk(a, { game: "cards", stake: 1_000, minutes: 15 });
+      const mine = (await b.req("GET", "/api/matches")).body.posts.filter((x: any) => x.author.username === a.username);
+      expect(mine.map((x: any) => x.id)).toEqual([p2.body.id]); // the new one replaced the old
+      expect((await a.req("POST", `/api/matches/${p2.body.id}/join`)).status).toBe(400);
+      const j = await b.req("POST", `/api/matches/${p2.body.id}/join`);
+      expect(j.body.href).toBe(`/ban-bai?challenge=${encodeURIComponent(a.username)}&stake=1000`);
+      expect((await notifs(a)).some((n) => n.kind === "match" && n.data.postId === p2.body.id)).toBe(true);
+      // Expiry
+      await pool.query("update match_posts set expires_at = now() - interval '1 second' where id = $1", [p2.body.id]);
+      expect((await b.req("GET", "/api/matches")).body.posts.some((x: any) => x.id === p2.body.id)).toBe(false);
+      expect((await b.req("POST", `/api/matches/${p2.body.id}/join`)).status).toBe(404);
+      // Close
+      await sleep(10_100);
+      const p3 = await mk(a, { game: "darts", stake: 0, minutes: 60 });
+      expect((await b.req("DELETE", `/api/matches/${p3.body.id}`)).status).toBe(404);
+      expect((await a.req("DELETE", `/api/matches/${p3.body.id}`)).status).toBe(200);
+      expect((await b.req("GET", "/api/matches")).body.posts.some((x: any) => x.id === p3.body.id)).toBe(false);
+    }, 40_000);
+
+    it("photos in messages: metadata stripped, size and rate limits, who can see them, blur setting", async () => {
+      const [a, b, c] = await players(3);
+      const seg = (marker: number, payload: Buffer) => Buffer.concat([Buffer.from([0xff, marker, (payload.length + 2) >> 8, (payload.length + 2) & 0xff]), payload]);
+      const jpeg = Buffer.concat([
+        Buffer.from([0xff, 0xd8]),
+        seg(0xe0, Buffer.from("JFIF\0\x01\x01\0\0\x01\0\x01\0\0", "binary")),
+        seg(0xe1, Buffer.from("Exif\0\0GPS-SECRET-LOCATION 51.5,-0.1", "binary")),
+        seg(0xfe, Buffer.from("taken at home", "binary")),
+        seg(0xdb, Buffer.from([0, 1])),
+        seg(0xda, Buffer.from([0, 0])), Buffer.from("PIXELS"), Buffer.from([0xff, 0xd9]),
+      ]);
+      const up = (p: Player, body: any) => p.req("POST", "/api/photos", body);
+      expect((await up(a, { scope: "dm", to: b.username, photo: Buffer.from("not an image").toString("base64") })).status).toBe(400);
+      expect((await up(a, { scope: "dm", to: b.username, photo: Buffer.alloc(700_000, 1).toString("base64") })).status).toBe(413);
+      const ph = await up(a, { scope: "dm", to: b.username, photo: jpeg.toString("base64") });
+      expect(ph.status).toBe(200);
+      const stored: Buffer = (await pool.query("select data from message_photos where id = $1", [ph.body.id])).rows[0].data;
+      expect(stored.includes(Buffer.from("GPS-SECRET"))).toBe(false);
+      expect(stored.includes(Buffer.from("taken at home"))).toBe(false);
+      expect(stored.includes(Buffer.from("JFIF"))).toBe(true);
+      expect(stored.includes(Buffer.from("PIXELS"))).toBe(true);
+      // Sent in the DM; only the two of them can fetch it
+      const m = await a.req("POST", "/api/dm/send", { to: b.username, photoId: ph.body.id });
+      expect(m.body).toMatchObject({ photo: ph.body.id, text: null });
+      const get = async (p: Player, id: number) => (await fetch(`${base}/api/photos/${id}`, { headers: { Cookie: p.cookie } })).status;
+      expect(await get(b, ph.body.id)).toBe(200);
+      expect(await get(a, ph.body.id)).toBe(200);
+      expect(await get(c, ph.body.id)).toBe(404);
+      // A photo made for one place can't be used in another
+      expect((await c.req("POST", "/api/dm/send", { to: b.username, photoId: ph.body.id })).status).toBe(400);
+      // Blur: off for non-friends unless the viewer turns "always show photos" on
+      expect((await b.req("GET", "/api/social/settings")).body.privacy.showPhotos).toBe(false);
+      expect((await b.req("GET", `/api/dm/thread/${a.username}`)).body.peer.friend).toBe(false);
+      expect((await b.req("PUT", "/api/social/privacy", { showPhotos: true })).body.showPhotos).toBe(true);
+      // Reported photos reach the admin queue, and only then can the admin see them
+      const adm = (await players(1))[0];
+      await pool.query("update users set is_admin = true where username = $1", [adm.username]);
+      expect(await get(adm, ph.body.id)).toBe(404);
+      expect((await b.req("POST", `/api/photos/${ph.body.id}/report`, { reason: "nude" })).status).toBe(200);
+      expect(await get(adm, ph.body.id)).toBe(200);
+      const q = (await adm.req("GET", "/api/admin/social3/reports")).body.items.find((x: any) => x.kind === "photo" && x.id === ph.body.id);
+      expect(q).toMatchObject({ reports: 1, reasons: ["nude"], username: a.username, photo: ph.body.id });
+      expect((await adm.req("POST", `/api/admin/ugc/photo/${ph.body.id}`, { action: "delete" })).status).toBe(200);
+      expect(await get(b, ph.body.id)).toBe(404);
+      // Rate limit: 20 an hour
+      await pool.query("insert into message_photos (user_id, scope, mime, data, bytes) select $1, 'lounge', 'image/jpeg', '\\x00', 1 from generate_series(1, 20)", [await idOf(c)]);
+      expect((await up(c, { scope: "lounge", photo: jpeg.toString("base64") })).status).toBe(429);
+      // Lounge photos: any signed-in player can see them
+      const lp = await up(b, { scope: "lounge", photo: jpeg.toString("base64") });
+      expect((await b.req("POST", "/api/chat", { photoId: lp.body.id, room: "eu" })).body).toMatchObject({ photo: lp.body.id, room: "eu" });
+      expect(await get(c, lp.body.id)).toBe(200);
+    });
+
+    it("lounge rooms keep their own messages; the main lounge is the old chat", async () => {
+      const [a, b] = await players(2);
+      const m1 = await a.req("POST", "/api/chat", { text: "chào sảnh", room: "main" });
+      const m2 = await b.req("POST", "/api/chat", { text: "大家好", room: "zh" });
+      expect(m2.body.room).toBe("zh");
+      const main = (await a.req("GET", "/api/chat")).body.messages.map((x: any) => x.id);
+      expect(main).toContain(m1.body.id);
+      expect(main).not.toContain(m2.body.id);
+      expect((await a.req("GET", "/api/chat?room=zh")).body.messages.map((x: any) => x.id)).toEqual([m2.body.id]);
+      expect((await a.req("GET", "/api/chat?room=nowhere")).body.messages.map((x: any) => x.id)).toContain(m1.body.id);
+    });
+
+    it("richer profiles: about me, country (can be hidden), games, languages, play style", async () => {
+      const [a, b] = await players(2);
+      const r = await a.req("PUT", "/api/social/profile", { bio: "Mình mê bi-a, hay chơi tối thứ Sáu. ".repeat(5).trim(), country: "GB", favGames: ["pool", "cards"], languages: ["vi", "en"], playStyle: "competitive" });
+      expect(r.status).toBe(200);
+      expect((await a.req("PUT", "/api/social/profile", { country: "XX" })).status).toBe(400);
+      expect((await a.req("PUT", "/api/social/profile", { favGames: ["chess"] })).status).toBe(400);
+      expect((await a.req("PUT", "/api/social/profile", { languages: ["fr"] })).status).toBe(400);
+      const prof = (await b.req("GET", `/api/players/${a.username}/profile`)).body;
+      expect(prof).toMatchObject({ country: "GB", favGames: ["pool", "cards"], languages: ["vi", "en"], playStyle: "competitive" });
+      expect(prof.bio.length).toBeGreaterThan(80);
+      await a.req("PUT", "/api/social/privacy", { hideCountry: true });
+      expect((await b.req("GET", `/api/players/${a.username}/profile`)).body.country).toBeNull();
+      await befriend(a, b);
+      expect((await b.req("GET", "/api/friends")).body.friends[0].facts).toMatchObject({ country: null, languages: ["vi", "en"], playStyle: "competitive" });
+    });
+
+    it("reports: threads and replies hide after three, the queue shows only reported items, admin deletes and dismisses", async () => {
+      const [a, r1, r2, r3, adm] = await players(5);
+      await pool.query("update users set is_admin = true where username = $1", [adm.username]);
+      const t = (await a.req("POST", "/api/talk/threads", { board: "misc", title: "Bài đăng", body: "nội dung" })).body.id;
+      const unreported = (await r1.req("POST", "/api/talk/threads", { board: "misc", title: "Không ai báo", body: "ok" })).body.id;
+      expect((await a.req("POST", `/api/talk/threads/${t}/report`)).status).toBe(400);
+      for (const p of [r1, r2]) await p.req("POST", `/api/talk/threads/${t}/report`, { reason: "spam" });
+      expect((await r3.req("GET", `/api/talk/threads/${t}`)).status).toBe(200);
+      await r3.req("POST", `/api/talk/threads/${t}/report`);
+      expect((await r3.req("GET", `/api/talk/threads/${t}`)).status).toBe(404);
+      const items = (await adm.req("GET", "/api/admin/social3/reports")).body.items;
+      expect(items.find((x: any) => x.kind === "thread" && x.id === t)).toMatchObject({ reports: 3, hidden: true, title: "Bài đăng", username: a.username, reasons: ["spam", "spam"] });
+      expect(items.some((x: any) => x.kind === "thread" && x.id === unreported)).toBe(false);
+      expect((await adm.req("POST", `/api/admin/ugc/thread/${t}`, { action: "restore" })).status).toBe(200);
+      expect((await r3.req("GET", `/api/talk/threads/${t}`)).status).toBe(200);
+      // Clubs can be reported too
+      await setBalance(a.username, 100_000);
+      const club = (await a.req("POST", "/api/clubs", { name: `Báo ${Date.now() % 100000}`, tag: "BAO", emblem: "🔥", color: "#ef4444" })).body.id;
+      expect((await r1.req("POST", `/api/clubs/${club}/report`, { reason: "offensive name" })).status).toBe(200);
+      expect((await adm.req("GET", "/api/admin/social3/reports")).body.items.find((x: any) => x.kind === "club" && x.id === club)).toMatchObject({ reports: 1 });
+      expect((await adm.req("POST", `/api/admin/ugc/club/${club}`, { action: "dismiss" })).status).toBe(200);
+      expect((await adm.req("GET", "/api/admin/social3/reports")).body.items.some((x: any) => x.kind === "club" && x.id === club)).toBe(false);
+      expect((await r1.req("GET", "/api/admin/social3/reports")).status).toBe(403);
+    });
+
+    it("online now: friends first, then others who share their presence", async () => {
+      const [a, b, c] = await players(3);
+      await befriend(a, b);
+      const { WebSocket } = await import("ws");
+      const open = (p: Player) => new Promise<import("ws").WebSocket>((resolve, reject) => {
+        const ws = new WebSocket(base.replace("http", "ws") + "/ws/social", { headers: { Cookie: p.cookie } });
+        ws.on("open", () => resolve(ws)); ws.on("error", reject);
+      });
+      const socks = [await open(b), await open(c)];
+      await sleep(150);
+      let v = (await a.req("GET", "/api/online")).body;
+      expect(v.friends.map((f: any) => f.username)).toEqual([b.username]);
+      expect(v.others.some((o: any) => o.username === c.username)).toBe(true);
+      await c.req("PUT", "/api/social/privacy", { showPresence: false });
+      v = (await a.req("GET", "/api/online")).body;
+      expect(v.others.some((o: any) => o.username === c.username)).toBe(false);
+      for (const s of socks) s.close();
+    });
+
+    it("deleting an account removes clubs data, Talk, match posts, photos, reports and quests", async () => {
+      const [gone, keep, other] = await players(3);
+      await setBalance(gone.username, 100_000);
+      const gid = await idOf(gone);
+      const club = (await gone.req("POST", "/api/clubs", { name: `Xoá ${Date.now() % 100000}`, tag: "DEL", emblem: "🌙", color: "#06b6d4" })).body.id;
+      await keep.req("POST", `/api/clubs/${club}/join`);
+      const msg = (await gone.req("POST", `/api/clubs/${club}/chat`, { text: "tạm biệt hội" })).body;
+      await keep.req("POST", `/api/clubs/chat/${msg.id}/report`);
+      const mine = (await gone.req("POST", "/api/talk/threads", { board: "misc", title: "của tôi", body: "x" })).body.id;
+      await keep.req("POST", `/api/talk/threads/${mine}/replies`, { text: "trả lời" });
+      const theirs = (await keep.req("POST", "/api/talk/threads", { board: "misc", title: "của bạn", body: "y" })).body.id;
+      await gone.req("POST", `/api/talk/threads/${theirs}/thumb`);
+      await gone.req("POST", `/api/talk/threads/${theirs}/replies`, { text: "hay đấy" });
+      await other.req("POST", `/api/talk/threads/${mine}/report`);
+      await gone.req("POST", `/api/talk/threads/${theirs}/report`).catch(() => {});
+      await gone.req("POST", "/api/matches", { game: "pool", stake: 0, minutes: 30 });
+      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0, 3, 0, 0xff, 0xda, 0, 2, 1, 2, 0xff, 0xd9]);
+      const ph = (await gone.req("POST", "/api/photos", { scope: "lounge", photo: jpeg.toString("base64") })).body.id;
+      await other.req("POST", `/api/photos/${ph}/report`);
+      await gone.req("GET", "/api/quests");
+      await (await import("../server/quests")).questEvent(gid, "chat", "x:1");
+      await gone.req("POST", "/api/invites", { to: keep.username, game: "pool", path: "/pool" });
+      const count = async () => Number((await pool.query(`select
+        (select count(*) from club_members where user_id = $1) + (select count(*) from club_messages where user_id = $1) +
+        (select count(*) from club_chat_reports where reporter_id = $1 or message_id = $2) + (select count(*) from talk_threads where user_id = $1) +
+        (select count(*) from talk_replies where user_id = $1 or thread_id = $3) + (select count(*) from talk_thumbs where user_id = $1) +
+        (select count(*) from ugc_reports where reporter_id = $1 or (kind = 'thread' and target_id = $3) or (kind = 'photo' and target_id = $4)) +
+        (select count(*) from match_posts where user_id = $1) + (select count(*) from message_photos where user_id = $1) +
+        (select count(*) from daily_quests where user_id = $1) + (select count(*) from quest_events where user_id = $1) +
+        (select count(*) from direct_messages where from_id = $1 or to_id = $1) as n`, [gid, msg.id, mine, ph])).rows[0].n);
+      expect(await count()).toBeGreaterThan(12);
+      expect((await gone.req("POST", "/api/user/delete", { password: gone.password })).status).toBe(200);
+      expect(await count()).toBe(0);
+      // The club passed to the remaining member; the other thread's counts are right
+      const v = (await keep.req("GET", `/api/clubs/${club}`)).body;
+      expect(v.members.map((m: any) => [m.username, m.role])).toEqual([[keep.username, "owner"]]);
+      expect((await keep.req("GET", `/api/talk/threads/${theirs}`)).body.thread).toMatchObject({ replies: 0, thumbs: 0 });
     });
   });
 

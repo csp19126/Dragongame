@@ -11,6 +11,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useGameState, useJackpot, useSetBalance } from "@/hooks/use-game";
 import { useLang } from "@/lib/lang-context";
 import { Seven } from "@/components/Seven777";
+import { LobbyQuestsCard } from "@/components/Quests";
+import { OnlineNowButton } from "@/components/OnlineNow";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { soundManager } from "@/lib/sound";
@@ -73,6 +75,7 @@ export default function Lobby() {
         </div>
 
         <AnnouncementBar />
+        <div className="flex justify-center -my-0.5"><OnlineNowButton /></div>
         <LobbyTicker />
 
         {/* Featured: the slot and its jackpot */}
@@ -151,10 +154,15 @@ export default function Lobby() {
           <ChevronRight className="w-5 h-5 text-white/40" />
         </Link>
 
+        <LobbyQuestsCard />
+
         <RecentWinsTicker />
 
         <div className="grid grid-cols-2 gap-2">
-          <Link href="/community?tab=chat" className="rounded-2xl p-3 bg-white/[0.04] border border-white/10 flex items-center gap-2 active:scale-95 transition"><span className="text-2xl">💬</span><span className="text-sm font-black text-white">{tr("Trò chuyện", "Chat", "聊天")}</span></Link>
+          <Link href="/community?tab=clubs" className="rounded-2xl p-3 bg-white/[0.04] border border-white/10 flex items-center gap-2 active:scale-95 transition" data-testid="lobby-clubs"><span className="text-2xl">🏯</span><span className="text-sm font-black text-white">{tr("Hội", "Clubs", "公會")}</span></Link>
+          <Link href="/community?tab=matches" className="rounded-2xl p-3 bg-white/[0.04] border border-white/10 flex items-center gap-2 active:scale-95 transition" data-testid="lobby-matches"><span className="text-2xl">🎯</span><span className="text-sm font-black text-white">{tr("Tìm trận", "Find a match", "找對手")}</span></Link>
+          <Link href="/community?tab=talk" className="rounded-2xl p-3 bg-white/[0.04] border border-white/10 flex items-center gap-2 active:scale-95 transition" data-testid="lobby-talk"><span className="text-2xl">🗣️</span><span className="text-sm font-black text-white">{tr("Trò chuyện", "Talk", "聊天")}</span></Link>
+          <Link href="/community?tab=chat" className="rounded-2xl p-3 bg-white/[0.04] border border-white/10 flex items-center gap-2 active:scale-95 transition"><span className="text-2xl">💬</span><span className="text-sm font-black text-white">{tr("Phòng chat", "Lounge", "交誼廳")}</span></Link>
           <Link href="/leaderboard" className="rounded-2xl p-3 bg-white/[0.04] border border-white/10 flex items-center gap-2 active:scale-95 transition"><span className="text-2xl">🏆</span><span className="text-sm font-black text-white">{tr("Đại gia", "Rich list", "富豪榜")}</span></Link>
         </div>
       </main>

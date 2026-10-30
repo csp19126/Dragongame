@@ -4,6 +4,7 @@
  */
 import { CHAT_MIN_GAMES } from "./chat";
 import type { Relation, ReactionCount, ReplyRef } from "./friends";
+import type { ClubTag, ClubRole, InviteCard } from "./social3";
 
 /** Same gate as the public chat: new accounts must play a few games first (keeps spam bots out) */
 export const SOCIAL_MIN_GAMES = CHAT_MIN_GAMES;
@@ -81,12 +82,19 @@ export interface PlayerProfile {
   friendsOnlyDm: boolean;
   /** The game they're on now (friends only, and only if they share it) */
   playing: string | null;
+  /** Social 3: their club */
+  club: (ClubTag & { name: string; role: ClubRole }) | null;
+  /** Social 3: where they live (unless hidden), languages, play style, favourite games */
+  country: string | null;
+  languages: string[];
+  playStyle: string | null;
+  favGames: string[];
 }
 
-export interface DmPeer { username: string; avatarUrl: string | null; online: boolean; level?: number }
+export interface DmPeer { username: string; avatarUrl: string | null; online: boolean; level?: number; club?: ClubTag | null; friend?: boolean }
 
 export interface DmConversation extends DmPeer {
-  last: { text: string | null; sticker: string | null; mine: boolean; at: string };
+  last: { text: string | null; sticker: string | null; card?: InviteCard | null; photo?: boolean; mine: boolean; at: string };
   unread: number;
 }
 
@@ -100,6 +108,10 @@ export interface DmMessage {
   /** The message this one answers */
   reply: ReplyRef | null;
   reactions: ReactionCount[];
+  /** A game invite / challenge card (Social 3) */
+  card: InviteCard | null;
+  /** A photo (message_photos id, fetched from /api/photos/:id) */
+  photo: number | null;
 }
 
 export interface DmThread {

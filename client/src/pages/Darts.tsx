@@ -11,6 +11,7 @@ import {
 import { Header } from "@/components/Header";
 import { GameTabs } from "@/components/GameTabs";
 import { Avatar } from "@/components/Avatar";
+import { ChallengeBanner, useChallengeTarget } from "@/components/Challenge";
 import { Stage, type StageHandle, type ThrowRequest } from "@/components/darts/Stage";
 import { Scoreboard } from "@/components/darts/Scoreboard";
 import { InviteSheet } from "@/components/darts/InviteSheet";
@@ -113,6 +114,7 @@ function DartsLobby({ tab }: { tab: "play" | "daily" }) {
   const stakes = tables.data?.stakes ?? DARTS_STAKES;
   const fail = (e: Error) => toast({ title: /balance/i.test(e.message) ? t.insufficientBalanceDesc : srv(e.message), variant: "destructive" });
   const open = (code: string) => setLocation(`/phi-tieu?table=${code}`);
+  const target = useChallengeTarget();
 
   const create = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/darts/tables", { stake, legs })).json() as Promise<{ code: string }>,
@@ -151,6 +153,16 @@ function DartsLobby({ tab }: { tab: "play" | "daily" }) {
   return (
     <div className="w-full max-w-md flex flex-col gap-3" data-testid="darts-lobby">
       {tabs}
+      {target && (
+        <ChallengeBanner game="darts" target={target} onOpen={open}
+          settings={<>{stake ? `${fmtCoins(stake)} 🪙` : tr("Miễn phí", "Free", "免費")}</>}
+          create={async () => {
+            if (mine) return mine;
+            const r = await (await apiRequest("POST", "/api/darts/tables", { stake, legs })).json() as { code: string };
+            refreshCoins();
+            return r.code;
+          }} />
+      )}
       {mine && (
         <button type="button" onClick={() => open(mine)} className="w-full rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500" data-testid="button-darts-back">
           {tr("Quay lại bàn của bạn", "Back to your table", "回到你的牌桌")} ({mine})

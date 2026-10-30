@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bot, Eye, Flag, Loader2, Plus, RotateCcw, UserPlus, Users, Wifi, WifiOff, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { GameTabs } from "@/components/GameTabs";
+import { ChallengeBanner, useChallengeTarget } from "@/components/Challenge";
 import { Pitch, type PitchPlay } from "@/components/football/Pitch";
 import { KitPicker, Scoreboard, InviteSheet, Ladder, KitBadge } from "@/components/football/Bits";
 import { useAuth, ME_KEY } from "@/hooks/use-auth";
@@ -109,6 +110,7 @@ function FootballLobby({ kit, setKit, onOpen, onPractice }: { kit: string; setKi
     onError: (e: Error) => { insufficient(e); tables.refetch(); },
   });
   const stakes = tables.data?.stakes ?? FOOTBALL_STAKES;
+  const target = useChallengeTarget();
   const balance = state?.balance ?? 0;
   const mine = tables.data?.mine;
   const levels: { id: Level; label: string; icon: string }[] = [
@@ -132,6 +134,16 @@ function FootballLobby({ kit, setKit, onOpen, onPractice }: { kit: string; setKi
   return (
     <div className="w-full max-w-md flex flex-col gap-3" data-testid="football-lobby">
       {tabs}
+      {target && (
+        <ChallengeBanner game="football" target={target} onOpen={onOpen}
+          settings={<>{stake ? `${fmtCoins(stake)} 🪙` : tr("Miễn phí", "Free", "免費")}</>}
+          create={async () => {
+            if (mine) return mine;
+            const r = await (await apiRequest("POST", "/api/football/tables", { stake, kit })).json() as { code: string };
+            after();
+            return r.code;
+          }} />
+      )}
       <KitPicker value={kit} onChange={setKit} />
       {mine && (
         <button type="button" onClick={() => onOpen(mine)} className="w-full rounded-2xl py-3 font-black text-black bg-gradient-to-r from-yellow-300 to-orange-500" data-testid="button-football-back">{tr("Quay lại bàn của bạn", "Back to your table", "回到你的球桌")} ({mine})</button>

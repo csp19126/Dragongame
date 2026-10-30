@@ -15,6 +15,12 @@ import { spin as runSpin, type SpinOutcome } from "./game";
 import * as bj from "./blackjack";
 import { deleteSocialData } from "./social";
 import { deleteFriendData } from "./friends";
+import { deleteClubData, afterClubDataDeleted } from "./clubs";
+import { deleteTalkData } from "./talk";
+import { deleteMatchData } from "./matches";
+import { deletePhotoData } from "./photos";
+import { deleteReportData } from "./reports3";
+import { deleteQuestData } from "./quests";
 
 /** Unambiguous characters (no 0/O, 1/I/L) so codes are easy to read out and type */
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -560,7 +566,15 @@ export class DatabaseStorage {
   }
 
   async adminDeleteUser(userId: string): Promise<void> {
+    let clubId: number | null = null;
     await db.transaction(async (tx) => {
+      // Social 3: club membership (an owner's club passes on), club chat, reports, Talk, match posts, photos, quests
+      clubId = await deleteClubData(tx, userId);
+      await deleteReportData(tx, userId);
+      await deleteTalkData(tx, userId);
+      await deleteMatchData(tx, userId);
+      await deletePhotoData(tx, userId);
+      await deleteQuestData(tx, userId);
       // Friends, notifications, reactions, feed, gifts and settings (first: it needs their messages to find reactions)
       await deleteFriendData(tx, userId);
       await tx.delete(achievements).where(eq(achievements.userId, userId));
@@ -577,6 +591,7 @@ export class DatabaseStorage {
       await tx.update(users).set({ referredBy: null }).where(eq(users.referredBy, userId));
       await tx.delete(users).where(eq(users.id, userId));
     });
+    await afterClubDataDeleted(userId, clubId);
   }
 
   async getAllPromoCodes(): Promise<(GiftCard & { redeemedByName: string | null })[]> {

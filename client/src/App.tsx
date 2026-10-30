@@ -12,6 +12,8 @@ import Home, { SlotPage } from "@/pages/Home";
 import { BottomNav } from "@/components/BottomNav";
 import { PlayerSheetProvider } from "@/components/PlayerSheet";
 import { SocialProvider } from "@/hooks/use-social";
+import { Social3Provider } from "@/components/Challenge";
+import { Social3Sheets } from "@/components/Social3Host";
 
 const RELOAD_FLAG = "chunk-reload-at";
 
@@ -145,10 +147,13 @@ export default function App() {
             <Toaster />
             <ErrorBoundary>
               <SocialProvider>
-                <PlayerSheetProvider>
-                  <Router />
-                  <BottomNav />
-                </PlayerSheetProvider>
+                <Social3Provider>
+                  <PlayerSheetProvider>
+                    <Router />
+                    <BottomNav />
+                    <Social3Sheets />
+                  </PlayerSheetProvider>
+                </Social3Provider>
               </SocialProvider>
             </ErrorBoundary>
             <InstallBanner />

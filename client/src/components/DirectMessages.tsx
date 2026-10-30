@@ -16,6 +16,31 @@ import { LevelBadge, QuoteBlock, ReplyingBar, ReactionChips, MessageActions, app
 import { TYPING_SHOW_MS, TYPING_EVERY_MS } from "@shared/friends";
 import { STICKERS, STICKER_BY_ID, type AlbumView } from "@shared/stickers";
 import { DM_MAX_LEN, SOCIAL_MIN_GAMES, type DmConversation, type DmMessage, type DmThread } from "@shared/social";
+import { ClubTagChip, useInviteGameName, safeInternalPath, MessagePhoto, PhotoPickButton, usePhotoBlur } from "@/components/Social3Bits";
+import { INVITE_GAMES, INVITE_FRESH_MS, type InviteCard, type InviteGame } from "@shared/social3";
+
+/** A game invite / challenge in a private conversation, with Join */
+function ChallengeCard({ card, mine, at, peer }: { card: InviteCard; mine: boolean; at: string; peer: string }) {
+  const { tr } = useLang();
+  const [, setLocation] = useLocation();
+  const g = INVITE_GAMES[card.game as InviteGame];
+  const fresh = Date.now() - new Date(at).getTime() < INVITE_FRESH_MS;
+  return (
+    <div className={`w-[15rem] max-w-full rounded-2xl overflow-hidden border ${mine ? "border-yellow-300/60" : "border-emerald-300/50"} bg-gradient-to-br from-red-700 via-red-900 to-[#2a0712] shadow-lg`} data-testid="dm-challenge-card">
+      <div className="flex items-center gap-2.5 p-3">
+        <span className="text-4xl leading-none drop-shadow">{g?.icon ?? "🎮"}</span>
+        <div className="min-w-0">
+          <div className="text-[10px] font-black uppercase tracking-widest text-yellow-200/80">⚔️ {tr("Thách đấu", "Challenge", "挑戰")}</div>
+          <div className="font-black text-white leading-tight">{g ? tr(g.vi, g.en, g.zh) : card.game}</div>
+          <div className="text-[11px] text-white/70">{mine ? tr(`Bạn đã mời ${peer}`, `You invited ${peer}`, `你邀請了 ${peer}`) : tr(`${peer} mời bạn vào bàn`, `${peer} invites you to a table`, `${peer} 邀請你入座`)}</div>
+        </div>
+      </div>
+      {mine ? null : fresh && safeInternalPath(card.path) ? (
+        <button type="button" onClick={(e) => { e.stopPropagation(); setLocation(card.path); }} className="w-full h-10 bg-emerald-500 text-black font-black text-sm" data-testid="dm-challenge-join">{tr("Vào chơi", "Join", "加入")}</button>
+      ) : <div className="w-full py-2 text-center text-[11px] font-bold text-white/45 bg-black/25">{tr("Lời mời đã cũ", "This invite has expired", "邀請已過期")}</div>}
+    </div>
+  );
+}
 
 
 /** Private messages: the conversation list, or one conversation when `dm` is set */
@@ -46,6 +71,7 @@ function Conversations() {
   const { tr, locale, loc } = useLang();
   const [, setLocation] = useLocation();
   const showPlayer = usePlayerSheet();
+  const inviteGame = useInviteGameName();
   const { connected } = useSocial();
   const q = useQuery<{ conversations: DmConversation[] }>({ queryKey: CONV_KEY, refetchInterval: connected ? 60_000 : 8_000, staleTime: 0 });
   const [to, setTo] = useState("");
@@ -71,13 +97,13 @@ function Conversations() {
           </div>
         ) : q.data.conversations.map((c) => {
           const st = c.last.sticker ? STICKER_BY_ID.get(c.last.sticker) : null;
-          const preview = st ? `${st.emoji} ${loc(st)}` : c.last.text ?? "";
+          const preview = c.last.card ? `⚔️ ${inviteGame(c.last.card.game)}` : c.last.photo && !c.last.text ? `📷 ${tr("Ảnh", "Photo", "照片")}` : st ? `${st.emoji} ${loc(st)}` : c.last.text ?? "";
           return (
             <div key={c.username} className={`flex items-center gap-3 px-3 py-2.5 border-b border-white/5 last:border-0 ${c.unread ? "bg-yellow-400/[0.06]" : ""}`} data-testid={`dm-conv-${c.username}`}>
               <Avatar user={c} size={46} online={c.online} onClick={() => showPlayer(c.username)} />
               <button type="button" onClick={() => open(c.username)} className="flex-1 min-w-0 text-left active:opacity-70">
                 <div className="flex items-baseline gap-2">
-                  <span className={`flex-1 min-w-0 flex items-center gap-1.5 ${c.unread ? "font-black text-white" : "font-bold text-white/90"}`}><span className="truncate">{c.username}</span><LevelBadge level={c.level} /></span>
+                  <span className={`flex-1 min-w-0 flex items-center gap-1.5 ${c.unread ? "font-black text-white" : "font-bold text-white/90"}`}><span className="truncate">{c.username}</span><ClubTagChip club={c.club} /><LevelBadge level={c.level} /></span>
                   <span className={`text-[10px] shrink-0 ${c.unread ? "text-yellow-300 font-bold" : "text-white/40"}`}>{when(c.last.at, locale)}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -133,6 +159,7 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
   const lastTypingSent = useRef(0);
   const album = useQuery<AlbumView>({ queryKey: ["/api/stickers"] });
   const ownedStickers = useMemo(() => STICKERS.filter((s) => (album.data?.owned[s.id] ?? 0) > 0), [album.data]);
+  const blurFor = usePhotoBlur();
   const path = `/api/dm/thread/${encodeURIComponent(username)}`;
   const peerName = info?.peer.username ?? username;
   const same = (a: string | undefined, b: string) => !!a && a.toLowerCase() === b.toLowerCase();
@@ -220,7 +247,7 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
     } finally { setLoadingOld(false); }
   };
 
-  const send = async (body: { text?: string; sticker?: string }) => {
+  const send = async (body: { text?: string; sticker?: string; photoId?: number }) => {
     setSending(true);
     try {
       const m: DmMessage = await (await apiRequest("POST", "/api/dm/send", { to: username, ...body, ...(replyTo ? { replyTo: replyTo.id } : {}) })).json();
@@ -284,7 +311,7 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
         <button type="button" onClick={() => setLocation("/community?tab=dm")} className="w-10 h-10 rounded-xl flex items-center justify-center text-white/80 active:bg-white/10" aria-label={tr("Quay lại", "Back", "返回")} data-testid="button-dm-back"><ArrowLeft className="w-5 h-5" /></button>
         <Avatar user={peer} size={38} online={peer.online} onClick={() => showPlayer(peer.username)} />
         <button type="button" onClick={() => showPlayer(peer.username)} className="flex-1 min-w-0 text-left">
-          <div className="font-black text-white truncate flex items-center gap-1.5"><span className="truncate" data-testid="dm-peer">{peer.username}</span><LevelBadge level={peer.level} /></div>
+          <div className="font-black text-white truncate flex items-center gap-1.5"><span className="truncate" data-testid="dm-peer">{peer.username}</span><ClubTagChip club={peer.club} /><LevelBadge level={peer.level} /></div>
           <div className={`text-[11px] ${typing ? "text-yellow-300" : peer.online ? "text-emerald-300" : "text-white/45"}`}>{typing ? tr("đang nhập…", "typing…", "正在輸入…") : peer.online ? tr("Đang online", "Online now", "在線上") : tr("Ngoại tuyến", "Offline", "離線")}</div>
         </button>
       </div>
@@ -318,7 +345,14 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
                 <div className={`flex flex-col min-w-0 ${m.mine ? "items-end" : "items-start"}`}>
                   {m.reply && <QuoteBlock reply={{ ...m.reply, username: m.reply.mine ? null : peer.username }} onJump={(id) => { if (!jumpToDm(id)) toast({ title: tr("Tin nhắn này ở xa hơn, bấm “Xem tin cũ hơn”", "That message is further up: tap “Load older messages”", "那則訊息在更上面，請點「載入更早的訊息」") }); }} />}
                   <button type="button" onClick={() => setActive((a) => (a === m.id ? null : m.id))} className="text-left" data-testid={`dm-bubble-${m.id}`}>
-                    {st ? (
+                    {m.photo ? (
+                      <div className={`flex flex-col gap-1 ${m.mine ? "items-end" : "items-start"}`}>
+                        <MessagePhoto id={m.photo} blur={blurFor({ username: peer.username, mine: m.mine, friend: !!info?.peer.friend })} mine={m.mine} />
+                        {m.text && <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap ${m.mine ? "bg-gradient-to-b from-yellow-400 to-orange-500 text-black" : "bg-white/10 text-white"}`}>{m.text}</div>}
+                      </div>
+                    ) : m.card ? (
+                      <ChallengeCard card={m.card} mine={m.mine} at={m.createdAt} peer={peer.username} />
+                    ) : st ? (
                       <div className="text-5xl leading-none py-1" title={loc(st)}>{st.emoji}</div>
                     ) : (
                       <div className={`px-3 py-1.5 rounded-2xl text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap ${m.mine ? `bg-gradient-to-b from-yellow-400 to-orange-500 text-black ${lastOfGroup ? "rounded-br-md" : ""}` : `bg-white/10 text-white ${lastOfGroup ? "rounded-bl-md" : ""}`}`}>{m.text}</div>
@@ -388,6 +422,7 @@ function Thread({ username, errs }: { username: string; errs: Record<string, str
             <button type="button" onClick={() => setTray((v) => !v)} className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${tray ? "bg-yellow-400 text-black" : "bg-white/10 text-white"}`} aria-label={tr("Sticker", "Stickers", "貼圖")} data-testid="button-dm-stickers">
               <Smile className="w-5 h-5" />
             </button>
+            <PhotoPickButton target={{ scope: "dm", to: username }} disabled={sending} onPhoto={(id) => send({ photoId: id, text: text.trim() || undefined })} />
             <input ref={inputRef} value={text} onChange={(e) => onType(e.target.value)} maxLength={DM_MAX_LEN} placeholder={tr("Nhắn tin…", "Message…", "輸入訊息…")} enterKeyHint="send"
               className="flex-1 min-w-0 rounded-xl bg-[#140b26] border border-white/15 px-3 text-white placeholder:text-white/30" data-testid="input-dm" />
             <button type="submit" disabled={sending || !text.trim()} className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-b from-yellow-300 to-orange-500 text-black flex items-center justify-center disabled:opacity-40" aria-label={tr("Gửi", "Send", "發送")} data-testid="button-dm-send">

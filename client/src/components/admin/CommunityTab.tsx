@@ -5,6 +5,7 @@ import { Avatar } from "@/components/Avatar";
 import { apiRequest, queryClient, ApiError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { STICKER_BY_ID } from "@shared/stickers";
+import { Social3Admin } from "@/components/admin/Social3Admin";
 
 interface AdminMsg {
   id: number; userId: string; username: string; text: string | null; sticker: string | null; deleted: boolean;
@@ -212,8 +213,9 @@ export function CommunityTab() {
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-white/40 flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5" />Links, phone numbers and coin trading are blocked automatically; swearing is starred out; 3 reports hide a message until you look.</p>
+        <p className="text-[11px] text-white/40 flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5" />Owner policy: no word filter and no monitoring. Only reported lounge messages appear here; 3 reports hide a message until you look.</p>
       </section>
+      <Social3Admin actions={actions} />
     </div>
   );
 }

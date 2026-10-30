@@ -32,6 +32,9 @@ export const BONUS_NAMES: Record<string, string> = {
   sticker_set: "Sticker set rewards",
   sticker_album: "Sticker album reward",
   friend_gift: "Friend Lì Xì (made by the game)",
+  daily_quest: "Daily quests, chests and streaks",
+  club_weekly: "Weekly top-3 club rewards",
+  club_fee: "Club creation fees (coins removed, negative)",
   darts_daily: "Darts Daily Challenge prizes",
   darts_practice_win: "Darts first win vs computer",
 };

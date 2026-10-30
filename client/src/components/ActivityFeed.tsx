@@ -15,7 +15,7 @@ type Page = { items: FeedItem[]; more: boolean };
 const short = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : String(n));
 
 /** One line saying what happened, in the player's language */
-function useFeedText() {
+export function useFeedText() {
   const { tr } = useLang();
   const gameName = useGameName();
   return (it: FeedItem, compact = false): { icon: string; text: ReactNode } => {
